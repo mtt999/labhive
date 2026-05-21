@@ -2,7 +2,6 @@ import HelpPanel from '../../components/HelpPanel'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
-import { hashPassword, verifyPassword } from '../../lib/crypto'
 import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES } from '../../components/DashboardIconPicker'
 import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
@@ -20,6 +19,14 @@ const sFirstName  = s => s?.email  || ''
 const sLastName   = s => s?.name   || ''
 const sEmail      = s => s?.phone  || ''
 const sSupervisor = s => s?.degree || s?.supervisor || ''
+
+async function createAuthUser(email, password) {
+  const { data: { session: prev } } = await sb.auth.getSession()
+  const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password })
+  if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
+  if (error) throw error
+  return data.user
+}
 
 // ══════════════════════════════════════════════════════════════
 // [TeammatesPanel imported from components/TeammatesPanel.jsx]
@@ -74,10 +81,10 @@ function SoloProfile({ session }) {
     if (!pinForm.current) { setPinError('Enter your current password.'); return }
     if (!pinForm.newPin || pinForm.newPin.length < 6) { setPinError('Min 6 characters.'); return }
     if (pinForm.newPin !== pinForm.confirm) { setPinError('Passwords do not match.'); return }
-    const { data } = await sb.from('solo_users').select('password').eq('id', user.id).single()
-    if (!(await verifyPassword(pinForm.current, data?.password))) { setPinError('Current password is incorrect.'); return }
-    const hashed = await hashPassword(pinForm.newPin)
-    await sb.from('solo_users').update({ password: hashed }).eq('id', user.id)
+    const { error: reAuthErr } = await sb.auth.signInWithPassword({ email: session.email, password: pinForm.current })
+    if (reAuthErr) { setPinError('Current password is incorrect.'); return }
+    const { error: updateErr } = await sb.auth.updateUser({ password: pinForm.newPin })
+    if (updateErr) { setPinError('Failed to update. Try again.'); return }
     toast('Password updated ✓'); setPinForm({ current: '', newPin: '', confirm: '' })
   }
 
@@ -656,24 +663,27 @@ function AdminProfile() {
   )
 }
 
-function AdminSettings({ session, toast }) {
-  const [form, setForm] = useState({ email: '', currentPassword: '', newPassword: '', confirmPassword: '' })
+function AdminSettings({ session: sessionProp, toast }) {
+  const { session: storeSession } = useAppStore()
+  const session = sessionProp ?? storeSession
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   async function savePassword() {
     setError('')
+    if (!form.currentPassword) { setError('Enter your current password.'); return }
     if (!form.newPassword) { setError('Enter a new password.'); return }
     if (form.newPassword !== form.confirmPassword) { setError('Passwords do not match.'); return }
     if (form.newPassword.length < 6) { setError('Password must be at least 6 characters.'); return }
     setSaving(true)
-    const { data: adminPassData } = await sb.from('settings').select('value').eq('key', 'admin_password').maybeSingle()
-    const storedPass = adminPassData?.value || 'Motlagh@2026'
-    if (!(await verifyPassword(form.currentPassword, storedPass))) { setError('Current password is incorrect.'); setSaving(false); return }
-    const hashed = await hashPassword(form.newPassword)
-    await sb.from('settings').upsert({ key: 'admin_password', value: hashed })
-    if (form.email) await sb.from('settings').upsert({ key: 'admin_email', value: form.email })
+    const email = session?.email || (await sb.auth.getUser()).data?.user?.email
+    if (!email) { setError('Cannot verify identity. Sign out and back in.'); setSaving(false); return }
+    const { error: reAuthErr } = await sb.auth.signInWithPassword({ email, password: form.currentPassword })
+    if (reAuthErr) { setError('Current password is incorrect.'); setSaving(false); return }
+    const { error: updateErr } = await sb.auth.updateUser({ password: form.newPassword })
+    if (updateErr) { setError('Failed to update. Try again.'); setSaving(false); return }
     toast('Password updated ✓')
-    setForm({ email: '', currentPassword: '', newPassword: '', confirmPassword: '' })
+    setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     setSaving(false)
   }
   return (
@@ -720,10 +730,19 @@ function StudentsPanel({ toast, session }) {
 
   async function saveStudent(form, id) {
     if (!form.firstName.trim() && !form.lastName.trim()) { toast('Name is required.'); return }
-    if (!id && !form.password) { toast('Password is required.'); return }
+    const actualEmail = form.emailAddr?.trim().toLowerCase()
+    if (!id) {
+      if (!form.password) { toast('Password is required.'); return }
+      if (!actualEmail) { toast('Email is required for student login.'); return }
+    }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
-    const payload = { name: form.lastName.trim(), email: form.firstName.trim() || null, phone: form.emailAddr || null, degree: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nickname: form.nickname || null, organization_id: session?.organizationId || null, role: 'student', is_active: true, admin_level: 0, pin: '' }
-    if (form.password && form.password.trim()) payload.password = await hashPassword(form.password.trim())
+    const payload = { name: form.lastName.trim(), email: form.firstName.trim() || null, phone: actualEmail || null, degree: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nickname: form.nickname || null, organization_id: session?.organizationId || null, role: 'student', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password }
+    if (!id && form.password && actualEmail) {
+      try {
+        const authUser = await createAuthUser(actualEmail, form.password)
+        if (authUser) payload.auth_id = authUser.id
+      } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
+    }
     if (id) {
       const { error } = await sb.from('users').update(payload).eq('id', id)
       if (error) { toast('Error: ' + error.message); return }
@@ -764,11 +783,10 @@ function StudentsPanel({ toast, session }) {
     setImporting(true)
     let added = 0
     for (const s of importPreview) {
-      const pw = Math.random().toString(36).slice(2, 8)
-      const { error } = await sb.from('users').insert({ ...s, password: pw, pin: '', role: 'student', is_active: true, admin_level: 0 })
+      const { error } = await sb.from('users').insert({ ...s, pin: '', role: 'student', is_active: true, admin_level: 0, must_change_password: true })
       if (!error) added++
     }
-    setImportPreview(null); setImporting(false); load(); toast(`${added} students imported.`)
+    setImportPreview(null); setImporting(false); load(); toast(`${added} students imported. Set their passwords individually to activate login.`)
   }
 
   return (
@@ -934,9 +952,18 @@ function StaffListPanel({ toast, session }) {
   async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setStaff(data || []); setLoading(false) }
   async function saveStaff(form, id) {
     if (!form.name.trim()) { toast('Name is required.'); return }
-    if (!id && !form.password) { toast('Password is required.'); return }
-    const payload = { name: form.name.trim(), email: form.email || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null }
-    if (form.password && form.password.trim()) payload.password = await hashPassword(form.password.trim())
+    const actualEmail = form.email?.trim().toLowerCase()
+    if (!id) {
+      if (!form.password) { toast('Password is required.'); return }
+      if (!actualEmail) { toast('Email is required for staff login.'); return }
+    }
+    const payload = { name: form.name.trim(), email: actualEmail || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null, must_change_password: !id && !!form.password }
+    if (!id && form.password && actualEmail) {
+      try {
+        const authUser = await createAuthUser(actualEmail, form.password)
+        if (authUser) payload.auth_id = authUser.id
+      } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
+    }
     if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return } }
     else { const { error } = await sb.from('users').insert(payload); if (error) { toast('Error: ' + error.message); return } }
     setShowModal(false); setEditStaff(null); load(); toast('Staff saved ✓')
@@ -1214,10 +1241,10 @@ function UserProfileForm({ session, toast }) {
     if (!pinForm.current) { setPinError('Enter your current password.'); return }
     if (!pinForm.newPin || pinForm.newPin.length < 6) { setPinError('New password must be at least 6 characters.'); return }
     if (pinForm.newPin !== pinForm.confirm) { setPinError('Passwords do not match.'); return }
-    const { data } = await sb.from('users').select('password').eq('id', user.id).single()
-    if (!(await verifyPassword(pinForm.current, data?.password))) { setPinError('Current password is incorrect.'); return }
-    const hashed = await hashPassword(pinForm.newPin)
-    await sb.from('users').update({ password: hashed }).eq('id', user.id)
+    const { error: reAuthErr } = await sb.auth.signInWithPassword({ email: session.email, password: pinForm.current })
+    if (reAuthErr) { setPinError('Current password is incorrect.'); return }
+    const { error: updateErr } = await sb.auth.updateUser({ password: pinForm.newPin })
+    if (updateErr) { setPinError('Failed to update. Try again.'); return }
     toast('Password updated ✓'); setPinForm({ current: '', newPin: '', confirm: '' })
   }
 
@@ -1517,11 +1544,16 @@ function IconImageManager({ toast }) {
       const compressed = await new Promise(resolve => {
         const img = new Image(); const url = URL.createObjectURL(file)
         img.onload = () => {
-          const scale = Math.min(1, 800 / img.width, 500 / img.height)
+          const W = 800, H = 500
           const canvas = document.createElement('canvas')
-          canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale)
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-          URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.82)
+          canvas.width = W; canvas.height = H
+          const ctx = canvas.getContext('2d')
+          ctx.fillStyle = '#111'
+          ctx.fillRect(0, 0, W, H)
+          const scale = Math.max(W / img.width, H / img.height)
+          const sw = img.width * scale, sh = img.height * scale
+          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+          URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
         }
         img.src = url
       })

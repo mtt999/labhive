@@ -4,21 +4,30 @@ import { sb } from '../../lib/supabase'
 
 export default function AdminLogin() {
   const { setSession } = useAppStore()
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [show, setShow] = useState(false)
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [show, setShow]         = useState(false)
 
   async function handleLogin(e) {
     e.preventDefault()
-    if (!password.trim()) { setError('Enter the admin password.'); return }
+    if (!email.trim() || !password.trim()) { setError('Enter your email and password.'); return }
     setLoading(true); setError('')
-    const { data: adminPass } = await sb.from('settings').select('value').eq('key', 'admin_password').maybeSingle()
-    if (password === (adminPass?.value || 'Motlagh@2026')) {
-      setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
-    } else {
-      setError('Incorrect password.')
+
+    const { data: authData, error: authError } = await sb.auth.signInWithPassword({
+      email: email.trim().toLowerCase(), password,
+    })
+    if (authError) { setError('Incorrect email or password.'); setLoading(false); return }
+
+    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
+    if (saRow?.value !== authData.user.id) {
+      await sb.auth.signOut()
+      setError('This account does not have super admin access.')
+      setLoading(false); return
     }
+
+    setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
     setLoading(false)
   }
 
@@ -33,7 +42,18 @@ export default function AdminLogin() {
         <div className="card" style={{ padding: '28px 28px 24px' }}>
           <form onSubmit={handleLogin}>
             <div className="field">
-              <label>Admin password</label>
+              <label>Admin email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError('') }}
+                placeholder="admin@example.com"
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+            <div className="field">
+              <label>Password</label>
               <div style={{ position: 'relative' }}>
                 <input
                   type={show ? 'text' : 'password'}
@@ -41,7 +61,6 @@ export default function AdminLogin() {
                   onChange={e => { setPassword(e.target.value); setError('') }}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  autoFocus
                   style={{ paddingRight: 44 }}
                 />
                 <button type="button" onClick={() => setShow(s => !s)}

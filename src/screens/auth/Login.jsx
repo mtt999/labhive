@@ -1,7 +1,6 @@
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState } from 'react'
-import { hashPassword, verifyPassword } from '../../lib/crypto'
 
 function ILabLogo({ size = 120 }) {
   return (
@@ -97,25 +96,30 @@ function SignUpForm({ onSuccess, onCancel }) {
   async function handleSignUp(e) {
     e.preventDefault()
     setError('')
-    if (!form.name.trim())           { setError('Please enter your full name.'); return }
-    if (!form.email.trim())          { setError('Please enter your email address.'); return }
-    if (form.password.length < 6)   { setError('Password must be at least 6 characters.'); return }
+    if (!form.name.trim())               { setError('Please enter your full name.'); return }
+    if (!form.email.trim())              { setError('Please enter your email address.'); return }
+    if (form.password.length < 6)       { setError('Password must be at least 6 characters.'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
     setLoading(true)
 
-    const { data: existingRows } = await sb.from('solo_users').select('id').ilike('email', form.email.trim()).limit(1)
-    if (existingRows?.[0]) { setError('An account with this email already exists. Please sign in.'); setLoading(false); return }
+    const { data: authData, error: authError } = await sb.auth.signUp({
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
+    })
+    if (authError) {
+      setError(authError.message.includes('already registered') ? 'An account with this email already exists. Please sign in.' : authError.message)
+      setLoading(false); return
+    }
 
-    const hashed = await hashPassword(form.password)
     const { data, error: insertErr } = await sb.from('solo_users').insert({
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
-      password: hashed,
+      auth_id: authData.user.id,
       is_active: true,
       active_modules: [],
     }).select().single()
 
-    if (insertErr) { setError('Error creating account. Please try again.'); setLoading(false); return }
+    if (insertErr) { await sb.auth.signOut(); setError('Error creating account. Please try again.'); setLoading(false); return }
     setLoading(false)
     onSuccess(data)
   }
@@ -222,50 +226,34 @@ export default function Login() {
     if (!mode) { setError('Please select how you are using iLab first.'); return }
     if (!identifier.trim() || !password.trim()) { setError('Please enter your email and password.'); return }
     setLoading(true); setError('')
-    const identifierLower = identifier.trim().toLowerCase()
+    const emailLower = identifier.trim().toLowerCase()
+
+    const { data: authData, error: authError } = await sb.auth.signInWithPassword({ email: emailLower, password })
+    if (authError) { setError('Incorrect email or password.'); setLoading(false); return }
+    const authUserId = authData.user.id
 
     if (mode === 'team') {
-      const { data: adminSettings } = await sb.from('settings').select('value').eq('key', 'admin_email').maybeSingle()
-      const adminEmail = adminSettings?.value || ''
-      const { data: adminPass } = await sb.from('settings').select('value').eq('key', 'admin_password').maybeSingle()
-      const storedAdminPass = adminPass?.value || ''
-      if (identifierLower === adminEmail.toLowerCase() && await verifyPassword(password, storedAdminPass)) {
-        if (!storedAdminPass.startsWith('$2')) {
-          const hashed = await hashPassword(password)
-          await sb.from('settings').upsert({ key: 'admin_password', value: hashed })
-        }
+      // Check super admin
+      const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
+      if (saRow?.value === authUserId) {
         const adminSessionObj = { role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' }
         setSession(adminSessionObj)
         localStorage.setItem('ilab_session', JSON.stringify(adminSessionObj))
         setLoading(false); return
       }
+      // Team user: look up by auth_id; auto-link by email on first login
       let user = null
-      // 1. try exact email match
-      const { data: byEmail } = await sb.from('users').select('*').ilike('email', identifierLower)
-      if (byEmail?.length) user = byEmail[0]
-      // 2. try exact name match
-      if (!user) {
-        const { data: byName } = await sb.from('users').select('*').ilike('name', identifier.trim())
-        if (byName?.length) user = byName[0]
+      const { data: byAuthId } = await sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true).maybeSingle()
+      if (byAuthId) {
+        user = byAuthId
+      } else {
+        const { data: byEmail } = await sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true).maybeSingle()
+        if (byEmail) {
+          await sb.from('users').update({ auth_id: authUserId }).eq('id', byEmail.id)
+          user = { ...byEmail, auth_id: authUserId }
+        }
       }
-      // 3. if identifier looks like an email, try matching just the local part (before @) as name
-      if (!user && identifierLower.includes('@')) {
-        const localPart = identifierLower.split('@')[0]
-        const { data: byLocal } = await sb.from('users').select('*').ilike('name', localPart)
-        if (byLocal?.length) user = byLocal[0]
-      }
-      if (!user) { setError('No account found. Contact your organization admin.'); setLoading(false); return }
-      if (user.is_active === false) { setError('This account is deactivated. Contact your admin.'); setLoading(false); return }
-      // verify password: support hashed password OR plain 4-digit PIN fallback
-      const passwordOk = user.password
-        ? await verifyPassword(password, user.password)
-        : user.pin && password === user.pin
-      if (!passwordOk) { setError('Incorrect password.'); setLoading(false); return }
-      // auto-upgrade plain PIN to hashed password
-      if (!user.password || (user.password && !user.password.startsWith('$2'))) {
-        const hashed = await hashPassword(password)
-        await sb.from('users').update({ password: hashed, is_active: true }).eq('id', user.id)
-      }
+      if (!user) { await sb.auth.signOut(); setError('No account found. Contact your organization admin.'); setLoading(false); return }
       const adminLevel = user.admin_level || 0
       const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
       const teamSessionObj = {
@@ -282,16 +270,18 @@ export default function Login() {
     }
 
     if (mode === 'solo') {
-      const { data: soloRows } = await sb
-        .from('solo_users').select('*').ilike('email', identifierLower).limit(1)
-      const soloUser = soloRows?.[0] || null
-      if (!soloUser) { setError('No Solo account found. Please sign up first.'); setLoading(false); return }
-      if (soloUser.is_active === false) { setError('This account is deactivated.'); setLoading(false); return }
-      if (!(await verifyPassword(password, soloUser.password))) { setError('Incorrect password.'); setLoading(false); return }
-      if (soloUser.password && !soloUser.password.startsWith('$2')) {
-        const hashed = await hashPassword(password)
-        await sb.from('solo_users').update({ password: hashed }).eq('id', soloUser.id)
+      let soloUser = null
+      const { data: byAuthId } = await sb.from('solo_users').select('*').eq('auth_id', authUserId).maybeSingle()
+      if (byAuthId) {
+        soloUser = byAuthId
+      } else {
+        const { data: byEmail } = await sb.from('solo_users').select('*').ilike('email', emailLower).is('auth_id', null).maybeSingle()
+        if (byEmail) {
+          await sb.from('solo_users').update({ auth_id: authUserId }).eq('id', byEmail.id)
+          soloUser = { ...byEmail, auth_id: authUserId }
+        }
       }
+      if (!soloUser) { await sb.auth.signOut(); setError('No Solo account found. Please sign up first.'); setLoading(false); return }
       const soloSessionObj = {
         role: 'solo', username: soloUser.name, userId: soloUser.id,
         email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar,
@@ -299,11 +289,7 @@ export default function Login() {
       }
       setSession(soloSessionObj)
       localStorage.setItem('ilab_session', JSON.stringify(soloSessionObj))
-      // Load workspaces this user has been invited into
-      const { data: memberships } = await sb
-        .from('solo_workspace_members')
-        .select('owner_id')
-        .eq('member_id', soloUser.id)
+      const { data: memberships } = await sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
       if (memberships?.length) {
         const ownerIds = memberships.map(m => m.owner_id)
         const { data: owners } = await sb.from('solo_users').select('id, name').in('id', ownerIds)

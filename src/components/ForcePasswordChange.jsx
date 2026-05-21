@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
-import { hashPassword, verifyPassword } from '../lib/crypto'
 
 export default function ForcePasswordChange() {
   const { session, setSession, toast } = useAppStore()
@@ -22,20 +21,16 @@ export default function ForcePasswordChange() {
     if (next === current)         { setError('New password must be different from the current one.'); return }
     setLoading(true)
 
-    const { data: user } = await sb.from('users').select('password').eq('id', session.userId).maybeSingle()
-    if (!user) { setError('Account not found. Please sign out and try again.'); setLoading(false); return }
+    // Verify current password by reauthenticating
+    const { error: reAuthErr } = await sb.auth.signInWithPassword({ email: session.email, password: current })
+    if (reAuthErr) { setError('Current password is incorrect.'); setLoading(false); return }
 
-    const ok = user.password
-      ? await verifyPassword(current, user.password)
-      : current === user.password
-    if (!ok) { setError('Current password is incorrect.'); setLoading(false); return }
-
-    const hashed = await hashPassword(next)
-    const { error: updateErr } = await sb.from('users')
-      .update({ password: hashed, must_change_password: false })
-      .eq('id', session.userId)
-
+    // Change password via Supabase Auth
+    const { error: updateErr } = await sb.auth.updateUser({ password: next })
     if (updateErr) { setError('Failed to update password. Try again.'); setLoading(false); return }
+
+    // Clear the must_change_password flag
+    await sb.from('users').update({ must_change_password: false }).eq('id', session.userId)
 
     const updated = { ...session, mustChangePassword: false }
     setSession(updated)

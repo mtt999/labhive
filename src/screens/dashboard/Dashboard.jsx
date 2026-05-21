@@ -86,6 +86,10 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
         position: 'relative',
         height: 160,
         backgroundColor: m.bg,
+        backgroundImage: imgUrl ? `url(${imgUrl})` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         touchAction: 'manipulation',
         WebkitTapHighlightColor: 'transparent',
         userSelect: 'none',
@@ -94,7 +98,6 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)' }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
-      {imgUrl && <img src={imgUrl} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block', pointerEvents: 'none' }} />}
       <div style={{ position: 'absolute', inset: 0, background: imgUrl ? 'linear-gradient(to top, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.15) 100%)' : 'linear-gradient(to top, rgba(0,0,0,0.15) 0%, transparent 100%)', pointerEvents: 'none' }} />
       {m.external && <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 10, borderRadius: 4, padding: '2px 6px', pointerEvents: 'none' }}>↗ External</div>}
       {isAdminManage && <div style={{ position: 'absolute', top: 10, right: 10, background: m.color, color: '#fff', fontSize: 10, borderRadius: 4, padding: '2px 8px', fontWeight: 600, pointerEvents: 'none' }}>⚙ Edit</div>}
@@ -229,11 +232,8 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
           <div style={{ fontSize:12, fontWeight:500, color:'var(--text3)', fontFamily:'var(--mono)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Quick access</div>
           {quickLinks.map(m => (
             <a key={m.key} href="#" onClick={e=>{e.preventDefault();m.external?setConfirmExternal({url:mileageUrl}):onNavigate(m.screen)}} onTouchEnd={e=>{e.preventDefault();m.external?setConfirmExternal({url:mileageUrl}):onNavigate(m.screen)}}
-              style={{ display:'block', borderRadius:'var(--radius-lg)', overflow:'hidden', cursor:'pointer', height:56, position:'relative', border:'1px solid var(--border)', transition:'all 0.15s', touchAction:'manipulation', WebkitTapHighlightColor:'transparent', textDecoration:'none' }}
+              style={{ display:'block', borderRadius:'var(--radius-lg)', overflow:'hidden', cursor:'pointer', height:56, position:'relative', border:'1px solid var(--border)', transition:'all 0.15s', touchAction:'manipulation', WebkitTapHighlightColor:'transparent', textDecoration:'none', backgroundColor:`${m.color}18`, backgroundImage:moduleImages[m.key]?`url(${moduleImages[m.key]})`:'none', backgroundSize:'cover', backgroundPosition:'center', backgroundRepeat:'no-repeat' }}
               onMouseEnter={e=>e.currentTarget.style.borderColor=m.color} onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-              {moduleImages[m.key]
-                ? <div style={{ position:'absolute',inset:0,backgroundImage:`url(${moduleImages[m.key]})`,backgroundSize:'cover',backgroundPosition:'center',pointerEvents:'none' }} />
-                : <div style={{ position:'absolute',inset:0,background:`${m.color}18`,pointerEvents:'none' }} />}
               {moduleImages[m.key] && <div style={{ position:'absolute',inset:0,background:'linear-gradient(to right,rgba(0,0,0,0.65) 0%,rgba(0,0,0,0.2) 100%)',pointerEvents:'none' }} />}
               <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',gap:12,padding:'0 14px',pointerEvents:'none' }}>
                 <span style={{ fontSize:18,flexShrink:0 }}>{m.icon}</span>
@@ -267,17 +267,20 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
       let suppliesQ = sb.from('supplies').select('id,min_qty')
       let projectsQ = sb.from('projects').select('id,status').eq('status','active')
       let studentsQ = sb.from('users').select('id').eq('role','student').eq('is_active',true)
+      let inspectionsQ = sb.from('inspections').select('id,room_name,inspected_at,flag_count,inspector').order('inspected_at',{ascending:false}).limit(5)
+      let trainingQ = sb.from('training_fresh').select('id').eq('admin_approved',false)
       if (!isSuperAdmin && orgId) {
         suppliesQ = suppliesQ.eq('organization_id', orgId)
         projectsQ = projectsQ.eq('organization_id', orgId)
         studentsQ = studentsQ.eq('organization_id', orgId)
+        inspectionsQ = inspectionsQ.eq('organization_id', orgId)
+        // training_fresh has no organization_id — filter via org user IDs
+        const { data: orgUsers } = await sb.from('users').select('id').eq('organization_id', orgId).eq('is_active', true)
+        const orgUserIds = (orgUsers || []).map(u => u.id)
+        trainingQ = orgUserIds.length ? trainingQ.in('user_id', orgUserIds) : Promise.resolve({ data: [] })
       }
       const [supplies,projects,students,inspections,training] = await Promise.all([
-        suppliesQ,
-        projectsQ,
-        studentsQ,
-        sb.from('inspections').select('id,room_name,inspected_at,flag_count,inspector').order('inspected_at',{ascending:false}).limit(5),
-        sb.from('training_fresh').select('id').eq('admin_approved',false),
+        suppliesQ, projectsQ, studentsQ, inspectionsQ, trainingQ,
       ])
       setStats({ lowSupplies:(supplies.data||[]).length, activeProjects:(projects.data||[]).length, students:(students.data||[]).length, pendingTraining:(training.data||[]).length })
       setRecentInspections(inspections.data||[])
@@ -317,11 +320,8 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
           <div style={{ fontSize:12,fontWeight:500,color:'var(--text3)',fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:6 }}>Quick access</div>
           {modules.map(m=>(
             <a key={m.key} href="#" onClick={e=>{e.preventDefault();m.external?setConfirmExternal({url:m.key==='mileage'?mileageUrl:labSafetyUrl}):onNavigate(m.screen)}} onTouchEnd={e=>{e.preventDefault();m.external?setConfirmExternal({url:m.key==='mileage'?mileageUrl:labSafetyUrl}):onNavigate(m.screen)}}
-              style={{ display:'block',borderRadius:'var(--radius-lg)',overflow:'hidden',cursor:'pointer',height:56,position:'relative',border:'1px solid var(--border)',transition:'all 0.15s',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',textDecoration:'none' }}
+              style={{ display:'block',borderRadius:'var(--radius-lg)',overflow:'hidden',cursor:'pointer',height:56,position:'relative',border:'1px solid var(--border)',transition:'all 0.15s',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',textDecoration:'none',backgroundColor:m.bg,backgroundImage:moduleImages[m.key]?`url(${moduleImages[m.key]})`:'none',backgroundSize:'cover',backgroundPosition:'center',backgroundRepeat:'no-repeat' }}
               onMouseEnter={e=>e.currentTarget.style.borderColor=m.color} onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-              {moduleImages[m.key]
-                ? <div style={{ position:'absolute',inset:0,backgroundImage:`url(${moduleImages[m.key]})`,backgroundSize:'cover',backgroundPosition:'center',pointerEvents:'none' }} />
-                : <div style={{ position:'absolute',inset:0,background:m.bg,pointerEvents:'none' }} />}
               {moduleImages[m.key] && <div style={{ position:'absolute',inset:0,background:'linear-gradient(to right,rgba(0,0,0,0.65) 0%,rgba(0,0,0,0.2) 100%)',pointerEvents:'none' }} />}
               <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',gap:12,padding:'0 14px',pointerEvents:'none' }}>
                 {!moduleImages[m.key]&&<span style={{ fontSize:18,flexShrink:0 }}>{m.icon}</span>}

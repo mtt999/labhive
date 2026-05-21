@@ -69,38 +69,50 @@ export default function App() {
     return () => { listenerHandle?.remove() }
   }, [])
 
+  async function restoreSessionFromAuth(authUser) {
+    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
+    if (saRow?.value === authUser.id) {
+      setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
+      return
+    }
+    const { data: teamUser } = await sb.from('users').select('*').eq('auth_id', authUser.id).eq('is_active', true).maybeSingle()
+    if (teamUser) {
+      const adminLevel = teamUser.admin_level || 0
+      const role = teamUser.role === 'admin' || adminLevel >= 1 ? 'admin' : teamUser.role
+      setSession({ role, dbRole: teamUser.role, username: teamUser.name, userId: teamUser.id, email: teamUser.email, adminLevel, photoUrl: teamUser.photo_url, avatar: teamUser.avatar, loginMode: 'team', organizationId: teamUser.organization_id || null, projectGroup: teamUser.project_group || null, mustChangePassword: teamUser.must_change_password === true })
+      return
+    }
+    const { data: soloUser } = await sb.from('solo_users').select('*').eq('auth_id', authUser.id).maybeSingle()
+    if (soloUser) {
+      setSession({ role: 'solo', username: soloUser.name, userId: soloUser.id, email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar, activeModules: soloUser.active_modules || [], loginMode: 'solo' })
+      sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
+        .then(({ data: memberships }) => {
+          if (memberships?.length) {
+            const ownerIds = memberships.map(m => m.owner_id)
+            sb.from('solo_users').select('id, name').in('id', ownerIds)
+              .then(({ data: owners }) => setSharedWorkspaces((owners || []).map(o => ({ ownerId: o.id, ownerName: o.name }))))
+          }
+        })
+    }
+  }
+
   useEffect(() => {
-    const saved = localStorage.getItem('ilab_session')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        setSession(parsed)
-        // Restore solo workspace memberships in background
-        if (parsed.role === 'solo' && parsed.userId) {
-          sb.from('solo_workspace_members').select('owner_id').eq('member_id', parsed.userId)
-            .then(({ data: memberships }) => {
-              if (memberships?.length) {
-                const ownerIds = memberships.map(m => m.owner_id)
-                sb.from('solo_users').select('id, name').in('id', ownerIds)
-                  .then(({ data: owners }) => {
-                    setSharedWorkspaces((owners || []).map(o => ({ ownerId: o.id, ownerName: o.name })))
-                  })
-              }
-            })
-        }
-      } catch {}
+    async function init() {
+      const { data: { session: authSession } } = await sb.auth.getSession()
+      if (authSession?.user) await restoreSessionFromAuth(authSession.user)
+      const loginMode = localStorage.getItem('ilab_login_mode')
+      const done = () => {
+        setLoading(false)
+        if (isNative()) import('@capacitor/splash-screen').then(({ SplashScreen }) => SplashScreen.hide()).catch(() => {})
+      }
+      if (loginMode === 'solo') {
+        done()
+      } else {
+        const timeout = new Promise(resolve => setTimeout(resolve, 8000))
+        Promise.race([refreshCache(), timeout]).finally(done)
+      }
     }
-    const loginMode = localStorage.getItem('ilab_login_mode')
-    const done = () => {
-      setLoading(false)
-      if (isNative()) import('@capacitor/splash-screen').then(({ SplashScreen }) => SplashScreen.hide()).catch(() => {})
-    }
-    if (loginMode === 'solo') {
-      done()
-    } else {
-      const timeout = new Promise(resolve => setTimeout(resolve, 8000))
-      Promise.race([refreshCache(), timeout]).finally(done)
-    }
+    init()
   }, [])
 
   useEffect(() => {

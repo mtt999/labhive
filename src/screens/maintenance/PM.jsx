@@ -424,7 +424,7 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId }) {
     let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
     if (!isSolo && orgId) q = q.eq('organization_id', orgId)
     if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-    const staffQ = isSolo ? Promise.resolve({ data: [] }) : sb.from('users').select('id, name').eq('is_active', true)
+    const staffQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
     Promise.all([q, staffQ])
       .then(([{ data: t }, { data: u }]) => {
         setTasks(t || [])
@@ -715,7 +715,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
       let query = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team').order('deadline', { ascending: true, nullsFirst: false })
       if (!isSolo && orgId) query = query.eq('organization_id', orgId)
       if (!isOwnerAdmin && userId) query = query.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-      const usersQ = isSolo ? Promise.resolve({ data: [] }) : sb.from('users').select('id, name').eq('is_active', true)
+      const usersQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
       const [{ data, error }, { data: users }] = await Promise.all([query, usersQ])
       if (error) console.error('Load tasks error:', error)
       const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
@@ -968,7 +968,7 @@ function TaskViewModal({ task, onClose }) {
   )
 }
 
-function Team() {
+function Team({ orgId, isSolo }) {
   const [staffUsers, setStaffUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -976,11 +976,12 @@ function Team() {
   const resizing = useRef(null)
 
   useEffect(() => {
-    Promise.all([
-      sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name'),
-      sb.from('tasks').select('*')
-    ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
-  }, [])
+    let usersQ = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name')
+    if (orgId) usersQ = usersQ.eq('organization_id', orgId)
+    let tasksQ = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
+    if (!isSolo && orgId) tasksQ = tasksQ.eq('organization_id', orgId)
+    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
+  }, [orgId, isSolo])
 
   useEffect(() => {
     function onMove(e) {
@@ -1078,7 +1079,7 @@ function Team() {
   )
 }
 
-function Meetings({ userId, isAdmin, userName }) {
+function Meetings({ userId, isAdmin, userName, orgId }) {
   const [meetings, setMeetings] = useState([])
   const [tasks, setTasks] = useState([])
   const [staffUsers, setStaffUsers] = useState([])
@@ -1090,29 +1091,44 @@ function Meetings({ userId, isAdmin, userName }) {
   const [selectedTask, setSelectedTask] = useState(null)
   const { toast } = useAppStore()
   useEffect(() => {
-    Promise.all([
-      sb.from('meetings').select('*').order('date', { ascending: false }),
-      sb.from('tasks').select('*').eq('is_meeting_task', true),
-      sb.from('users').select('id, name, role').eq('is_active', true).order('name'),
-    ]).then(([{ data: m }, { data: t }, { data: u }]) => {
+    async function load() {
+      let usersQ = sb.from('users').select('id, name, role').eq('is_active', true).order('name')
+      if (orgId) usersQ = usersQ.eq('organization_id', orgId)
+      const { data: u } = await usersQ
       const allUsers = u || []
       const uMap = {}; allUsers.forEach(x => { uMap[x.id] = x.name })
-      setMeetings(m || []); setTasks(t || []); setStaffUsers(allUsers.filter(x => x.role === 'user'))
-      setAllUsersMap(uMap)
-      if (m?.length) setActiveMeeting(m[0])
+      setAllUsersMap(uMap); setStaffUsers(allUsers.filter(x => x.role === 'user'))
+      let tasksQ = sb.from('tasks').select('*').eq('is_meeting_task', true)
+      if (orgId) tasksQ = tasksQ.eq('organization_id', orgId)
+      const { data: t } = await tasksQ
+      setTasks(t || [])
+      const orgUserIds = allUsers.map(x => x.id)
+      let meetingsData
+      if (orgId && orgUserIds.length > 0) {
+        const { data: m } = await sb.from('meetings').select('*').in('created_by', orgUserIds).order('date', { ascending: false })
+        meetingsData = m || []
+      } else if (!orgId) {
+        const { data: m } = await sb.from('meetings').select('*').order('date', { ascending: false })
+        meetingsData = m || []
+      } else {
+        meetingsData = []
+      }
+      setMeetings(meetingsData)
+      if (meetingsData.length) setActiveMeeting(meetingsData[0])
       setLoading(false)
-    })
-  }, [])
+    }
+    load()
+  }, [orgId])
   const staffMap = {}; staffUsers.forEach(u => { staffMap[u.id] = u.name })
   const createMeeting = async () => {
-    const payload = { date: new Date().toISOString().split('T')[0], notes: '' }
+    const payload = { date: new Date().toISOString().split('T')[0], notes: '', organization_id: orgId || null }
     if (userId) payload.created_by = userId
     const { data } = await sb.from('meetings').insert(payload).select().single()
     if (data) { setMeetings([data, ...meetings]); setActiveMeeting(data) }
   }
   const addTask = async (e) => {
     e.preventDefault()
-    const payload = { ...newTask, meeting_id: activeMeeting.id, is_meeting_task: true, status: 'todo', login_mode: 'team' }
+    const payload = { ...newTask, meeting_id: activeMeeting.id, is_meeting_task: true, status: 'todo', login_mode: 'team', organization_id: orgId || null }
     if (userId) payload.created_by = userId
     const { data } = await sb.from('tasks').insert(payload).select().single()
     if (data) {
@@ -1206,7 +1222,7 @@ function Meetings({ userId, isAdmin, userName }) {
   )
 }
 
-function AssignOthers({ userId }) {
+function AssignOthers({ userId, orgId }) {
   const [staffUsers, setStaffUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1214,16 +1230,17 @@ function AssignOthers({ userId }) {
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
   useEffect(() => {
-    Promise.all([
-      sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name'),
-      sb.from('tasks').select('*').order('created_at', { ascending: false })
-    ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
-  }, [])
+    let usersQ = sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name')
+    if (orgId) usersQ = usersQ.eq('organization_id', orgId)
+    let tasksQ = sb.from('tasks').select('*').eq('login_mode', 'team').order('created_at', { ascending: false })
+    if (orgId) tasksQ = tasksQ.eq('organization_id', orgId)
+    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
+  }, [orgId])
   const staffMap = {}; staffUsers.forEach(u => { staffMap[u.id] = u.name })
   const createTask = async (e) => {
     e.preventDefault(); setSaving(true)
     try {
-      const payload = { ...newTask, status: 'todo', progress: 0, login_mode: 'team' }
+      const payload = { ...newTask, status: 'todo', progress: 0, login_mode: 'team', organization_id: orgId || null }
       if (userId) payload.created_by = userId
       const { data, error } = await sb.from('tasks').insert(payload).select().single()
       if (error) throw error
@@ -1523,25 +1540,39 @@ function Reminders({ userId }) {
   )
 }
 
-function Chat({ userId }) {
+function Chat({ userId, orgId }) {
   const [messages, setMessages] = useState([])
   const [staffMap, setStaffMap] = useState({})
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef(null)
+  const orgUserIdsRef = useRef(null)
   useEffect(() => {
-    Promise.all([
-      sb.from('users').select('id, name, role').in('role', ['user', 'admin']).eq('is_active', true),
-      sb.from('messages').select('*').order('sent_at', { ascending: true })
-    ]).then(([{ data: u }, { data: m }]) => {
-      const map = {}; (u || []).forEach(user => map[user.id] = user)
-      setStaffMap(map); setMessages(m || []); setLoading(false)
-    })
+    async function load() {
+      let usersQ = sb.from('users').select('id, name, role').in('role', ['user', 'admin']).eq('is_active', true)
+      if (orgId) usersQ = usersQ.eq('organization_id', orgId)
+      const { data: u } = await usersQ
+      const orgUsers = u || []
+      const ids = orgId ? orgUsers.map(x => x.id) : null
+      orgUserIdsRef.current = ids
+      const map = {}; orgUsers.forEach(user => map[user.id] = user)
+      setStaffMap(map)
+      if (ids !== null && ids.length === 0) { setMessages([]); setLoading(false); return }
+      let messagesQ = sb.from('messages').select('*').order('sent_at', { ascending: true })
+      if (ids !== null) messagesQ = messagesQ.in('sender_id', ids)
+      const { data: m } = await messagesQ
+      setMessages(m || []); setLoading(false)
+    }
+    load()
     const channel = sb.channel('pm_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => setMessages(prev => [...prev, payload.new]))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        const ids = orgUserIdsRef.current
+        if (ids !== null && !ids.includes(payload.new.sender_id)) return
+        setMessages(prev => [...prev, payload.new])
+      })
       .subscribe()
     return () => sb.removeChannel(channel)
-  }, [])
+  }, [orgId])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   const sendMessage = async (e) => {
     e.preventDefault()
@@ -1605,7 +1636,7 @@ export default function PM() {
     <div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Project Management</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>ICT — Staff workspace</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Staff workspace</div>
       </div>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
         {tabs.map(t => (
@@ -1617,12 +1648,12 @@ export default function PM() {
       </div>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} />}
       {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} />}
-      {activeTab === 'team'      && <Team />}
+      {activeTab === 'team'      && <Team orgId={orgId} isSolo={isSolo} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setActiveTab('tasks') }} />}
-      {activeTab === 'meetings'  && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} />}
-      {activeTab === 'chat'      && <Chat userId={userId} />}
+      {activeTab === 'meetings'  && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
+      {activeTab === 'chat'      && <Chat userId={userId} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
-      {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} />}
+      {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}
     </div>
   )
 }

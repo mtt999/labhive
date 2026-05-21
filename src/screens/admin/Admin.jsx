@@ -2,8 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
-import { hashPassword } from '../../lib/crypto'
 import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
+
+async function createAuthUser(email, password) {
+  const { data: { session: prev } } = await sb.auth.getSession()
+  const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password })
+  if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
+  if (error) throw error
+  return data.user
+}
 
 const MODULE_IMAGE_DEFS = [
   { key: 'supply',       label: 'Supply Inventory',    icon: '📦' },
@@ -191,26 +198,31 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
     if (user) {
       const upd = { name: name.trim(), email: email.trim().toLowerCase() || null, role, organization_id: orgId, is_active: true }
-      if (password) { upd.password = await hashPassword(password); upd.must_change_password = true }
+      if (password) upd.must_change_password = true
       const { error } = await sb.from('users').update(upd).eq('id', user.id)
       if (error) { toast('Error updating user: ' + error.message); return }
-      toast('User updated.')
+      if (password) toast('User updated. The user must change their password on next login — ask them to use the Forgot Password flow.')
+      else toast('User updated.')
       onSaved()
       onClose()
     } else {
-      const hashed = await hashPassword(password)
+      const emailLC = email.trim().toLowerCase()
+      let auth_id = null
+      try {
+        const authUser = await createAuthUser(emailLC, password)
+        if (authUser) auth_id = authUser.id
+      } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
       const { error } = await sb.from('users').insert({
         name: name.trim(),
-        email: email.trim().toLowerCase(),
-        password: hashed,
+        email: emailLC,
+        auth_id,
         role,
         organization_id: orgId,
         is_active: true,
         must_change_password: true,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
-      // Show credentials to copy before closing
-      setSavedCreds({ name: name.trim(), email: email.trim().toLowerCase(), password })
+      setSavedCreds({ name: name.trim(), email: emailLC, password })
       onSaved()
     }
   }
