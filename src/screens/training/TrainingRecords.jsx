@@ -971,9 +971,11 @@ function StudentLocker({ session }) {
 
   async function load() {
     setLoading(true)
+    let stQ = sb.from('users').select('id, name, last_name, project_group').eq('role', 'student').eq('is_active', true).order('name')
+    if (session?.organizationId) stQ = stQ.eq('organization_id', session.organizationId)
     const [{ data: lk }, { data: st }] = await Promise.all([
       sb.from('student_lockers').select('*').order('locker_number'),
-      sb.from('users').select('id, name, last_name, project_group').eq('role', 'student').eq('is_active', true).order('name'),
+      stQ,
     ])
     if (!lk || lk.length === 0) {
       setLockers(Array.from({ length: TOTAL_LOCKERS }, (_, i) => ({ locker_number: i + 1, user_id: null, user_name: null })))
@@ -1225,7 +1227,9 @@ export default function TrainingRecords() {
       const { data } = await sb.from('users').select('*').eq('id', session.userId).single()
       setStudents(data ? [data] : [])
     } else {
-      const { data } = await sb.from('users').select('*').eq('role', 'student').eq('is_active', true).order('name')
+      let q = sb.from('users').select('*').eq('role', 'student').eq('is_active', true).order('name')
+      if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+      const { data } = await q
       setStudents(data || [])
     }
     setLoading(false)
