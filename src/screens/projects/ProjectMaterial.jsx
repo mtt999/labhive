@@ -396,8 +396,10 @@ function ResultsTab({ projects, session, allowedNames }) {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-      .then(({ data }) => setEquipment(data || []))
+    const isSolo = session?.loginMode === 'solo'
+    let q = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
+    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    q.then(({ data }) => setEquipment(data || []))
   }, [])
 
   useEffect(() => { if (allowedNames !== undefined) loadResults() }, [projects.length, allowedNames])
@@ -1421,7 +1423,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
 }
 
 // ── Records Panel ───────────────────────────────────────────────
-function RecordsPanel({ projects, allowedNames }) {
+function RecordsPanel({ projects, allowedNames, session }) {
   const [entries, setEntries] = useState([])
   const [fileMap, setFileMap] = useState({})   // test_result_id → file row
   const [loading, setLoading] = useState(true)
@@ -1430,7 +1432,10 @@ function RecordsPanel({ projects, allowedNames }) {
   const [equipment, setEquipment] = useState([])
 
   useEffect(() => {
-    sb.from('equipment_inventory').select('id, equipment_name').then(({ data }) => setEquipment(data || []))
+    const isSolo = session?.loginMode === 'solo'
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name')
+    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    eqQ.then(({ data }) => setEquipment(data || []))
   }, [])
 
   useEffect(() => { if (allowedNames !== undefined) loadData() }, [projects.length, allowedNames])
@@ -1623,7 +1628,7 @@ function WorkspaceTab({ session, projects, isSolo, readOnly, allowedNames, userP
 
       {wsTab === 'analysis' && <DataAnalysis allowedNames={allowedNames} userProjectGroup={userProjectGroup} userAssignedProjectIds={userAssignedProjectIds} />}
 
-      {wsTab === 'records' && <RecordsPanel projects={projects} allowedNames={allowedNames} />}
+      {wsTab === 'records' && <RecordsPanel projects={projects} allowedNames={allowedNames} session={session} />}
 
       {wsTab === 'links' && (
         <LinksPanel projects={projects} readOnly={readOnly} allowedNames={allowedNames} />
@@ -1674,7 +1679,9 @@ function MaterialInventoryTab({ session, isSolo }) {
   }
 
   async function loadUsers() {
-    const { data } = await sb.from('users').select('id, name').order('name')
+    let q = sb.from('users').select('id, name').order('name')
+    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const { data } = await q
     setUsers(data || [])
   }
 
