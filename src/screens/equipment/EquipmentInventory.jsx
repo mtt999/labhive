@@ -643,12 +643,16 @@ function EquipmentSettings({ session }) {
   async function applyDefaultInterval() {
     if (!confirm(`Set maintenance interval to ${defaultInterval} days for all equipment without one?`)) return
     setSaving(true)
-    await sb.from('equipment_inventory').update({ maintenance_interval_days: parseInt(defaultInterval) }).is('maintenance_interval_days', null).eq('is_active', true)
+    let q = sb.from('equipment_inventory').update({ maintenance_interval_days: parseInt(defaultInterval) }).is('maintenance_interval_days', null).eq('is_active', true)
+    if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
+    await q
     toast('Default interval applied.'); setSaving(false)
   }
   async function clearAllMaintenance() {
     if (!confirm('Clear all maintenance schedules? This cannot be undone.')) return
-    await sb.from('equipment_inventory').update({ maintenance_interval_days: null, last_maintenance_date: null, next_maintenance_date: null }).eq('is_active', true)
+    let q = sb.from('equipment_inventory').update({ maintenance_interval_days: null, last_maintenance_date: null, next_maintenance_date: null }).eq('is_active', true)
+    if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
+    await q
     toast('Maintenance schedules cleared.')
   }
   return (
@@ -692,10 +696,15 @@ function MaintenanceRecords({ session }) {
 
   async function load() {
     setLoading(true)
+    const isSolo = session?.loginMode === 'solo'
+    const orgId = !isSolo && session?.userId ? session?.organizationId : null
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name')
+    let staffQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
+    if (orgId) { eqQ = eqQ.eq('organization_id', orgId); staffQ = staffQ.eq('organization_id', orgId) }
     const [{ data: eq }, { data: bookings }, { data: staffData }] = await Promise.all([
-      sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name'),
+      eqQ,
       sb.from('equipment_bookings').select('equipment_id, start_time, end_time, status').eq('status', 'confirmed'),
-      sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name'),
+      staffQ,
     ])
     setStaff(staffData || [])
     const usage = {}
