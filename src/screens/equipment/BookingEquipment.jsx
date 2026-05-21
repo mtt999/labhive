@@ -783,6 +783,7 @@ function BookingCalendar({ session }) {
   }, [selectedEq, weekStart, monthDate, calView])
 
   const [retrainingBlocked, setRetrainingBlocked] = useState([]) // equipment IDs blocked for this user
+  const orgEqIdsRef = useRef(null) // null = unscoped (solo/super admin), [] = org with no equipment, [...] = org equipment IDs
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
@@ -790,7 +791,11 @@ function BookingCalendar({ session }) {
     if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setEquipment(data || [])
+    if (!isSolo && session?.userId && session?.organizationId) {
+      orgEqIdsRef.current = (data || []).map(e => e.id)
+    }
     setLoading(false)
+    loadBookings()
     // Check retraining blocks for this user
     await checkRetrainingStatus(data || [])
   }
@@ -844,12 +849,15 @@ function BookingCalendar({ session }) {
       start = startOfMonth(monthDate).toISOString()
       end = addDays(endOfMonth(monthDate), 1).toISOString()
     }
+    const scopedIds = orgEqIdsRef.current
+    if (scopedIds !== null && scopedIds.length === 0) { setBookings([]); return }
     let query = sb.from('equipment_bookings').select('*')
       .gte('start_time', start).lt('start_time', end)
       .order('start_time')
-    // Filter by selected equipment if any selected
     if (selectedEq.length > 0) {
       query = query.in('equipment_id', selectedEq)
+    } else if (scopedIds !== null) {
+      query = query.in('equipment_id', scopedIds)
     }
     const { data } = await query
     // Show all except cancelled on calendar — cancelled slots are available again
@@ -1144,10 +1152,13 @@ function BookingHistory({ session }) {
     if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     const { data: eq } = await eqQ
     const orgEqIds = (eq || []).map(e => e.id)
+    if (orgId && canEdit(session) && orgEqIds.length === 0) {
+      setEquipment([]); setBookings([]); setLoading(false); return
+    }
     let bkQ = canEdit(session)
       ? sb.from('equipment_bookings').select('*').order('start_time', { ascending: false }).limit(1000)
       : sb.from('equipment_bookings').select('*').eq('user_id', session.userId).order('start_time', { ascending: false })
-    if (orgId && canEdit(session) && orgEqIds.length > 0) bkQ = bkQ.in('equipment_id', orgEqIds)
+    if (orgId && canEdit(session)) bkQ = bkQ.in('equipment_id', orgEqIds)
     const { data: bk } = await bkQ
     setEquipment(eq || [])
     setBookings(bk || [])
