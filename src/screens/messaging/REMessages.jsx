@@ -132,7 +132,9 @@ export default function REMessages() {
   useEffect(() => { loadStaff() }, [])
 
   async function loadStaff() {
-    const { data } = await sb.from('users').select('id, name, role').in('role', ['user', 'admin']).eq('is_active', true).order('name')
+    let q = sb.from('users').select('id, name, role').in('role', ['user', 'admin']).eq('is_active', true).order('name')
+    if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
+    const { data } = await q
     setStaff(data || [])
   }
 
