@@ -238,8 +238,7 @@ export default function Login() {
       if (saRow?.value === authUserId) {
         const adminSessionObj = { role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' }
         setSession(adminSessionObj)
-        localStorage.setItem('ilab_session', JSON.stringify(adminSessionObj))
-        setLoading(false); return
+                setLoading(false); return
       }
       // Team user: look up by auth_id; auto-link by email on first login
       let user = null
@@ -265,8 +264,7 @@ export default function Login() {
         mustChangePassword: user.must_change_password === true,
       }
       setSession(teamSessionObj)
-      localStorage.setItem('ilab_session', JSON.stringify(teamSessionObj))
-      setLoading(false); return
+            setLoading(false); return
     }
 
     if (mode === 'solo') {
@@ -288,8 +286,7 @@ export default function Login() {
         activeModules: soloUser.active_modules || [], loginMode: 'solo',
       }
       setSession(soloSessionObj)
-      localStorage.setItem('ilab_session', JSON.stringify(soloSessionObj))
-      const { data: memberships } = await sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
+            const { data: memberships } = await sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
       if (memberships?.length) {
         const ownerIds = memberships.map(m => m.owner_id)
         const { data: owners } = await sb.from('solo_users').select('id, name').in('id', ownerIds)
