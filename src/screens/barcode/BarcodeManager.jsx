@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { ScannerContent } from './BarcodeScannerScreen'
+import { ScannerContent, DEFAULT_TYPES, buildTypeMap } from './BarcodeScannerScreen'
 import { isNative } from '../../lib/scanner.js'
 
 // Colorful logo for screen preview
@@ -483,8 +483,139 @@ function RecordsTab({ equipment, loading }) {
   )
 }
 
-// ── Settings tab (print prefs + barcode access for staff) ────────────────────
+// ── Material Types Manager ────────────────────────────────────────────────────
 
+function MaterialTypesManager({ session }) {
+  const [types, setTypes] = useState(null)
+  const [newLabel, setNewLabel] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const { toast } = useAppStore()
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    if (!session?.organizationId) return
+    const { data } = await sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
+    setTypes(data?.material_types?.length ? data.material_types : DEFAULT_TYPES)
+  }
+
+  async function save(newTypes) {
+    setSaving(true)
+    const { error } = await sb.from('organizations').update({ material_types: newTypes }).eq('id', session.organizationId)
+    if (error) { toast('Could not save: ' + error.message); setSaving(false); return }
+    setTypes(newTypes)
+    setSaving(false)
+    toast('Material types saved.')
+  }
+
+  function generateKey(label) {
+    return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  }
+
+  function addType() {
+    const label = newLabel.trim()
+    if (!label) return
+    const key = generateKey(label)
+    if ((types || []).some(t => t.key === key)) { toast('A type with this name already exists.'); return }
+    save([...(types || []), { key, label }])
+    setNewLabel('')
+  }
+
+  function deleteType(key) {
+    if (!confirm('Delete this type? Existing materials with this type will still show the key name.')) return
+    save((types || []).filter(t => t.key !== key))
+  }
+
+  function move(i, dir) {
+    const next = [...(types || [])]
+    const j = i + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    save(next)
+  }
+
+  function saveLabel(key) {
+    if (!editing?.label?.trim()) { setEditing(null); return }
+    save((types || []).map(t => t.key === key ? { ...t, label: editing.label.trim() } : t))
+    setEditing(null)
+  }
+
+  function resetToDefaults() {
+    if (!confirm('Reset to default types? All custom types will be removed.')) return
+    save(DEFAULT_TYPES)
+  }
+
+  const { colors: typeColors } = buildTypeMap(types || DEFAULT_TYPES)
+
+  if (!types) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+
+  return (
+    <div style={{ maxWidth: 520 }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Material Types</div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.5 }}>
+          These types appear in the QR Scan "All Materials" type filter. Customize the list for your organization — changes apply immediately to all users.
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+        {types.length === 0 && (
+          <div style={{ padding: '16px', fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No types defined. Add one below.</div>
+        )}
+        {types.map((type, i) => {
+          const tc = typeColors[type.key] || { bg: '#f0f0f0', color: '#555' }
+          return (
+            <div key={type.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < types.length - 1 ? '1px solid var(--surface2)' : 'none' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 99, padding: '2px 10px', background: tc.bg, color: tc.color, flexShrink: 0 }}>
+                {type.label}
+              </span>
+              {editing?.key === type.key ? (
+                <>
+                  <input autoFocus value={editing.label}
+                    onChange={e => setEditing({ ...editing, label: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') saveLabel(type.key); if (e.key === 'Escape') setEditing(null) }}
+                    style={{ flex: 1, fontSize: 13 }} />
+                  <button className="btn btn-sm btn-primary" onClick={() => saveLabel(type.key)} disabled={saving}>Save</button>
+                  <button className="btn btn-sm" onClick={() => setEditing(null)}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ flex: 1, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{type.key}</div>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button className="btn btn-sm" onClick={() => move(i, -1)} disabled={i === 0 || saving} title="Move up" style={{ padding: '3px 8px' }}>↑</button>
+                    <button className="btn btn-sm" onClick={() => move(i, 1)} disabled={i === types.length - 1 || saving} title="Move down" style={{ padding: '3px 8px' }}>↓</button>
+                    <button className="btn btn-sm" onClick={() => setEditing({ key: type.key, label: type.label })} title="Rename" style={{ padding: '3px 8px' }}>✏️</button>
+                    <button className="btn btn-sm" onClick={() => deleteType(type.key)} title="Delete" disabled={saving} style={{ padding: '3px 8px', color: '#c84b2f' }}>🗑</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add new type</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addType()}
+            placeholder="e.g. Bitumen Emulsion" style={{ flex: 1, fontSize: 13 }} />
+          <button className="btn btn-primary" onClick={addType} disabled={!newLabel.trim() || saving}>Add</button>
+        </div>
+        {newLabel.trim() && (
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+            Key: <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4 }}>{generateKey(newLabel)}</code>
+          </div>
+        )}
+      </div>
+
+      <button className="btn btn-sm" onClick={resetToDefaults} disabled={saving} style={{ fontSize: 12, color: 'var(--text3)' }}>
+        Reset to defaults
+      </button>
+    </div>
+  )
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -539,6 +670,7 @@ export default function BarcodeManager() {
           { key: 'equipment', label: '🔲 Equipment Barcode',   sub: 'Generate & print QR labels' },
           { key: 'records',   label: '📋 Records',             sub: 'Equipment list & bulk export' },
           { key: 'materials', label: '📷 Project Materials',   sub: 'Scan & browse project materials' },
+          { key: 'types',     label: '🏷️ Material Types',      sub: 'Manage material type list' },
         ].map(t => (
           <button
             key={t.key}
@@ -559,6 +691,7 @@ export default function BarcodeManager() {
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
       {tab === 'materials' && <ScannerContent />}
+      {tab === 'types'     && <MaterialTypesManager session={session} />}
     </div>
   )
 }

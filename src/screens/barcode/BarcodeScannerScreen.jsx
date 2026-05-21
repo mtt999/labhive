@@ -3,19 +3,38 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import jsQR from 'jsqr'
 
-const TYPE_LABELS = { aggregate: 'Aggregate', asphalt_binder: 'Asphalt Binder', plant_mix: 'Plant Mix', cores: 'Cores', other: 'Other' }
-const typeLabel = t => TYPE_LABELS[t] || t || '—'
+export const DEFAULT_TYPES = [
+  { key: 'aggregate',      label: 'Aggregate' },
+  { key: 'asphalt_binder', label: 'Asphalt Binder' },
+  { key: 'plant_mix',      label: 'Plant Mix' },
+  { key: 'cores',          label: 'Cores' },
+  { key: 'other',          label: 'Other' },
+]
 
-const TYPE_COLORS = {
-  aggregate:      { bg: '#fef3c7', color: '#92400e' },
-  asphalt_binder: { bg: '#e0f2fe', color: '#0369a1' },
-  plant_mix:      { bg: '#e8f2ee', color: '#1e4d39' },
-  cores:          { bg: '#f3eeff', color: '#7c4dbd' },
-  other:          { bg: '#f0efe9', color: '#6b6860' },
+const COLOR_PALETTE = [
+  { bg: '#fef3c7', color: '#92400e' },
+  { bg: '#e0f2fe', color: '#0369a1' },
+  { bg: '#e8f2ee', color: '#1e4d39' },
+  { bg: '#f3eeff', color: '#7c4dbd' },
+  { bg: '#f0efe9', color: '#6b6860' },
+  { bg: '#fce7f3', color: '#9d174d' },
+  { bg: '#ecfdf5', color: '#065f46' },
+  { bg: '#fff7ed', color: '#9a3412' },
+]
+
+export function buildTypeMap(types) {
+  const labels = {}; const colors = {}
+  ;(types || DEFAULT_TYPES).forEach((t, i) => {
+    labels[t.key] = t.label
+    colors[t.key] = COLOR_PALETTE[i % COLOR_PALETTE.length]
+  })
+  return { labels, colors }
 }
 
+const tLabel = (k, labelsMap) => labelsMap?.[k] || k || '—'
+
 // ── Material detail card (shared between Scan + List tabs) ──────
-function MaterialCard({ material, scannedValue, onClose }) {
+function MaterialCard({ material, scannedValue, onClose, typeLabels }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -36,8 +55,8 @@ function MaterialCard({ material, scannedValue, onClose }) {
       <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-lg)', padding: '14px 16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           {[
-            ['Material', material.name || typeLabel(material.material_type)],
-            ['Type',     typeLabel(material.material_type)],
+            ['Material', material.name || tLabel(material.material_type, typeLabels)],
+            ['Type',     tLabel(material.material_type, typeLabels)],
             ['Project',  material.projects?.name || '—'],
             ['Project ID', material.projects?.project_id || '—'],
             ['Storage',  material.storage_confirmed ? '✅ Confirmed' : '⏳ Pending'],
@@ -72,7 +91,7 @@ function MaterialCard({ material, scannedValue, onClose }) {
 }
 
 // ── Scan Tab ────────────────────────────────────────────────────
-function ScanTab() {
+function ScanTab({ typeLabels }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const animRef = useRef(null)
@@ -220,7 +239,7 @@ function ScanTab() {
 
       {result && !looking && (
         result.found
-          ? <MaterialCard material={result.material} scannedValue={result.scannedValue} onClose={reset} />
+          ? <MaterialCard material={result.material} scannedValue={result.scannedValue} onClose={reset} typeLabels={typeLabels} />
           : (
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -264,7 +283,7 @@ function ScanTab() {
 }
 
 // ── All Materials Tab ───────────────────────────────────────────
-function MaterialsTab() {
+function MaterialsTab({ typeLabels, typeColors }) {
   const { session } = useAppStore()
   const [materials, setMaterials] = useState([])
   const [projects, setProjects] = useState([])
@@ -317,7 +336,7 @@ function MaterialsTab() {
   return (
     <div>
       {selected && (
-        <MaterialCard material={selected} onClose={() => setSelected(null)} />
+        <MaterialCard material={selected} onClose={() => setSelected(null)} typeLabels={typeLabels} />
       )}
 
       {!selected && (
@@ -330,7 +349,7 @@ function MaterialsTab() {
             </div>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ flex: '0 1 160px' }}>
               <option value="">All types</option>
-              {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} style={{ flex: '0 1 180px' }}>
               <option value="">All projects</option>
@@ -350,7 +369,7 @@ function MaterialsTab() {
             </div>
           ) : (
             filtered.map(m => {
-              const tc = TYPE_COLORS[m.material_type] || TYPE_COLORS.other
+              const tc = typeColors[m.material_type] || COLOR_PALETTE[COLOR_PALETTE.length - 1]
               return (
                 <div key={m.id} className="card" style={{ padding: '12px 16px', marginBottom: 10, cursor: 'pointer', transition: 'box-shadow 0.15s' }}
                   onClick={() => setSelected(m)}
@@ -363,7 +382,7 @@ function MaterialsTab() {
                           {m.barcode_id || <span style={{ color: 'var(--text3)', fontWeight: 400 }}>No barcode</span>}
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 99, padding: '2px 8px', background: tc.bg, color: tc.color }}>
-                          {typeLabel(m.material_type)}
+                          {tLabel(m.material_type, typeLabels)}
                         </span>
                         {m.storage_confirmed && <span style={{ fontSize: 11, color: '#1e4d39', background: '#e8f2ee', borderRadius: 99, padding: '2px 8px' }}>✅ Stored</span>}
                       </div>
@@ -386,7 +405,7 @@ function MaterialsTab() {
 }
 
 // ── Summary Tab ─────────────────────────────────────────────────
-function SummaryTab() {
+function SummaryTab({ typeLabels, typeColors }) {
   const { session } = useAppStore()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -452,10 +471,10 @@ function SummaryTab() {
       {/* By type */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>By Material Type</div>
-        {Object.entries(TYPE_LABELS).map(([key, label]) => {
+        {Object.entries(typeLabels).map(([key, label]) => {
           const count = stats.byType[key] || 0
           if (!count) return null
-          const tc = TYPE_COLORS[key] || TYPE_COLORS.other
+          const tc = typeColors[key] || COLOR_PALETTE[COLOR_PALETTE.length - 1]
           const pct = Math.round(count / stats.total * 100)
           return (
             <div key={key} style={{ marginBottom: 10 }}>
@@ -467,6 +486,21 @@ function SummaryTab() {
               </div>
               <div style={{ background: 'var(--surface2)', borderRadius: 99, height: 6, overflow: 'hidden' }}>
                 <div style={{ height: '100%', background: tc.color, borderRadius: 99, width: `${pct}%`, transition: 'width 0.4s ease', opacity: 0.75 }} />
+              </div>
+            </div>
+          )
+        })}
+        {/* Show any types in data that aren't in typeLabels (leftover from old config) */}
+        {Object.entries(stats.byType).filter(([k]) => !typeLabels[k]).map(([key, count]) => {
+          const pct = Math.round(count / stats.total * 100)
+          return (
+            <div key={key} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 99, padding: '2px 8px', background: '#f0f0f0', color: '#666' }}>{key}</span>
+                <span style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{count} ({pct}%)</span>
+              </div>
+              <div style={{ background: 'var(--surface2)', borderRadius: 99, height: 6, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#999', borderRadius: 99, width: `${pct}%`, transition: 'width 0.4s ease', opacity: 0.75 }} />
               </div>
             </div>
           )
@@ -492,7 +526,19 @@ function SummaryTab() {
 
 // ── Shared scanner content (used by both the standalone screen and BarcodeManager tab) ──
 export function ScannerContent() {
+  const { session } = useAppStore()
   const [tab, setTab] = useState('scan')
+  const [orgTypes, setOrgTypes] = useState(DEFAULT_TYPES)
+
+  useEffect(() => {
+    if (session?.loginMode !== 'solo' && session?.organizationId) {
+      sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
+        .then(({ data }) => { if (data?.material_types?.length) setOrgTypes(data.material_types) })
+    }
+  }, [session?.organizationId])
+
+  const { labels: typeLabels, colors: typeColors } = buildTypeMap(orgTypes)
+
   const tabs = [
     { key: 'scan',      label: '📷 Scan' },
     { key: 'materials', label: '📦 All Materials' },
@@ -508,9 +554,9 @@ export function ScannerContent() {
           </button>
         ))}
       </div>
-      {tab === 'scan'      && <ScanTab />}
-      {tab === 'materials' && <MaterialsTab />}
-      {tab === 'summary'   && <SummaryTab />}
+      {tab === 'scan'      && <ScanTab typeLabels={typeLabels} />}
+      {tab === 'materials' && <MaterialsTab typeLabels={typeLabels} typeColors={typeColors} />}
+      {tab === 'summary'   && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
       <style>{`
         @keyframes scanline {
           0%   { top: 8px; opacity: 1; }
