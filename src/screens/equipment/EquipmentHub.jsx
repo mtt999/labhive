@@ -592,7 +592,15 @@ export default function EquipmentHub() {
         </div>
         <div style={{ overflowY: 'auto', maxHeight: mobile ? 220 : 600 }}>
           {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-            : filtered.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
+            : filtered.length === 0 ? (
+              equipment.length === 0
+                ? <div style={{ padding: '20px 14px', fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 22, marginBottom: 8 }}>🔧</div>
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment available yet.</div>
+                    <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment Inventory</strong> icon by your administrator.</div>
+                  </div>
+                : <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
+            )
             : filtered.map((e, idx) => (
               <div key={e.id} onClick={() => { setSelected(e); setSubTab('info') }}
                 style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--surface2)', background: selected?.id === e.id ? 'var(--accent-light)' : 'transparent', transition: 'background 0.1s' }}
