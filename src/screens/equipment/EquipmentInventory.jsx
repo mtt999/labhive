@@ -595,19 +595,22 @@ function MaintenanceDue({ session }) {
   )
 }
 
-function CategoriesManager({ toast }) {
+function CategoriesManager({ toast, session }) {
   const [categories, setCategories] = useState([])
   const [newCat, setNewCat] = useState('')
   const [loading, setLoading] = useState(true)
+  const orgId = session?.userId ? session?.organizationId : null
   useEffect(() => { loadCats() }, [])
   async function loadCats() {
     setLoading(true)
-    const { data } = await sb.from('equipment_categories').select('*').order('name')
+    let q = sb.from('equipment_categories').select('*').order('name')
+    if (orgId) q = q.eq('organization_id', orgId)
+    const { data } = await q
     setCategories(data || []); setLoading(false)
   }
   async function addCategory() {
     if (!newCat.trim()) return
-    await sb.from('equipment_categories').insert({ name: newCat.trim() })
+    await sb.from('equipment_categories').insert({ name: newCat.trim(), organization_id: orgId || null })
     setNewCat(''); loadCats(); toast('Category added.')
   }
   async function deleteCategory(id) {
@@ -670,7 +673,7 @@ function EquipmentSettings({ session }) {
           <button className="btn btn-sm btn-primary" onClick={applyDefaultInterval} disabled={saving}>Apply to equipment without interval</button>
         </div>
       </div>
-      <CategoriesManager toast={toast} />
+      <CategoriesManager toast={toast} session={session} />
       {session?.role === 'admin' && (
         <div className="card" style={{ borderColor: 'var(--accent2)' }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, color: 'var(--accent2)' }}>Danger zone</div>
