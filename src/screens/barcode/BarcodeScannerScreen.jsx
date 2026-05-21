@@ -278,12 +278,21 @@ function MaterialsTab() {
 
   async function load() {
     setLoading(true)
-    const orgId = session?.loginMode !== 'solo' ? session?.organizationId : null
+    const isSolo = session?.loginMode === 'solo'
+    const isSuperAdmin = !session?.userId
     let projQ = sb.from('projects').select('id, name, project_id').order('name')
-    if (orgId) projQ = projQ.eq('organization_id', orgId)
+    if (isSolo && session?.userId) {
+      projQ = projQ.eq('solo_owner_id', session.userId)
+    } else if (!isSolo && !isSuperAdmin && session?.organizationId) {
+      projQ = projQ.eq('organization_id', session.organizationId)
+    }
     const { data: projs } = await projQ
+    const isScoped = isSolo || (!isSuperAdmin && session?.organizationId)
+    if (isScoped && (!projs || projs.length === 0)) {
+      setMaterials([]); setProjects([]); setLoading(false); return
+    }
     let matsQ = sb.from('project_materials').select('*, projects(id, name, project_id)').order('created_at', { ascending: false })
-    if (orgId && projs?.length) matsQ = matsQ.in('project_id', projs.map(p => p.id))
+    if (isScoped && projs?.length) matsQ = matsQ.in('project_id', projs.map(p => p.id))
     const { data: mats } = await matsQ
     setMaterials(mats || [])
     setProjects(projs || [])
@@ -378,6 +387,7 @@ function MaterialsTab() {
 
 // ── Summary Tab ─────────────────────────────────────────────────
 function SummaryTab() {
+  const { session } = useAppStore()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -385,8 +395,22 @@ function SummaryTab() {
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('project_materials')
-      .select('material_type, storage_confirmed, barcode_id, projects(name, project_id)')
+    const isSolo = session?.loginMode === 'solo'
+    const isSuperAdmin = !session?.userId
+    let scopedProjectIds = null
+    if (isSolo && session?.userId) {
+      const { data: projs } = await sb.from('projects').select('id').eq('solo_owner_id', session.userId)
+      scopedProjectIds = (projs || []).map(p => p.id)
+    } else if (!isSolo && !isSuperAdmin && session?.organizationId) {
+      const { data: projs } = await sb.from('projects').select('id').eq('organization_id', session.organizationId)
+      scopedProjectIds = (projs || []).map(p => p.id)
+    }
+    if (scopedProjectIds !== null && scopedProjectIds.length === 0) {
+      setStats({ total: 0, withBarcode: 0, stored: 0, byType: {}, byProject: {} }); setLoading(false); return
+    }
+    let q = sb.from('project_materials').select('material_type, storage_confirmed, barcode_id, projects(name, project_id)')
+    if (scopedProjectIds !== null) q = q.in('project_id', scopedProjectIds)
+    const { data } = await q
     if (!data) { setLoading(false); return }
 
     const byType = {}
