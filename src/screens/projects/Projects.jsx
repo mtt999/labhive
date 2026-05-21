@@ -542,8 +542,10 @@ function DataAnalysis() {
   const [dateTo, setDateTo]         = useState('')
 
   useEffect(() => {
-    sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-      .then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
+    const isSolo = session?.loginMode === 'solo'
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
+    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
   }, [])
 
   useEffect(() => {

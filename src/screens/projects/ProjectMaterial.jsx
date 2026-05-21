@@ -1035,8 +1035,10 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   const [addForm, setAddForm] = useState(emptyAddForm)
 
   useEffect(() => {
-    sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-      .then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
+    const isSolo = session?.loginMode === 'solo'
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
+    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
     if (session?.organizationId) {
       sb.from('projects').select('id, name, project_id, pi_user_id, student_ids, project_group').eq('status', 'active').eq('organization_id', session.organizationId).order('project_id')
         .then(({ data }) => setAllProjects(data || []))
