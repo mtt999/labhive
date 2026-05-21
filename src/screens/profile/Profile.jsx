@@ -634,7 +634,7 @@ function AdminProfile() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Profile & Management</div>
+        <div className="section-title">Profile</div>
         <HelpPanel screen="profile" />
       </div>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
@@ -705,7 +705,9 @@ function StudentsPanel({ toast, session }) {
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('users').select('*').eq('role', 'student').order('name')
+    let q = sb.from('users').select('*').eq('role', 'student').order('name')
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const { data } = await q
     setStudents(data || [])
     setLoading(false)
   }
@@ -918,7 +920,7 @@ function StaffPanel({ toast, session }) {
         ))}
       </div>
       {staffTab === 'list'   && <StaffListPanel toast={toast} session={session} />}
-      {staffTab === 'access' && <AccessControl toast={toast} />}
+      {staffTab === 'access' && <AccessControl toast={toast} session={session} />}
     </div>
   )
 }
@@ -929,11 +931,11 @@ function StaffListPanel({ toast, session }) {
   const [showModal, setShowModal] = useState(false)
   const [editStaff, setEditStaff] = useState(null)
   useEffect(() => { load() }, [])
-  async function load() { setLoading(true); const { data } = await sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); setStaff(data || []); setLoading(false) }
+  async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setStaff(data || []); setLoading(false) }
   async function saveStaff(form, id) {
     if (!form.name.trim()) { toast('Name is required.'); return }
     if (!id && !form.password) { toast('Password is required.'); return }
-    const payload = { name: form.name.trim(), email: form.email || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '' }
+    const payload = { name: form.name.trim(), email: form.email || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null }
     if (form.password && form.password.trim()) payload.password = await hashPassword(form.password.trim())
     if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return } }
     else { const { error } = await sb.from('users').insert(payload); if (error) { toast('Error: ' + error.message); return } }
@@ -1037,8 +1039,13 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
 }
 
 function SupervisorSelect({ value, onChange }) {
+  const { session } = useAppStore()
   const [supervisors, setSupervisors] = useState([])
-  useEffect(() => { sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name').then(({ data }) => setSupervisors(data || [])) }, [])
+  useEffect(() => {
+    let q = sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name')
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    q.then(({ data }) => setSupervisors(data || []))
+  }, [session?.organizationId])
   return (
     <select value={value||''} onChange={e => onChange(e.target.value)}>
       <option value="">— Select supervisor —</option>
@@ -1051,7 +1058,7 @@ function SupervisorSelect({ value, onChange }) {
 // STAFF: MANAGE STUDENT DASHBOARD ICONS
 // ══════════════════════════════════════════════════════════════
 function StaffStudentIconManager() {
-  const { toast } = useAppStore()
+  const { toast, session } = useAppStore()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -1061,7 +1068,9 @@ function StaffStudentIconManager() {
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('users').select('*').eq('role', 'student').order('name')
+    let q = sb.from('users').select('*').eq('role', 'student').order('name')
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const { data } = await q
     setStudents(data || [])
     setLoading(false)
   }
@@ -1136,7 +1145,7 @@ function StaffProfile({ session }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Profile & Management</div>
+        <div className="section-title">Profile</div>
         <HelpPanel screen="profile" />
       </div>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
@@ -1409,7 +1418,7 @@ export default function Profile() {
   return <UserProfile session={session} />
 }
 
-function AccessControl({ toast }) {
+function AccessControl({ toast, session }) {
   const ALL_SCREENS = [
     { key: 'home',        label: 'Supply Inventory',    icon: '📦' },
     { key: 'projects',    label: 'Project & Material',   icon: '🧪' },
@@ -1432,7 +1441,7 @@ function AccessControl({ toast }) {
   const [loading, setLoading] = useState(true)
   useEffect(() => { loadUsers() }, [])
   useEffect(() => { if (selected) loadAccess(selected.id) }, [selected])
-  async function loadUsers() { setLoading(true); const { data } = await sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name'); setUsers(data || []); setLoading(false) }
+  async function loadUsers() { setLoading(true); let q = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setUsers(data || []); setLoading(false) }
   async function loadAccess(userId) {
     const { data } = await sb.from('user_screen_access').select('screen_key').eq('user_id', userId)
     const map = {}
