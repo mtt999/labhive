@@ -5,35 +5,25 @@ import { PasswordStrengthHint } from './PasswordStrengthHint'
 
 export default function ForcePasswordChange() {
   const { session, setSession, clearSession, toast } = useAppStore()
-  const [current, setCurrent]   = useState('')
   const [next, setNext]         = useState('')
   const [confirm, setConfirm]   = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const [showCurrent, setShowCurrent] = useState(false)
-  const [showNext, setShowNext]       = useState(false)
+  const [showNext, setShowNext] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!current.trim())                     { setError('Enter your current (temporary) password.'); return }
-    if (next.length < 8)                     { setError('New password must be at least 8 characters.'); return }
-    if (!/[A-Z]/.test(next))                 { setError('New password must contain an uppercase letter.'); return }
-    if (!/[a-z]/.test(next))                 { setError('New password must contain a lowercase letter.'); return }
-    if (!/[^A-Za-z0-9]/.test(next))          { setError('New password must contain a symbol (e.g. !@#$%).'); return }
-    if (next !== confirm)                    { setError('Passwords do not match.'); return }
-    if (next === current)                    { setError('New password must be different from the current one.'); return }
+    if (next.length < 8)            { setError('New password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(next))        { setError('New password must contain an uppercase letter.'); return }
+    if (!/[a-z]/.test(next))        { setError('New password must contain a lowercase letter.'); return }
+    if (!/[^A-Za-z0-9]/.test(next)) { setError('New password must contain a symbol (e.g. !@#$%).'); return }
+    if (next !== confirm)           { setError('Passwords do not match.'); return }
     setLoading(true)
 
-    // Verify current password by reauthenticating
-    const { error: reAuthErr } = await sb.auth.signInWithPassword({ email: session.email, password: current })
-    if (reAuthErr) { setError('Current password is incorrect.'); setLoading(false); return }
-
-    // Change password via Supabase Auth
     const { error: updateErr } = await sb.auth.updateUser({ password: next })
     if (updateErr) { setError(updateErr.message || 'Failed to update password. Try again.'); setLoading(false); return }
 
-    // Clear the must_change_password flag
     await sb.from('users').update({ must_change_password: false }).eq('id', session.userId)
 
     const updated = { ...session, mustChangePassword: false }
@@ -67,24 +57,6 @@ export default function ForcePasswordChange() {
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>Current (temporary) password</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showCurrent ? 'text' : 'password'}
-                value={current}
-                onChange={e => { setCurrent(e.target.value); setError('') }}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                style={{ paddingRight: 44 }}
-              />
-              <button type="button" onClick={() => setShowCurrent(s => !s)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 15, color: 'var(--text3)', padding: 4 }}>
-                {showCurrent ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-
-          <div className="field">
             <label>New password</label>
             <div style={{ position: 'relative' }}>
               <input
@@ -94,6 +66,7 @@ export default function ForcePasswordChange() {
                 placeholder="••••••••"
                 autoComplete="new-password"
                 style={{ paddingRight: 44 }}
+                autoFocus
               />
               <button type="button" onClick={() => setShowNext(s => !s)}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 15, color: 'var(--text3)', padding: 4 }}>
