@@ -292,7 +292,7 @@ function DashboardIconsPanel({ session }) {
           setSelected(new Set(savedArr))
           setDisplayOrder(initOrder(savedArr, poolKeys))
         } else {
-          const displayKeys = effectivePool !== null ? allKeys.filter(k => effectivePool.includes(k) || k === 'profile') : allKeys
+          const displayKeys = effectivePool !== null ? allKeys.filter(k => effectivePool.includes(k) || pinnedKeys.includes(k)) : allKeys
           const savedArr = data?.active_modules?.length
             ? data.active_modules.filter(k => displayKeys.includes(k))
             : null

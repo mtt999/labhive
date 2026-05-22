@@ -159,7 +159,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         const effectivePool = orgPool ?? appPool
 
         if (effectivePool !== null) {
-          localAvailable = localAvailable.filter(m => effectivePool.includes(m.key) || m.key === 'profile')
+          localAvailable = localAvailable.filter(m => effectivePool.includes(m.key) || m.key === 'profile' || (isStaff && m.staffOnly))
         }
 
         if (session?.role === 'student') {
