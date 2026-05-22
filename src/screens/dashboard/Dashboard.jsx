@@ -371,7 +371,7 @@ export default function Dashboard() {
     try {
       if (!session?.loginMode) return
       // Students default to empty while prefs load so they never flash all icons
-      if (session?.role === 'student') setActiveModules(prev => prev === null ? [] : prev)
+      if (session?.role === 'student' && activeModules === null) setActiveModules([])
       if (!session?.userId) {
         const saved = localStorage.getItem('ilab_admin_modules')
         setActiveModules(saved ? JSON.parse(saved) : null)
