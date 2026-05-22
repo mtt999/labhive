@@ -92,8 +92,9 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
 
   useEffect(() => {
     if (isAdmin(session)) {
-      sb.from('users').select('id, name').eq('is_active', true).neq('role', 'admin').order('name')
-        .then(({ data }) => setStudents(data || []))
+      let q = sb.from('users').select('id, name').eq('is_active', true).neq('role', 'admin').order('name')
+      if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+      q.then(({ data }) => setStudents(data || []))
     }
     if (session?.userId) {
       const isSolo = session.loginMode === 'solo' || session.role === 'solo'

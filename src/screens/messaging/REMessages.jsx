@@ -65,6 +65,7 @@ function ComposeForm({ session, staff, onSent, onCancel }) {
       receiver_id: form.receiverId || null,
       receiver_name: receiver?.name || (isAdmin || isStaff ? 'All Staff' : null),
       subject: form.subject || null, body: form.body.trim(), file_url: fileUrl, file_name: fileName,
+      organization_id: session?.organizationId || null,
     })
     if (form.receiverId) {
       await sendMessageEmail(form.receiverId, session.username, form.body.trim())
@@ -143,10 +144,9 @@ export default function REMessages() {
     let query = sb.from('re_messages').select('*').order('created_at', { ascending: false })
     if (!isAdmin) {
       query = query.or(`receiver_id.eq.${session.userId},sender_id.eq.${session.userId}`)
+      if (session?.organizationId) query = query.eq('organization_id', session.organizationId)
     } else if (session?.organizationId && session?.userId) {
-      const { data: orgUsers } = await sb.from('users').select('id').eq('organization_id', session.organizationId).eq('is_active', true)
-      const orgIds = (orgUsers || []).map(u => u.id).join(',')
-      if (orgIds) query = query.or(`sender_id.in.(${orgIds}),receiver_id.in.(${orgIds})`)
+      query = query.eq('organization_id', session.organizationId)
     }
     const { data } = await query
     setMessages(data || [])

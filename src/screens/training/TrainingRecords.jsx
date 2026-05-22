@@ -54,11 +54,14 @@ function FreshTraining({ students, session }) {
   const addFileRef = useRef(null)
   const [search, setSearch] = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (students.length > 0) load() }, [students])
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('training_fresh').select('*')
+    const ids = students.map(s => s.id)
+    let q = sb.from('training_fresh').select('*')
+    if (ids.length) q = q.in('user_id', ids)
+    const { data } = await q
     setRecords(data || [])
     setLoading(false)
   }
@@ -306,11 +309,14 @@ function GolfCarTraining({ students, session }) {
   const [addingFor, setAddingFor] = useState(null)
   const [form, setForm] = useState({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (students.length > 0) load() }, [students])
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('training_golf_car').select('*')
+    const ids = students.map(s => s.id)
+    let q = sb.from('training_golf_car').select('*')
+    if (ids.length) q = q.in('user_id', ids)
+    const { data } = await q
     setRecords(data || [])
     setLoading(false)
   }
@@ -483,16 +489,19 @@ function EquipmentTraining({ students, session }) {
   const [search, setSearch] = useState('')
   const [searchHistory, setSearchHistory] = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (students.length > 0) load() }, [students])
 
   async function load() {
     setLoading(true)
     let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('nickname')
     if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('created_by', session.userId)
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
+    const ids = students.map(s => s.id)
+    let recQuery = sb.from('training_equipment').select('*')
+    if (ids.length) recQuery = recQuery.in('user_id', ids)
     const [{ data: eq }, { data: rec }, { data: retrainReqs }] = await Promise.all([
       equipQuery,
-      sb.from('training_equipment').select('*'),
+      recQuery,
       sb.from('retraining_requests').select('*').eq('status', 'pending'),
     ])
     setEquipment(eq || [])
@@ -860,11 +869,14 @@ function BuildingAlarm({ students, session }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (students.length > 0) load() }, [students])
 
   async function load() {
     setLoading(true)
-    const { data } = await sb.from('training_building_alarm').select('*')
+    const ids = students.map(s => s.id)
+    let q = sb.from('training_building_alarm').select('*')
+    if (ids.length) q = q.in('user_id', ids)
+    const { data } = await q
     setRecords(data || [])
     setLoading(false)
   }
@@ -1213,33 +1225,34 @@ export default function TrainingRecords() {
   })
   const [expiryAlerts, setExpiryAlerts] = useState([])
 
-  useEffect(() => { loadStudents(); checkExpiry() }, [])
+  useEffect(() => { loadStudents() }, [])
 
   async function loadStudents() {
     setLoading(true)
+    let data
     if (session?.loginMode === 'solo') {
-      // Solo user sees only their own row
-      setStudents([{ id: session.userId, name: session.username, email: session.username }])
-      setLoading(false)
-      return
-    }
-    if (session?.role === 'student') {
-      const { data } = await sb.from('users').select('*').eq('id', session.userId).single()
-      setStudents(data ? [data] : [])
+      data = [{ id: session.userId, name: session.username, email: session.username }]
+    } else if (session?.role === 'student') {
+      const { data: d } = await sb.from('users').select('*').eq('id', session.userId).single()
+      data = d ? [d] : []
     } else {
       let q = sb.from('users').select('*').eq('role', 'student').eq('is_active', true).order('name')
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
-      const { data } = await q
-      setStudents(data || [])
+      const { data: d } = await q
+      data = d || []
     }
+    setStudents(data)
     setLoading(false)
+    checkExpiry(data.map(u => u.id))
   }
 
-  async function checkExpiry() {
+  async function checkExpiry(orgUserIds) {
     if (!session?.userId) return
-    const { data } = await sb.from('training_equipment')
+    let q = sb.from('training_equipment')
       .select('*, equipment_inventory(equipment_name, nickname), users(name, last_name)')
       .lt('expires_at', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+    if (orgUserIds?.length) q = q.in('user_id', orgUserIds)
+    const { data } = await q
     if (data?.length) setExpiryAlerts(data)
   }
 
