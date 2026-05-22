@@ -207,6 +207,17 @@ function OrgSettingsPanel({ session }) {
   )
 }
 
+const STUDENT_ICON_OPTIONS = [
+  { key: 'projects',     label: 'Project & Material',   icon: '🧪' },
+  { key: 'training',     label: 'Training Records',      icon: '🎓' },
+  { key: 'equipmenthub', label: 'Equipment Hub',         icon: '📚' },
+  { key: 'booking',      label: 'Booking Equipment',     icon: '📅' },
+  { key: 'barcode',      label: 'QR Scan',               icon: '📷' },
+  { key: 'remessages',   label: 'Contact Lab Manager',   icon: '💬' },
+  { key: 'mileage',      label: 'Mileage Form',          icon: '🚗' },
+  { key: 'labsafety',    label: 'Lab Safety',            icon: '🦺' },
+]
+
 // ── User modal ────────────────────────────────────────────────
 function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClose, onSaved }) {
   const { toast } = useAppStore()
@@ -217,6 +228,35 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   const [orgId, setOrgId]       = useState(user?.organization_id || defaultOrgId || '')
   const [copied, setCopied]     = useState(false)
   const [savedCreds, setSavedCreds] = useState(null)
+  const [selectedIcons, setSelectedIcons] = useState(new Set())
+
+  // Load existing icon prefs when editing a student
+  useEffect(() => {
+    if (user?.id && (user?.role === 'student' || role === 'student')) {
+      sb.from('user_dashboard_prefs').select('active_modules').eq('user_id', user.id).maybeSingle()
+        .then(({ data }) => {
+          if (data?.active_modules?.length) setSelectedIcons(new Set(data.active_modules))
+        })
+    }
+  }, [user?.id, role])
+
+  function toggleIcon(key) {
+    setSelectedIcons(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function saveIconPrefs(userId) {
+    const modules = [...selectedIcons]
+    const { data: existing } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId).maybeSingle()
+    if (existing) {
+      await sb.from('user_dashboard_prefs').update({ active_modules: modules, has_set_dashboard: true }).eq('user_id', userId)
+    } else {
+      await sb.from('user_dashboard_prefs').insert({ user_id: userId, active_modules: modules, has_set_dashboard: true })
+    }
+  }
 
   async function save() {
     if (!name.trim())    { toast('Please enter a name.'); return }
@@ -234,7 +274,8 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       if (password) upd.must_change_password = true
       const { error } = await sb.from('users').update(upd).eq('id', user.id)
       if (error) { toast('Error updating user: ' + error.message); return }
-      if (password) toast('User updated. The user must change their password on next login — ask them to use the Forgot Password flow.')
+      if (role === 'student') await saveIconPrefs(user.id)
+      if (password) toast('User updated. Password will be required to change on next login.')
       else toast('User updated.')
       onSaved()
       onClose()
@@ -246,16 +287,12 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         const authUser = await createAuthUser(emailLC, tempPassword)
         if (authUser) auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
-      const { error } = await sb.from('users').insert({
-        name: name.trim(),
-        email: emailLC,
-        auth_id,
-        role,
-        organization_id: orgId,
-        is_active: true,
-        must_change_password: true,
-      })
+      const { data: inserted, error } = await sb.from('users').insert({
+        name: name.trim(), email: emailLC, auth_id, role,
+        organization_id: orgId, is_active: true, must_change_password: true,
+      }).select('id').single()
       if (error) { toast('Error creating user: ' + error.message); return }
+      if (role === 'student' && inserted?.id) await saveIconPrefs(inserted.id)
       setSavedCreds({ name: name.trim(), email: emailLC, password: tempPassword })
       onSaved()
     }
@@ -330,6 +367,38 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
           </div>
         )}
       </div>
+
+      {role === 'student' && (
+        <div style={{ marginTop: 4, marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+            Dashboard icons for this lab user
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {STUDENT_ICON_OPTIONS.map(m => {
+              const on = selectedIcons.has(m.key)
+              return (
+                <button key={m.key} type="button" onClick={() => toggleIcon(m.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${on ? '#1D9E75' : 'var(--border)'}`,
+                    background: on ? '#E1F5EE' : 'var(--surface)', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 500, color: on ? '#0F6E56' : 'var(--text2)',
+                    transition: 'all 0.12s',
+                  }}>
+                  <span>{m.icon}</span>
+                  <span>{m.label}</span>
+                  {on && <span style={{ fontSize: 10, fontWeight: 700 }}>✓</span>}
+                </button>
+              )
+            })}
+          </div>
+          {selectedIcons.size === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              No icons selected — user will see an empty dashboard until icons are assigned.
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button className="btn btn-primary" onClick={save}>
