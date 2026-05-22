@@ -14,7 +14,7 @@ function getModules(role, loginMode, activeModules) {
     if (m.hideForStaff && isStaff) return false
     return true
   })
-  if (activeModules && activeModules.length > 0) {
+  if (activeModules !== null && activeModules !== undefined) {
     const baseMap = Object.fromEntries(base.map(m => [m.key, m]))
     const ordered = []
     activeModules.forEach(k => { if (baseMap[k]) ordered.push(baseMap[k]) })
@@ -128,10 +128,10 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
 
   if (isStudent) {
     const allMods = getAllModulesForStudent()
-    // Respect activeModules: hide unchecked non-locked cards
-    const visibleMods = activeModules?.length
-      ? allMods.filter(m => m.locked || activeModules.includes(m.key))
-      : allMods
+    // null = no preference (show all); [] = no icons assigned yet (show none)
+    const visibleMods = activeModules === null || activeModules === undefined
+      ? allMods
+      : allMods.filter(m => activeModules.includes(m.key))
     return (
       <>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
@@ -210,9 +210,9 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     { key:'remessages',  icon:'💬', label:'Contact Lab Manager',  sub:'Ask REs a question',             screen:'remessages',  color:'#2a6049' },
     { key:'mileage',     icon:'🚗', label:'Mileage Form',         sub:'Submit reimbursement',           screen:null,          color:'#c84b2f', external:true },
   ]
-  const quickLinks = activeModules?.length
-    ? allQuickLinks.filter(m => activeModules.includes(m.key))
-    : allQuickLinks
+  const quickLinks = activeModules === null || activeModules === undefined
+    ? allQuickLinks
+    : allQuickLinks.filter(m => activeModules.includes(m.key))
   return (
     <>
       <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap:20, alignItems:'start' }}>
@@ -422,7 +422,9 @@ export default function Dashboard() {
             }
           }
         } catch {}
-        setActiveModules(mods?.length ? mods : null)
+        // Students with no config see nothing (only pinned profile) until admin assigns icons
+        const defaultMods = session?.role === 'student' ? [] : null
+        setActiveModules(mods?.length ? mods : defaultMods)
         if (session?.role === 'student') {
           setStudentAllowedPool(new Set(row?.allowed_modules || []))
         }

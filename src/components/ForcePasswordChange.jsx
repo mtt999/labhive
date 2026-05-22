@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
+import { PasswordStrengthHint } from './PasswordStrengthHint'
 
 export default function ForcePasswordChange() {
-  const { session, setSession, toast } = useAppStore()
+  const { session, setSession, clearSession, toast } = useAppStore()
   const [current, setCurrent]   = useState('')
   const [next, setNext]         = useState('')
   const [confirm, setConfirm]   = useState('')
@@ -15,10 +16,13 @@ export default function ForcePasswordChange() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!current.trim())          { setError('Enter your current (temporary) password.'); return }
-    if (next.length < 6)          { setError('New password must be at least 6 characters.'); return }
-    if (next !== confirm)         { setError('Passwords do not match.'); return }
-    if (next === current)         { setError('New password must be different from the current one.'); return }
+    if (!current.trim())                     { setError('Enter your current (temporary) password.'); return }
+    if (next.length < 8)                     { setError('New password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(next))                 { setError('New password must contain an uppercase letter.'); return }
+    if (!/[a-z]/.test(next))                 { setError('New password must contain a lowercase letter.'); return }
+    if (!/[^A-Za-z0-9]/.test(next))          { setError('New password must contain a symbol (e.g. !@#$%).'); return }
+    if (next !== confirm)                    { setError('Passwords do not match.'); return }
+    if (next === current)                    { setError('New password must be different from the current one.'); return }
     setLoading(true)
 
     // Verify current password by reauthenticating
@@ -27,7 +31,7 @@ export default function ForcePasswordChange() {
 
     // Change password via Supabase Auth
     const { error: updateErr } = await sb.auth.updateUser({ password: next })
-    if (updateErr) { setError('Failed to update password. Try again.'); setLoading(false); return }
+    if (updateErr) { setError(updateErr.message || 'Failed to update password. Try again.'); setLoading(false); return }
 
     // Clear the must_change_password flag
     await sb.from('users').update({ must_change_password: false }).eq('id', session.userId)
@@ -46,11 +50,18 @@ export default function ForcePasswordChange() {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{ width: '100%', maxWidth: 400, background: 'var(--surface)', borderRadius: 16, padding: 32, boxShadow: '0 8px 40px rgba(0,0,0,0.3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+          <button type="button" onClick={clearSession}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: '2px 4px' }}>
+            Sign out
+          </button>
+        </div>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>🔑</div>
           <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>Set your new password</div>
           <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 6, lineHeight: 1.5 }}>
-            Your admin set a temporary password. You must change it before continuing.
+            Your admin set a temporary password. You must change it before you can use the app.<br/>
+            Min. 8 characters with uppercase, lowercase & symbol.
           </div>
         </div>
 
@@ -74,7 +85,7 @@ export default function ForcePasswordChange() {
           </div>
 
           <div className="field">
-            <label>New password (min 6 characters)</label>
+            <label>New password</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showNext ? 'text' : 'password'}
@@ -89,6 +100,7 @@ export default function ForcePasswordChange() {
                 {showNext ? '🙈' : '👁️'}
               </button>
             </div>
+            <PasswordStrengthHint password={next} />
           </div>
 
           <div className="field">

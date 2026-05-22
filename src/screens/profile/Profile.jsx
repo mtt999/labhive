@@ -1,4 +1,5 @@
 import HelpPanel from '../../components/HelpPanel'
+import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
@@ -172,12 +173,13 @@ function SoloProfile({ session }) {
       {activeTab === 'password' && (
         <div className="card">
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Change password</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>Minimum 6 characters.</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>Min. 8 characters with uppercase, lowercase & symbol.</div>
           <div className="field"><label>Current password</label><input type="password" value={pinForm.current} onChange={e => { setPinForm(f => ({ ...f, current: e.target.value })); setPinError('') }} /></div>
           <div className="grid-2">
             <div className="field"><label>New password</label><input type="password" value={pinForm.newPin} onChange={e => { setPinForm(f => ({ ...f, newPin: e.target.value })); setPinError('') }} /></div>
             <div className="field"><label>Confirm</label><input type="password" value={pinForm.confirm} onChange={e => { setPinForm(f => ({ ...f, confirm: e.target.value })); setPinError('') }} /></div>
           </div>
+          <PasswordStrengthHint password={pinForm.newPin} />
           {pinError && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {pinError}</div>}
           <button className="btn btn-primary" onClick={savePassword} disabled={!pinForm.current || !pinForm.newPin || !pinForm.confirm}>Update password</button>
         </div>
@@ -691,7 +693,8 @@ function AdminSettings({ session: sessionProp, toast }) {
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🔑 Account Settings</div>
       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>Update the admin password.</div>
       <div className="field"><label>Current password</label><input type="password" value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="••••••••" /></div>
-      <div className="field"><label>New password</label><input type="password" value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 6 characters" /></div>
+      <div className="field"><label>New password</label><input type="password" value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 8 characters" /></div>
+      <PasswordStrengthHint password={form.newPassword} />
       <div className="field"><label>Confirm new password</label><input type="password" value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} placeholder="••••••••" /></div>
       {error && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {error}</div>}
       <button className="btn btn-primary" onClick={savePassword} disabled={saving}>{saving ? 'Saving…' : 'Update password'}</button>
@@ -1380,12 +1383,13 @@ function UserProfileForm({ session, toast }) {
       {activeTab === 'pin' && (
         <div className="card">
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Change password</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Minimum 6 characters.</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Min. 8 characters with uppercase, lowercase & symbol.</div>
           <div className="field"><label>Current password</label><input type="password" value={pinForm.current} onChange={e => { setPinForm(f => ({ ...f, current: e.target.value })); setPinError('') }} /></div>
           <div className="grid-2">
             <div className="field"><label>New password</label><input type="password" value={pinForm.newPin} onChange={e => { setPinForm(f => ({ ...f, newPin: e.target.value })); setPinError('') }} /></div>
             <div className="field"><label>Confirm</label><input type="password" value={pinForm.confirm} onChange={e => { setPinForm(f => ({ ...f, confirm: e.target.value })); setPinError('') }} /></div>
           </div>
+          <PasswordStrengthHint password={pinForm.newPin} />
           {pinError && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {pinError}</div>}
           <button className="btn btn-primary" onClick={savePin} disabled={!pinForm.current || !pinForm.newPin || !pinForm.confirm}>Update password</button>
         </div>

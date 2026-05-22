@@ -28,6 +28,16 @@ import EquipmentScan from './screens/equipment/EquipmentScan'
 import Admin from './screens/admin/Admin'
 import { isNative } from './lib/scanner.js'
 
+if (isNative()) {
+  import('@basecom-gmbh/capacitor-jailbreak-root-detection').then(({ JailbreakRootDetection }) => {
+    JailbreakRootDetection.isJailbrokenOrRooted().then(({ result }) => {
+      if (result) {
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:32px"><p>This app cannot run on a jailbroken device.</p></div>'
+      }
+    }).catch(() => {})
+  }).catch(() => {})
+}
+
 // Detect if we're on the /admin route
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
 
@@ -156,10 +166,12 @@ export default function App() {
         const hasSaved = row && Array.isArray(row.active_modules) && row.active_modules.length > 0
         setShowIconPicker(!hasSaved)
       } else {
-        const { data } = await sb.from('user_dashboard_prefs').select('active_modules').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
+        const { data } = await sb.from('user_dashboard_prefs').select('active_modules, has_set_dashboard').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
         const row = data?.[0]
-        // Show picker only if user has never saved any modules (no row or null/empty array)
-        const hasSaved = row && Array.isArray(row.active_modules) && row.active_modules.length > 0
+        const hasSaved = row && (
+          (Array.isArray(row.active_modules) && row.active_modules.length > 0) ||
+          row.has_set_dashboard === true
+        )
         setShowIconPicker(!hasSaved)
       }
     } catch (e) {
@@ -244,21 +256,22 @@ export default function App() {
           onDone={(modules) => {
             if (!session.userId) {
               localStorage.setItem('ilab_admin_dashboard_set', 'true')
-            } else if (!modules) {
-              // Dismissed without saving — mark as seen so picker doesn't reappear
+            } else if (!modules || modules.length === 0) {
+              // Dismissed or no icons assigned — mark as seen so picker doesn't reappear
               if (session.loginMode === 'solo') {
                 sb.from('solo_users').update({ has_set_dashboard: true }).eq('id', session.userId).then(() => {})
               } else {
-                sb.from('user_dashboard_prefs')
-                  .update({ has_set_dashboard: true }).eq('user_id', session.userId).select('id')
+                sb.from('user_dashboard_prefs').select('id').eq('user_id', session.userId).limit(1)
                   .then(({ data }) => {
-                    if (!data?.length) {
-                      sb.from('user_dashboard_prefs').insert({ user_id: session.userId, has_set_dashboard: true }).then(() => {})
+                    if (data?.length) {
+                      sb.from('user_dashboard_prefs').update({ has_set_dashboard: true }).eq('user_id', session.userId).then(() => {})
+                    } else {
+                      sb.from('user_dashboard_prefs').insert({ user_id: session.userId, has_set_dashboard: true, active_modules: [] }).then(() => {})
                     }
                   })
               }
             }
-            if (modules) setActiveModules(modules)
+            if (modules !== null && modules !== undefined) setActiveModules(modules)
             setShowIconPicker(false)
           }}
         />

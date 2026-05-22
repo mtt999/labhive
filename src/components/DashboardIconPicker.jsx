@@ -260,7 +260,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
         <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>No icons assigned yet</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>Your staff hasn't assigned any dashboard icons for you yet. Contact them to get access.</div>
-        <button className="btn" onClick={() => onDone(null)}>Close</button>
+        <button className="btn" onClick={() => onDone([])}>Close</button>
       </div>
     </div>
   )

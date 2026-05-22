@@ -3,13 +3,42 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
+import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 
 async function createAuthUser(email, password) {
   const { data: { session: prev } } = await sb.auth.getSession()
   const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password })
   if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
-  if (error) throw error
+  if (error) {
+    if (error.message?.toLowerCase().includes('already registered') || error.message?.toLowerCase().includes('already been registered')) {
+      const { data: existingId } = await sb.rpc('get_auth_user_id_by_email', { p_email: email.trim().toLowerCase() }).catch(() => ({ data: null }))
+      if (existingId) return { id: existingId }
+      const { data: existingUser } = await sb.from('users').select('auth_id').ilike('email', email).maybeSingle()
+      if (existingUser?.auth_id) return { id: existingUser.auth_id }
+      throw new Error('This email already has a Supabase account. Try a different email or contact support.')
+    }
+    throw error
+  }
   return data.user
+}
+
+function generateTempPassword() {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lower = 'abcdefghjkmnpqrstuvwxyz'
+  const digits = '23456789'
+  const symbols = '!@#$%'
+  const all = upper + lower + digits + symbols
+  const arr = [
+    upper[Math.floor(Math.random() * upper.length)],
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    symbols[Math.floor(Math.random() * symbols.length)],
+    ...Array.from({ length: 4 }, () => all[Math.floor(Math.random() * all.length)]),
+  ]
+  return arr.sort(() => Math.random() - 0.5).join('')
 }
 
 const MODULE_IMAGE_DEFS = [
@@ -192,9 +221,13 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   async function save() {
     if (!name.trim())    { toast('Please enter a name.'); return }
     if (!orgId)          { toast('Please select an organization.'); return }
-    if (!user && !password.trim()) { toast('Please set a temporary password.'); return }
-    if (password && password.length < 4) { toast('Password must be at least 4 characters.'); return }
     if (!user && !email.trim()) { toast('Please enter an email address.'); return }
+    if (password) {
+      if (password.length < 8)        { toast('Password must be at least 8 characters.'); return }
+      if (!/[A-Z]/.test(password))    { toast('Password must contain an uppercase letter.'); return }
+      if (!/[a-z]/.test(password))    { toast('Password must contain a lowercase letter.'); return }
+      if (!/[^A-Za-z0-9]/.test(password)) { toast('Password must contain a symbol (e.g. !@#$%).'); return }
+    }
 
     if (user) {
       const upd = { name: name.trim(), email: email.trim().toLowerCase() || null, role, organization_id: orgId, is_active: true }
@@ -207,9 +240,10 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       onClose()
     } else {
       const emailLC = email.trim().toLowerCase()
+      const tempPassword = generateTempPassword()
       let auth_id = null
       try {
-        const authUser = await createAuthUser(emailLC, password)
+        const authUser = await createAuthUser(emailLC, tempPassword)
         if (authUser) auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
       const { error } = await sb.from('users').insert({
@@ -222,7 +256,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         must_change_password: true,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
-      setSavedCreds({ name: name.trim(), email: emailLC, password })
+      setSavedCreds({ name: name.trim(), email: emailLC, password: tempPassword })
       onSaved()
     }
   }
@@ -266,11 +300,18 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       <div className="field"><label>Email * (used to sign in)</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="user@example.com" />
       </div>
-      <div className="field">
-        <label>{user ? 'Reset password (leave blank to keep current)' : 'Temporary password *'}</label>
-        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={user ? '••••••••' : 'Set a temporary password'} />
-        {!user && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>User will be forced to change this on first login.</div>}
-      </div>
+      {user && (
+        <div className="field">
+          <label>Reset password (leave blank to keep current)</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+          <PasswordStrengthHint password={password} />
+        </div>
+      )}
+      {!user && (
+        <div style={{ fontSize: 12, color: 'var(--text3)', background: 'var(--surface2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+          🔑 A secure temporary password will be auto-generated. The user must change it on first login.
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="field"><label>Role</label>
@@ -767,6 +808,7 @@ export default function Admin() {
   const [search, setSearch]   = useState('')
   const [orgFilter, setOrgFilter] = useState('')
   const [loading, setLoading] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const [userModal, setUserModal]               = useState(null)
   const [orgModal, setOrgModal]                 = useState(null)
@@ -778,11 +820,12 @@ export default function Admin() {
   // Super admin: images tab is accessed standalone (no tab bar), so exclude it from the tab list
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: 'Organizations' }]
-    : [{ key: 'users', label: 'Users' }, { key: 'students', label: 'Lab Users' }, { key: 'images', label: 'Module Images' }, { key: 'orgsettings', label: 'Org Settings' }]
+    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'images', label: 'Module Images' }, { key: 'orgsettings', label: 'Org Settings' }]
 
   useEffect(() => { loadOrgs() }, [])
   useEffect(() => {
     if (tab === 'users' || tab === 'students') loadUsers()
+    setSelectedIds(new Set())
   }, [tab, orgFilter])
 
   async function loadOrgs() {
@@ -822,16 +865,55 @@ export default function Admin() {
     toast(u.is_active ? 'User deactivated.' : 'User activated.')
   }
 
-  async function deleteUser(id) {
+  async function deleteUser(user) {
     if (!confirm('Delete this user permanently?')) return
-    await sb.from('users').delete().eq('id', id)
+    if (isSuperAdmin) {
+      const { error } = await sb.rpc('delete_user_account', {
+        p_user_id: user.id,
+        p_auth_id: user.auth_id || null,
+      })
+      if (error) { toast('Delete failed: ' + error.message); return }
+    } else {
+      const { error } = await sb.from('users').delete().eq('id', user.id)
+      if (error) { toast('Delete failed: ' + error.message); return }
+    }
     loadUsers()
     toast('User deleted.')
   }
 
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredUsers.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredUsers.map(u => u.id)))
+    }
+  }
+
+  async function deleteSelected() {
+    if (!selectedIds.size) return
+    if (!confirm(`Delete ${selectedIds.size} lab user(s) permanently? This cannot be undone.`)) return
+    const ids = Array.from(selectedIds)
+    const { error } = await sb.from('users').delete().in('id', ids)
+    if (error) { toast('Delete failed: ' + error.message); return }
+    setSelectedIds(new Set())
+    loadUsers()
+    toast(`${ids.length} user(s) deleted.`)
+  }
+
   async function deleteOrg(id) {
     if (!confirm('Delete this organization? All linked users will lose their org assignment.')) return
-    await sb.from('organizations').delete().eq('id', id)
+    const { error: unlinkErr } = await sb.from('users').update({ organization_id: null }).eq('organization_id', id)
+    if (unlinkErr) { toast('Delete failed: ' + unlinkErr.message); return }
+    const { error } = await sb.from('organizations').delete().eq('id', id)
+    if (error) { toast('Delete failed: ' + error.message); return }
     loadOrgs(); loadUsers()
     toast('Organization deleted.')
   }
@@ -878,14 +960,41 @@ export default function Admin() {
               + Add {tab === 'students' ? 'lab user' : 'lab manager'}
             </button>
           </div>
+          {tab === 'students' && filteredUsers.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === filteredUsers.length && filteredUsers.length > 0}
+                  onChange={toggleSelectAll}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                {selectedIds.size === filteredUsers.length ? 'Deselect all' : 'Select all'} ({filteredUsers.length})
+              </label>
+              {selectedIds.size > 0 && (
+                <button className="btn btn-sm btn-danger" onClick={deleteSelected} style={{ marginLeft: 'auto' }}>
+                  Delete selected ({selectedIds.size})
+                </button>
+              )}
+            </div>
+          )}
           {loading ? (
             <div className="empty-state"><div className="spinner" style={{ margin: '0 auto' }} /></div>
           ) : filteredUsers.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">👤</div>No users found.</div>
           ) : (
             filteredUsers.map(u => (
-              <div key={u.id} className="card" style={{ padding: '12px 18px', marginBottom: 10, opacity: u.is_active ? 1 : 0.55 }}>
+              <div key={u.id} className="card" style={{ padding: '12px 18px', marginBottom: 10, opacity: u.is_active ? 1 : 0.55, outline: tab === 'students' && selectedIds.has(u.id) ? '2px solid var(--accent)' : 'none', borderRadius: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {tab === 'students' && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(u.id)}
+                      onChange={() => toggleSelect(u.id)}
+                      style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
+                    />
+                  )}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontWeight: 600 }}>{u.name}</span>
@@ -899,11 +1008,12 @@ export default function Admin() {
                       {u.email && <span>{u.email}</span>}
                     </div>
                   </div>
+                  </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {u.role !== 'admin' && tab === 'users' && <button className="btn btn-sm" onClick={() => setAccessModal(u)}>Access</button>}
                     {u.role !== 'admin' && <button className="btn btn-sm" onClick={() => setUserModal(u)}>Edit</button>}
                     {u.role !== 'admin' && <button className="btn btn-sm" onClick={() => deactivateUser(u)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>}
-                    {u.role !== 'admin' && <button className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)}>Delete</button>}
+                    {u.role !== 'admin' && <button className="btn btn-sm btn-danger" onClick={() => deleteUser(u)}>Delete</button>}
                   </div>
                 </div>
               </div>
