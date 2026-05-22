@@ -3,7 +3,7 @@ import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
-import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES } from '../../components/DashboardIconPicker'
+import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
@@ -222,7 +222,8 @@ function DashboardIconsPanel({ session }) {
 
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = session?.role === 'admin' || session?.role === 'user'
-  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForStaff || !isStaff))
+  const pinnedKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
 
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
@@ -286,7 +287,7 @@ function DashboardIconsPanel({ session }) {
           setAllowedPool(pool)
           const poolKeys = effectivePool !== null ? pool.filter(k => effectivePool.includes(k)) : pool
           const savedArr = data?.active_modules?.length
-            ? data.active_modules.filter(k => poolKeys.includes(k) || PINNED_MODULES.includes(k))
+            ? data.active_modules.filter(k => poolKeys.includes(k) || pinnedKeys.includes(k))
             : poolKeys
           setSelected(new Set(savedArr))
           setDisplayOrder(initOrder(savedArr, poolKeys))
@@ -306,7 +307,7 @@ function DashboardIconsPanel({ session }) {
   }
 
   function toggle(key) {
-    if (PINNED_MODULES.includes(key)) return
+    if (pinnedKeys.includes(key)) return
     if (isSolo && ALL_MODULES_META.find(m => m.key === key)?.soloLocked) return
     setSelected(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
   }
@@ -356,9 +357,9 @@ function DashboardIconsPanel({ session }) {
       const studentPool = adminPool !== null
         ? allowedPool.filter(k => adminPool.includes(k))
         : allowedPool
-      return available.filter(m => studentPool.includes(m.key) || PINNED_MODULES.includes(m.key))
+      return available.filter(m => studentPool.includes(m.key) || pinnedKeys.includes(m.key))
     }
-    if (adminPool !== null) return available.filter(m => adminPool.includes(m.key) || m.key === 'profile')
+    if (adminPool !== null) return available.filter(m => adminPool.includes(m.key) || pinnedKeys.includes(m.key))
     return available
   })()
 
@@ -369,7 +370,7 @@ function DashboardIconsPanel({ session }) {
   const selectedCount = selected.size
 
   function handleDragStart(e, key) {
-    if (PINNED_MODULES.includes(key)) return
+    if (pinnedKeys.includes(key)) return
     dragKeyRef.current = key
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', key)
@@ -405,7 +406,7 @@ function DashboardIconsPanel({ session }) {
         <div style={{ fontSize: 13, color: 'var(--text2)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {displayModules.length} selected</div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={() => setSelected(new Set(displayModules.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
-          <button onClick={() => setSelected(new Set(PINNED_MODULES))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+          <button onClick={() => setSelected(new Set(pinnedKeys))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
         </div>
       </div>
       <div style={{ height: 3, background: 'var(--surface2)', borderRadius: 99, marginBottom: 16, overflow: 'hidden' }}>
@@ -416,7 +417,7 @@ function DashboardIconsPanel({ session }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, marginBottom: 24 }}>
         {displayModules.map(m => {
-          const pinned = PINNED_MODULES.includes(m.key)
+          const pinned = pinnedKeys.includes(m.key)
           const locked = isSolo && !!m.soloLocked
           const sel = selected.has(m.key)
           const isDragging = dragKey === m.key
@@ -633,8 +634,6 @@ function AdminProfile() {
 
   const tabs = [
     { key: 'admin',    label: '🔑 Admin Settings' },
-    { key: 'students', label: '👥 Lab Users' },
-    { key: 'staff',    label: '👨‍💼 Lab Managers' },
     { key: 'icons',    label: '🖼️ Icon Images' },
     { key: 'dashboard',label: '🎛️ Dashboard Icons' },
     { key: 'notifs',   label: '🔔 Notifications' },
@@ -655,8 +654,6 @@ function AdminProfile() {
         ))}
       </div>
       {adminTab === 'admin'     && <AdminSettings session={session} toast={toast} />}
-      {adminTab === 'students'  && <StudentsPanel toast={toast} session={session} />}
-      {adminTab === 'staff'     && <StaffPanel toast={toast} session={session} />}
       {adminTab === 'icons'     && <IconImageManager toast={toast} />}
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
@@ -703,7 +700,7 @@ function AdminSettings({ session: sessionProp, toast }) {
 }
 
 // ── STUDENTS PANEL ── with 🎛️ icon button per student
-function StudentsPanel({ toast, session }) {
+export function StudentsPanel({ toast, session }) {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -928,7 +925,7 @@ function StudentModal({ student, session, onClose, onSave }) {
   )
 }
 
-function StaffPanel({ toast, session }) {
+export function StaffPanel({ toast, session }) {
   const [staffTab, setStaffTab] = useState('list')
   return (
     <div>
@@ -1181,8 +1178,6 @@ function StaffProfile({ session }) {
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
         {[
           { key: 'info',      label: '👤 My Profile' },
-          { key: 'students',  label: '👥 Lab Users' },
-          { key: 'staff',     label: '👨‍💼 Lab Managers' },
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'team',      label: '🤝 Project Team' },
@@ -1194,8 +1189,6 @@ function StaffProfile({ session }) {
         ))}
       </div>
       {activeTab === 'info'      && <UserProfileForm session={session} toast={toast} />}
-      {activeTab === 'students'  && <StudentsPanel toast={toast} session={session} />}
-      {activeTab === 'staff'     && <StaffListPanel toast={toast} session={session} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}

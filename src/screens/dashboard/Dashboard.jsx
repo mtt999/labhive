@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { ALL_MODULES_META, PINNED_MODULES } from '../../components/DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
 
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
@@ -12,6 +12,7 @@ function getModules(role, loginMode, activeModules) {
     if (role === 'student' && !studentAllowed.includes(m.key)) return false
     if (m.adminOnly && !isStaff) return false
     if (m.hideForStaff && isStaff) return false
+    if (m.staffOnly && !isStaff) return false
     return true
   })
   if (activeModules !== null && activeModules !== undefined) {
@@ -19,6 +20,7 @@ function getModules(role, loginMode, activeModules) {
     const ordered = []
     activeModules.forEach(k => { if (baseMap[k]) ordered.push(baseMap[k]) })
     PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
+    if (isStaff) STAFF_PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
     if (role === 'admin') base.forEach(m => { if (m.adminOnly && !activeModules.includes(m.key)) ordered.push(m) })
     return ordered
   }
@@ -415,13 +417,18 @@ export default function Dashboard() {
           if (effectivePool !== null) {
             if (mods?.length) {
               // Keep saved order, remove no-longer-allowed modules, append newly-allowed ones
-              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile')
-              const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile')
+              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || STAFF_PINNED_MODULES.includes(k))
+              const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !STAFF_PINNED_MODULES.includes(k))
               mods = [...filtered, ...missing]
             } else if (session?.role !== 'student') {
               // No saved prefs — pool defines what's visible (not for students: they see nothing until admin assigns)
               mods = effectivePool
             }
+          }
+          // Ensure labmanagement is always present for admin/user
+          if (session?.role === 'admin' || session?.role === 'user') {
+            if (!mods) mods = [...STAFF_PINNED_MODULES]
+            else if (!mods.includes('labmanagement')) mods = ['labmanagement', ...mods]
           }
         } catch {}
         // Students with no config see only Profile until admin assigns icons
@@ -446,7 +453,7 @@ export default function Dashboard() {
     return base
   })()
   // Screens not managed by user_screen_access (always allowed if in activeModules)
-  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcode', 'barcodeqr', 'orgadmin', 'home', 'equipment'])
+  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcode', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement'])
   const modules = userAccess
     ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))
     : allModules

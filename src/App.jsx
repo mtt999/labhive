@@ -26,6 +26,7 @@ import BarcodeScannerScreen from './screens/barcode/BarcodeScannerScreen'
 import BarcodeManager from './screens/barcode/BarcodeManager'
 import EquipmentScan from './screens/equipment/EquipmentScan'
 import Admin from './screens/admin/Admin'
+import LabManagement from './screens/labmanagement/LabManagement'
 import { isNative } from './lib/scanner.js'
 
 if (isNative()) {
@@ -203,7 +204,7 @@ export default function App() {
       if (!baseAllowed.includes(screen) && !(userAccess && userAccess.has(screen))) setScreen('dashboard')
     }
     // equipmentscan, barcodeqr, barcode, home, equipment bypass per-user access control
-    const INTERNAL = new Set(['dashboard', 'profile', 'inspection', 'results', 'project-detail', 'pm', 'barcode', 'equipmentscan', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'projects', 'training', 'history', 'equipmenthub', 'booking', 'remessages'])
+    const INTERNAL = new Set(['dashboard', 'profile', 'inspection', 'results', 'project-detail', 'pm', 'barcode', 'equipmentscan', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'projects', 'training', 'history', 'equipmenthub', 'booking', 'remessages', 'labmanagement'])
     if ((session?.role === 'user' || session?.role === 'admin') && userAccess && !INTERNAL.has(screen)) {
       if (!userAccess.has(screen)) setScreen('dashboard')
     }
@@ -242,6 +243,7 @@ export default function App() {
     barcodeqr: <BarcodeManager />,
     equipmentscan: <EquipmentScan />,
     orgadmin: <Admin />,
+    labmanagement: <LabManagement />,
   }
 
   return (
