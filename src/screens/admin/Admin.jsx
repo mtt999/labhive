@@ -11,11 +11,17 @@ async function createAuthUser(email, password) {
   if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
   if (error) {
     if (error.message?.toLowerCase().includes('already registered') || error.message?.toLowerCase().includes('already been registered')) {
-      const { data: existingId } = await sb.rpc('get_auth_user_id_by_email', { p_email: email.trim().toLowerCase() }).catch(() => ({ data: null }))
-      if (existingId) return { id: existingId }
-      const { data: existingUser } = await sb.from('users').select('auth_id').ilike('email', email).maybeSingle()
-      if (existingUser?.auth_id) return { id: existingUser.auth_id }
-      throw new Error('This email already has a Supabase account. Try a different email or contact support.')
+      // Check if it's an ACTIVE user in our DB — if so, block reuse
+      const { data: activeUser } = await sb.from('users').select('id, auth_id').ilike('email', email).eq('is_active', true).maybeSingle()
+      if (activeUser) throw new Error('This email is already in use by an active account.')
+      // It's a deleted user — reset the auth password so the new temp password works
+      const { error: resetErr } = await sb.rpc('reset_auth_user_password', { p_email: email.trim().toLowerCase(), p_password: password }).catch(() => ({ error: { message: 'reset_rpc_unavailable' } }))
+      if (!resetErr || resetErr.message === 'reset_rpc_unavailable') {
+        // Try to get the existing auth id so we can link the new DB row
+        const { data: existingId } = await sb.rpc('get_auth_user_id_by_email', { p_email: email.trim().toLowerCase() }).catch(() => ({ data: null }))
+        if (existingId) return { id: existingId }
+      }
+      throw new Error('This email belongs to a deleted account whose auth record still exists. Run the SQL cleanup or use a different email.')
     }
     throw error
   }
@@ -207,6 +213,69 @@ function OrgSettingsPanel({ session }) {
   )
 }
 
+// ── Org-level student default icons (set by org admin, pre-loaded in UserModal) ──
+function StudentDefaultIconsPanel({ orgId }) {
+  const { toast } = useAppStore()
+  const [selected, setSelected] = useState(null) // null = loading
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!orgId) return
+    sb.from('organizations').select('student_default_modules').eq('id', orgId).maybeSingle()
+      .then(({ data }) => {
+        const mods = data?.student_default_modules?.length
+          ? data.student_default_modules
+          : ['projects', 'training', 'booking', 'equipmenthub', 'remessages']
+        setSelected(new Set(mods))
+      })
+  }, [orgId])
+
+  function toggle(key) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function save() {
+    setSaving(true)
+    const modules = STUDENT_ICON_OPTIONS.filter(m => selected.has(m.key)).map(m => m.key)
+    const { error } = await sb.from('organizations').update({ student_default_modules: modules }).eq('id', orgId)
+    if (error) toast('Save failed: ' + error.message)
+    else toast('Default icons saved ✓ — new lab users will start with these icons.')
+    setSaving(false)
+  }
+
+  if (!selected) return null
+
+  return (
+    <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', marginBottom: 18 }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>🎛 Default icons for new lab users</div>
+      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+        These icons are pre-selected when a lab manager creates a new lab user. Profile is always included.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 20, border: '1.5px solid #1D9E75', background: '#E1F5EE', fontSize: 12, fontWeight: 500, color: '#0F6E56', cursor: 'default' }}>
+          <span>👤</span><span>Profile</span><span style={{ fontSize: 10, opacity: 0.6 }}>🔒</span>
+        </div>
+        {STUDENT_ICON_OPTIONS.map(m => {
+          const on = selected.has(m.key)
+          return (
+            <button key={m.key} type="button" onClick={() => toggle(m.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 20, border: `1.5px solid ${on ? '#1D9E75' : 'var(--border)'}`, background: on ? '#E1F5EE' : 'var(--surface)', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: on ? '#0F6E56' : 'var(--text2)', transition: 'all 0.12s' }}>
+              <span>{m.icon}</span><span>{m.label}</span>{on && <span style={{ fontSize: 10, fontWeight: 700 }}>✓</span>}
+            </button>
+          )
+        })}
+      </div>
+      <button className="btn btn-sm btn-primary" onClick={save} disabled={saving}>
+        {saving ? 'Saving…' : 'Save defaults'}
+      </button>
+    </div>
+  )
+}
+
 const STUDENT_ICON_OPTIONS = [
   { key: 'projects',     label: 'Project & Material',   icon: '🧪' },
   { key: 'training',     label: 'Training Records',      icon: '🎓' },
@@ -228,28 +297,44 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   const [orgId, setOrgId]       = useState(user?.organization_id || defaultOrgId || '')
   const [copied, setCopied]     = useState(false)
   const [savedCreds, setSavedCreds] = useState(null)
-  const [selectedIcons, setSelectedIcons] = useState(new Set())
+  // profile is always locked on; start empty otherwise (loaded from org defaults or existing prefs)
+  const [selectedIcons, setSelectedIcons] = useState(new Set(['profile']))
 
-  // Load existing icon prefs when editing a student
+  const effectiveOrgId = orgId || defaultOrgId
+
+  // Load icons: org defaults for new student, existing prefs for edit
   useEffect(() => {
-    if (user?.id && (user?.role === 'student' || role === 'student')) {
+    if (user?.id && user?.role === 'student') {
       sb.from('user_dashboard_prefs').select('active_modules').eq('user_id', user.id).maybeSingle()
         .then(({ data }) => {
-          if (data?.active_modules?.length) setSelectedIcons(new Set(data.active_modules))
+          const mods = data?.active_modules?.length ? data.active_modules : []
+          setSelectedIcons(new Set([...mods, 'profile']))
         })
+    } else if (!user && role === 'student' && effectiveOrgId) {
+      sb.from('organizations').select('student_default_modules').eq('id', effectiveOrgId).maybeSingle()
+        .then(({ data }) => {
+          const defaults = data?.student_default_modules?.length
+            ? data.student_default_modules
+            : ['projects', 'training', 'booking', 'equipmenthub', 'remessages']
+          setSelectedIcons(new Set([...defaults, 'profile']))
+        })
+    } else if (!user && role === 'student') {
+      setSelectedIcons(new Set(['projects', 'training', 'booking', 'equipmenthub', 'remessages', 'profile']))
     }
-  }, [user?.id, role])
+  }, [user?.id, user?.role, role, effectiveOrgId])
 
   function toggleIcon(key) {
+    if (key === 'profile') return // always locked
     setSelectedIcons(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      next.add('profile')
       return next
     })
   }
 
   async function saveIconPrefs(userId) {
-    const modules = [...selectedIcons]
+    const modules = ['profile', ...STUDENT_ICON_OPTIONS.filter(m => selectedIcons.has(m.key)).map(m => m.key)]
     const { data: existing } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId).maybeSingle()
     if (existing) {
       await sb.from('user_dashboard_prefs').update({ active_modules: modules, has_set_dashboard: true }).eq('user_id', userId)
@@ -277,8 +362,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       if (role === 'student') await saveIconPrefs(user.id)
       if (password) toast('User updated. Password will be required to change on next login.')
       else toast('User updated.')
-      onSaved()
-      onClose()
+      onSaved(); onClose()
     } else {
       const emailLC = email.trim().toLowerCase()
       const tempPassword = generateTempPassword()
@@ -287,12 +371,19 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         const authUser = await createAuthUser(emailLC, tempPassword)
         if (authUser) auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
-      const { data: inserted, error } = await sb.from('users').insert({
+
+      // Plain insert — don't use .single() which fails under RLS
+      const { error } = await sb.from('users').insert({
         name: name.trim(), email: emailLC, auth_id, role,
         organization_id: orgId, is_active: true, must_change_password: true,
-      }).select('id').single()
+      })
       if (error) { toast('Error creating user: ' + error.message); return }
-      if (role === 'student' && inserted?.id) await saveIconPrefs(inserted.id)
+
+      // Fetch the new user's ID to save icon prefs
+      if (role === 'student') {
+        const { data: newUser } = await sb.from('users').select('id').ilike('email', emailLC).maybeSingle()
+        if (newUser?.id) await saveIconPrefs(newUser.id)
+      }
       setSavedCreds({ name: name.trim(), email: emailLC, password: tempPassword })
       onSaved()
     }
@@ -370,10 +461,14 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
       {role === 'student' && (
         <div style={{ marginTop: 4, marginBottom: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
             Dashboard icons for this lab user
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {/* Profile — always locked on */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1.5px solid #1D9E75', background: '#E1F5EE', fontSize: 12, fontWeight: 500, color: '#0F6E56', cursor: 'default' }}>
+              <span>👤</span><span>Profile</span><span style={{ fontSize: 10, opacity: 0.6 }}>🔒</span>
+            </div>
             {STUDENT_ICON_OPTIONS.map(m => {
               const on = selectedIcons.has(m.key)
               return (
@@ -385,18 +480,15 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
                     fontSize: 12, fontWeight: 500, color: on ? '#0F6E56' : 'var(--text2)',
                     transition: 'all 0.12s',
                   }}>
-                  <span>{m.icon}</span>
-                  <span>{m.label}</span>
+                  <span>{m.icon}</span><span>{m.label}</span>
                   {on && <span style={{ fontSize: 10, fontWeight: 700 }}>✓</span>}
                 </button>
               )
             })}
           </div>
-          {selectedIcons.size === 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-              No icons selected — user will see an empty dashboard until icons are assigned.
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+            Profile is always included. Defaults are set by your org admin in the Lab Users tab.
+          </div>
         </div>
       )}
 
@@ -936,6 +1028,10 @@ export default function Admin() {
 
   async function deleteUser(user) {
     if (!confirm('Delete this user permanently?')) return
+    // Always delete auth account so the email can be reused
+    if (user.auth_id) {
+      await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }).catch(() => {})
+    }
     if (isSuperAdmin) {
       const { error } = await sb.rpc('delete_user_account', {
         p_user_id: user.id,
@@ -1023,6 +1119,7 @@ export default function Admin() {
       {/* ── USERS / STUDENTS (org admin only) ── */}
       {!isSuperAdmin && (tab === 'users' || tab === 'students') && (
         <div>
+          {tab === 'students' && <StudentDefaultIconsPanel orgId={myOrgId} />}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ flex: 1, minWidth: 180 }} />
             <button className="btn btn-primary btn-sm" onClick={() => setUserModal('add')}>
