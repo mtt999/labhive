@@ -370,6 +370,8 @@ export default function Dashboard() {
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
+      // Students default to empty while prefs load so they never flash all icons
+      if (session?.role === 'student') setActiveModules(prev => prev === null ? [] : prev)
       if (!session?.userId) {
         const saved = localStorage.getItem('ilab_admin_modules')
         setActiveModules(saved ? JSON.parse(saved) : null)
@@ -416,8 +418,8 @@ export default function Dashboard() {
               const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile')
               const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile')
               mods = [...filtered, ...missing]
-            } else {
-              // No saved prefs — pool defines what's visible
+            } else if (session?.role !== 'student') {
+              // No saved prefs — pool defines what's visible (not for students: they see nothing until admin assigns)
               mods = effectivePool
             }
           }
