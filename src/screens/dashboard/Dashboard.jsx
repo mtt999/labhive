@@ -370,8 +370,8 @@ export default function Dashboard() {
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
-      // Students default to empty while prefs load so they never flash all icons
-      if (session?.role === 'student' && activeModules === null) setActiveModules([])
+      // Students default to profile-only while prefs load so they never flash all icons
+      if (session?.role === 'student' && activeModules === null) setActiveModules(['profile'])
       if (!session?.userId) {
         const saved = localStorage.getItem('ilab_admin_modules')
         setActiveModules(saved ? JSON.parse(saved) : null)
@@ -424,8 +424,8 @@ export default function Dashboard() {
             }
           }
         } catch {}
-        // Students with no config see nothing (only pinned profile) until admin assigns icons
-        const defaultMods = session?.role === 'student' ? [] : null
+        // Students with no config see only Profile until admin assigns icons
+        const defaultMods = session?.role === 'student' ? ['profile'] : null
         setActiveModules(mods?.length ? mods : defaultMods)
         if (session?.role === 'student') {
           setStudentAllowedPool(new Set(row?.allowed_modules || []))
