@@ -1589,7 +1589,8 @@ function IconImageManager({ toast }) {
       const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (error) throw error
       const publicUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
-      await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl })
+      const { error: saveErr } = await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl })
+      if (saveErr) throw new Error('Save failed: ' + saveErr.message)
       setImages(prev => ({ ...prev, [moduleKey]: publicUrl }))
       toast(`Image updated for ${ALL_MODULES.find(m => m.key === moduleKey)?.label} ✓`)
     } catch (e) { toast('Upload failed: ' + (e?.message || e)) }

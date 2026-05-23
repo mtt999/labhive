@@ -343,7 +343,7 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
 }
 
 export default function Dashboard() {
-  const { session, setScreen, activeModules, setActiveModules, setPendingAdminTab } = useAppStore()
+  const { session, screen, setScreen, activeModules, setActiveModules, setPendingAdminTab } = useAppStore()
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
   const [mileageUrl, setMileageUrl] = useState('https://bw4qh7p8sn.us-east-1.awsapprunner.com/')
   const [labSafetyUrl, setLabSafetyUrl] = useState('https://canvas.illinois.edu/')
@@ -458,7 +458,7 @@ export default function Dashboard() {
     ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))
     : allModules
 
-  useEffect(() => { loadSettings() }, [session?.userId])
+  useEffect(() => { loadSettings() }, [session?.userId, screen])
   async function loadSettings() {
     const base = import.meta.env.BASE_URL
     const imgs = {
