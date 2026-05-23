@@ -79,40 +79,51 @@ function ModuleImagesPanel({ orgId }) {
     if (!file) return
     setUploading(def.key)
     try {
-      // Convert everything (including SVG) to 800×500 JPEG via FileReader data URL
-      const compressed = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onerror = () => reject(new Error('File read failed'))
-        reader.onload = e => {
-          const img = new Image()
-          img.onerror = () => reject(new Error('Image render failed'))
-          img.onload = () => {
-            const W = 800, H = 500
-            const canvas = document.createElement('canvas')
-            canvas.width = W; canvas.height = H
-            const ctx = canvas.getContext('2d')
-            ctx.fillStyle = '#111'
-            ctx.fillRect(0, 0, W, H)
-            const scale = Math.max(W / img.width, H / img.height)
-            const sw = img.width * scale, sh = img.height * scale
-            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+      const W = 800, H = 500
+      const canvas = document.createElement('canvas')
+      canvas.width = W; canvas.height = H
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#111'
+      ctx.fillRect(0, 0, W, H)
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+      if (isSvg) {
+        const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
+        ctx.drawImage(bitmap, 0, 0, W, H)
+        bitmap.close?.()
+      } else {
+        await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(new Error('File read failed'))
+          reader.onload = e => {
+            const img = new Image()
+            img.onerror = () => reject(new Error('Image load failed'))
+            img.onload = () => {
+              const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
+              const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale
+              ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+              resolve()
+            }
+            img.src = e.target.result
           }
-          img.src = e.target.result
-        }
-        reader.readAsDataURL(file)
-      })
+          reader.readAsDataURL(file)
+        })
+      }
+      const compressed = await new Promise((resolve, reject) =>
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+      )
       const path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
       const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
-      if (upErr) { toast('Storage upload failed: ' + upErr.message); return }
+      if (upErr) throw new Error('Storage: ' + upErr.message)
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
       const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
       const current = orgData?.module_images || {}
       const { error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [def.key]: url } }).eq('id', orgId)
-      if (saveErr) { toast('Image uploaded but save failed: ' + saveErr.message); return }
+      if (saveErr) throw new Error('Save: ' + saveErr.message)
       setImages(prev => ({ ...prev, [def.key]: url }))
       toast(`${def.label} image saved ✓`)
+    } catch (e) {
+      toast('Upload failed: ' + (e?.message || String(e)))
     } finally {
       setUploading(null)
       if (fileRefs.current[def.key]) fileRefs.current[def.key].value = ''
@@ -549,39 +560,50 @@ function GlobalImageGrid({ modules, imagePrefix }) {
     if (!file) return
     setUploading(m.key)
     try {
-      const compressed = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onerror = () => reject(new Error('File read failed'))
-        reader.onload = e => {
-          const img = new Image()
-          img.onerror = () => reject(new Error('Image render failed'))
-          img.onload = () => {
-            const W = 800, H = 500
-            const canvas = document.createElement('canvas')
-            canvas.width = W; canvas.height = H
-            const ctx = canvas.getContext('2d')
-            ctx.fillStyle = '#111'
-            ctx.fillRect(0, 0, W, H)
-            const scale = Math.max(W / img.width, H / img.height)
-            const sw = img.width * scale, sh = img.height * scale
-            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+      const W = 800, H = 500
+      const canvas = document.createElement('canvas')
+      canvas.width = W; canvas.height = H
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#111'
+      ctx.fillRect(0, 0, W, H)
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+      if (isSvg) {
+        const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
+        ctx.drawImage(bitmap, 0, 0, W, H)
+        bitmap.close?.()
+      } else {
+        await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(new Error('File read failed'))
+          reader.onload = e => {
+            const img = new Image()
+            img.onerror = () => reject(new Error('Image load failed'))
+            img.onload = () => {
+              const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
+              const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale
+              ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+              resolve()
+            }
+            img.src = e.target.result
           }
-          img.src = e.target.result
-        }
-        reader.readAsDataURL(file)
-      })
+          reader.readAsDataURL(file)
+        })
+      }
+      const compressed = await new Promise((resolve, reject) =>
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+      )
       const path = `module-images/global/${imagePrefix}${m.key}-${Date.now()}.jpg`
       const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
-      if (upErr) { toast('Upload failed: ' + upErr.message); return }
+      if (upErr) throw new Error('Storage: ' + upErr.message)
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
       const { error } = await sb.from('settings').upsert({ key: `${imagePrefix}${m.key}`, value: url }, { onConflict: 'key' })
-      if (error) { toast('Save failed: ' + error.message); return }
+      if (error) throw new Error('Save: ' + error.message)
       setImages(prev => ({ ...prev, [m.key]: url }))
       toast(`${m.label} image saved ✓`)
-    } catch (e) { toast('Upload failed: ' + (e?.message || e)) }
-    finally {
+    } catch (e) {
+      toast('Upload failed: ' + (e?.message || String(e)))
+    } finally {
       setUploading(null)
       if (fileRefs.current[m.key]) fileRefs.current[m.key].value = ''
     }
