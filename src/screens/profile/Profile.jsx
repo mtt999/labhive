@@ -1512,18 +1512,19 @@ function AccessControl({ toast, session }) {
 
 function IconImageManager({ toast }) {
   const ALL_MODULES = [
-    { key: 'supply',      label: 'Supply Inventory',   icon: '📦', bg: '#e8f2ee' },
-    { key: 'projects',    label: 'Project & Material',  icon: '🧪', bg: '#f3eeff' },
-    { key: 'training',    label: 'Training Records',   icon: '🎓', bg: '#e0f2fe' },
-    { key: 'equipment',   label: 'Equipment Inventory',icon: '🔧', bg: '#fef3c7' },
-    { key: 'equipmenthub',label: 'Equipment',          icon: '📚', bg: '#e8f2ee' },
-    { key: 'booking',     label: 'Booking Equipment',  icon: '📅', bg: '#e0f2fe' },
-    { key: 'mileage',     label: 'Mileage Form',       icon: '🚗', bg: '#fdf0ed' },
-    { key: 'labsafety',   label: 'Lab Safety',         icon: '🦺', bg: '#fef3c7' },
-    { key: 'remessages',  label: 'Contact Lab Manager',icon: '💬', bg: '#e8f2ee' },
-    { key: 'profile',     label: 'Profile',            icon: '👤', bg: '#f3eeff' },
-    { key: 'pm',          label: 'Project Management', icon: '📋', bg: '#fff3e0' },
-    { key: 'barcode',     label: 'Barcode Scanner',    icon: '📷', bg: '#e0f7fa' },
+    { key: 'supply',         label: 'Supply Inventory',    icon: '📦', bg: '#e8f2ee' },
+    { key: 'projects',       label: 'Project & Material',  icon: '🧪', bg: '#f3eeff' },
+    { key: 'training',       label: 'Training Records',    icon: '🎓', bg: '#e0f2fe' },
+    { key: 'equipment',      label: 'Equipment Inventory', icon: '🔧', bg: '#fef3c7' },
+    { key: 'equipmenthub',   label: 'Equipment',           icon: '📚', bg: '#e8f2ee' },
+    { key: 'booking',        label: 'Booking Equipment',   icon: '📅', bg: '#e0f2fe' },
+    { key: 'mileage',        label: 'Mileage Form',        icon: '🚗', bg: '#fdf0ed' },
+    { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺', bg: '#fef3c7' },
+    { key: 'remessages',     label: 'Contact Lab Manager', icon: '💬', bg: '#e8f2ee' },
+    { key: 'profile',        label: 'Profile',             icon: '👤', bg: '#f3eeff' },
+    { key: 'pm',             label: 'Project Management',  icon: '📋', bg: '#fff3e0' },
+    { key: 'barcode',        label: 'Barcode Scanner',     icon: '📷', bg: '#e0f7fa' },
+    { key: 'labmanagement',  label: 'Lab Management',      icon: '🏛️', bg: '#e8f2ee' },
   ]
   const [images, setImages] = useState({})
   const [uploading, setUploading] = useState(null)

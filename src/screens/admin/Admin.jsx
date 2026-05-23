@@ -48,16 +48,17 @@ function generateTempPassword() {
 }
 
 const MODULE_IMAGE_DEFS = [
-  { key: 'supply',       label: 'Supply Inventory',    icon: '📦' },
-  { key: 'projects',     label: 'Project & Material',  icon: '🧪' },
-  { key: 'training',     label: 'Training Records',    icon: '🎓' },
-  { key: 'equipment',    label: 'Equipment Inventory', icon: '🔧' },
-  { key: 'equipmenthub', label: 'Equipment Hub',       icon: '📚' },
-  { key: 'booking',      label: 'Booking Equipment',   icon: '📅' },
-  { key: 'remessages',   label: 'RE Messages',         icon: '💬' },
-  { key: 'pm',           label: 'Project Management',  icon: '📋' },
-  { key: 'mileage',      label: 'Mileage Form',        icon: '🚗' },
-  { key: 'labsafety',    label: 'Lab Safety',          icon: '🦺' },
+  { key: 'supply',         label: 'Supply Inventory',    icon: '📦' },
+  { key: 'projects',       label: 'Project & Material',  icon: '🧪' },
+  { key: 'training',       label: 'Training Records',    icon: '🎓' },
+  { key: 'equipment',      label: 'Equipment Inventory', icon: '🔧' },
+  { key: 'equipmenthub',   label: 'Equipment Hub',       icon: '📚' },
+  { key: 'booking',        label: 'Booking Equipment',   icon: '📅' },
+  { key: 'remessages',     label: 'RE Messages',         icon: '💬' },
+  { key: 'pm',             label: 'Project Management',  icon: '📋' },
+  { key: 'mileage',        label: 'Mileage Form',        icon: '🚗' },
+  { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺' },
+  { key: 'labmanagement',  label: 'Lab Management',      icon: '🏛️' },
 ]
 
 // Images are stored per-org in organizations.module_images (JSONB)
@@ -78,9 +79,27 @@ function ModuleImagesPanel({ orgId }) {
     if (!file) return
     setUploading(def.key)
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const path = `module-images/${orgId}/${def.key}-${Date.now()}.${ext}`
-      const { error: upErr } = await sb.storage.from('project-files').upload(path, file, { upsert: true, contentType: file.type })
+      // Compress & crop to 800×500 landscape so images always fill the card correctly
+      const compressed = await new Promise(resolve => {
+        const img = new Image()
+        const url = URL.createObjectURL(file)
+        img.onload = () => {
+          const W = 800, H = 500
+          const canvas = document.createElement('canvas')
+          canvas.width = W; canvas.height = H
+          const ctx = canvas.getContext('2d')
+          ctx.fillStyle = '#111'
+          ctx.fillRect(0, 0, W, H)
+          const scale = Math.max(W / img.width, H / img.height)
+          const sw = img.width * scale, sh = img.height * scale
+          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+          URL.revokeObjectURL(url)
+          canvas.toBlob(resolve, 'image/jpeg', 0.85)
+        }
+        img.src = url
+      })
+      const path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) { toast('Storage upload failed: ' + upErr.message); return }
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
