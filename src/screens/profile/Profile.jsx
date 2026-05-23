@@ -1539,23 +1539,28 @@ function IconImageManager({ toast }) {
     if (!file?.type.startsWith('image/') && !file?.name.toLowerCase().endsWith('.svg')) { toast('Please select an image file.'); return }
     setUploading(moduleKey)
     try {
-      // Convert everything (including SVG) to 800×500 JPEG so storage always accepts it
+      // Convert everything (including SVG) to 800×500 JPEG via FileReader data URL
       const compressed = await new Promise((resolve, reject) => {
-        const img = new Image(); const url = URL.createObjectURL(file)
-        img.onload = () => {
-          const W = 800, H = 500
-          const canvas = document.createElement('canvas')
-          canvas.width = W; canvas.height = H
-          const ctx = canvas.getContext('2d')
-          ctx.fillStyle = '#111'
-          ctx.fillRect(0, 0, W, H)
-          const scale = Math.max(W / img.width, H / img.height)
-          const sw = img.width * scale, sh = img.height * scale
-          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-          URL.revokeObjectURL(url); canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('File read failed'))
+        reader.onload = e => {
+          const img = new Image()
+          img.onerror = () => reject(new Error('Image render failed'))
+          img.onload = () => {
+            const W = 800, H = 500
+            const canvas = document.createElement('canvas')
+            canvas.width = W; canvas.height = H
+            const ctx = canvas.getContext('2d')
+            ctx.fillStyle = '#111'
+            ctx.fillRect(0, 0, W, H)
+            const scale = Math.max(W / img.width, H / img.height)
+            const sw = img.width * scale, sh = img.height * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+          }
+          img.src = e.target.result
         }
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')) }
-        img.src = url
+        reader.readAsDataURL(file)
       })
       const path = `module-icons/${moduleKey}_${Date.now()}.jpg`
       const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })

@@ -79,25 +79,28 @@ function ModuleImagesPanel({ orgId }) {
     if (!file) return
     setUploading(def.key)
     try {
-      // Convert everything (including SVG) to 800×500 JPEG so storage always accepts it
+      // Convert everything (including SVG) to 800×500 JPEG via FileReader data URL
       const compressed = await new Promise((resolve, reject) => {
-        const img = new Image()
-        const url = URL.createObjectURL(file)
-        img.onload = () => {
-          const W = 800, H = 500
-          const canvas = document.createElement('canvas')
-          canvas.width = W; canvas.height = H
-          const ctx = canvas.getContext('2d')
-          ctx.fillStyle = '#111'
-          ctx.fillRect(0, 0, W, H)
-          const scale = Math.max(W / img.width, H / img.height)
-          const sw = img.width * scale, sh = img.height * scale
-          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-          URL.revokeObjectURL(url)
-          canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('File read failed'))
+        reader.onload = e => {
+          const img = new Image()
+          img.onerror = () => reject(new Error('Image render failed'))
+          img.onload = () => {
+            const W = 800, H = 500
+            const canvas = document.createElement('canvas')
+            canvas.width = W; canvas.height = H
+            const ctx = canvas.getContext('2d')
+            ctx.fillStyle = '#111'
+            ctx.fillRect(0, 0, W, H)
+            const scale = Math.max(W / img.width, H / img.height)
+            const sw = img.width * scale, sh = img.height * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+          }
+          img.src = e.target.result
         }
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')) }
-        img.src = url
+        reader.readAsDataURL(file)
       })
       const path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
       const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
@@ -546,9 +549,30 @@ function GlobalImageGrid({ modules, imagePrefix }) {
     if (!file) return
     setUploading(m.key)
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const path = `module-images/global/${imagePrefix}${m.key}-${Date.now()}.${ext}`
-      const { error: upErr } = await sb.storage.from('project-files').upload(path, file, { upsert: true, contentType: file.type })
+      const compressed = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('File read failed'))
+        reader.onload = e => {
+          const img = new Image()
+          img.onerror = () => reject(new Error('Image render failed'))
+          img.onload = () => {
+            const W = 800, H = 500
+            const canvas = document.createElement('canvas')
+            canvas.width = W; canvas.height = H
+            const ctx = canvas.getContext('2d')
+            ctx.fillStyle = '#111'
+            ctx.fillRect(0, 0, W, H)
+            const scale = Math.max(W / img.width, H / img.height)
+            const sw = img.width * scale, sh = img.height * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+          }
+          img.src = e.target.result
+        }
+        reader.readAsDataURL(file)
+      })
+      const path = `module-images/global/${imagePrefix}${m.key}-${Date.now()}.jpg`
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) { toast('Upload failed: ' + upErr.message); return }
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
@@ -556,7 +580,8 @@ function GlobalImageGrid({ modules, imagePrefix }) {
       if (error) { toast('Save failed: ' + error.message); return }
       setImages(prev => ({ ...prev, [m.key]: url }))
       toast(`${m.label} image saved ✓`)
-    } finally {
+    } catch (e) { toast('Upload failed: ' + (e?.message || e)) }
+    finally {
       setUploading(null)
       if (fileRefs.current[m.key]) fileRefs.current[m.key].value = ''
     }
@@ -596,7 +621,7 @@ function GlobalImageGrid({ modules, imagePrefix }) {
               <button className="btn btn-sm btn-primary" disabled={isUploading} onClick={() => fileRefs.current[m.key]?.click()} style={{ fontSize: 10, padding: '3px 8px', flexShrink: 0 }}>
                 {currentUrl ? '↑' : '+'}
               </button>
-              <input type="file" accept="image/*" ref={el => fileRefs.current[m.key] = el} style={{ display: 'none' }} onChange={e => handleUpload(m, e.target.files[0])} />
+              <input type="file" accept="image/*,.svg" ref={el => fileRefs.current[m.key] = el} style={{ display: 'none' }} onChange={e => handleUpload(m, e.target.files[0])} />
             </div>
           </div>
         )
