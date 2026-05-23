@@ -1539,39 +1539,32 @@ function IconImageManager({ toast }) {
     if (!file?.type.startsWith('image/') && !file?.name.toLowerCase().endsWith('.svg')) { toast('Please select an image file.'); return }
     setUploading(moduleKey)
     try {
-      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
-      let uploadBlob, path, contentType
-      if (isSvg) {
-        uploadBlob = file
-        path = `module-icons/${moduleKey}_${Date.now()}.svg`
-        contentType = 'image/svg+xml'
-      } else {
-        uploadBlob = await new Promise(resolve => {
-          const img = new Image(); const url = URL.createObjectURL(file)
-          img.onload = () => {
-            const W = 800, H = 500
-            const canvas = document.createElement('canvas')
-            canvas.width = W; canvas.height = H
-            const ctx = canvas.getContext('2d')
-            ctx.fillStyle = '#111'
-            ctx.fillRect(0, 0, W, H)
-            const scale = Math.max(W / img.width, H / img.height)
-            const sw = img.width * scale, sh = img.height * scale
-            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-            URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
-          }
-          img.src = url
-        })
-        path = `module-icons/${moduleKey}_${Date.now()}.jpg`
-        contentType = 'image/jpeg'
-      }
-      const { error } = await sb.storage.from('project-files').upload(path, uploadBlob, { contentType, upsert: true })
+      // Convert everything (including SVG) to 800×500 JPEG so storage always accepts it
+      const compressed = await new Promise((resolve, reject) => {
+        const img = new Image(); const url = URL.createObjectURL(file)
+        img.onload = () => {
+          const W = 800, H = 500
+          const canvas = document.createElement('canvas')
+          canvas.width = W; canvas.height = H
+          const ctx = canvas.getContext('2d')
+          ctx.fillStyle = '#111'
+          ctx.fillRect(0, 0, W, H)
+          const scale = Math.max(W / img.width, H / img.height)
+          const sw = img.width * scale, sh = img.height * scale
+          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+          URL.revokeObjectURL(url); canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
+        }
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')) }
+        img.src = url
+      })
+      const path = `module-icons/${moduleKey}_${Date.now()}.jpg`
+      const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })
       if (error) throw error
       const publicUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
       await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl })
       setImages(prev => ({ ...prev, [moduleKey]: publicUrl }))
       toast(`Image updated for ${ALL_MODULES.find(m => m.key === moduleKey)?.label} ✓`)
-    } catch { toast('Upload failed.') }
+    } catch (e) { toast('Upload failed: ' + (e?.message || e)) }
     setUploading(null)
   }
   async function removeImage(moduleKey) {
