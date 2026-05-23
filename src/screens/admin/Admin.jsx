@@ -77,6 +77,8 @@ function ModuleImagesPanel({ orgId }) {
 
   async function handleUpload(def, file) {
     if (!file) return
+    const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+    if (!isSvg && !file.type.startsWith('image/')) { toast('Please select an image or SVG file.'); return }
     setUploading(def.key)
     try {
       const W = 800, H = 500
@@ -85,7 +87,6 @@ function ModuleImagesPanel({ orgId }) {
       const ctx = canvas.getContext('2d')
       ctx.fillStyle = '#111'
       ctx.fillRect(0, 0, W, H)
-      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
       if (isSvg) {
         const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
         ctx.drawImage(bitmap, 0, 0, W, H)
@@ -173,7 +174,7 @@ function ModuleImagesPanel({ orgId }) {
                   <button className="btn btn-sm btn-primary" disabled={isUploading} onClick={() => fileRefs.current[def.key]?.click()}>
                     {currentUrl ? 'Replace' : 'Upload'}
                   </button>
-                  <input type="file" accept="image/*,.svg" ref={el => fileRefs.current[def.key] = el} style={{ display: 'none' }}
+                  <input type="file" ref={el => fileRefs.current[def.key] = el} style={{ display: 'none' }}
                     onChange={e => { handleUpload(def, e.target.files[0]) }} />
                 </div>
                 {currentUrl && (
@@ -558,6 +559,8 @@ function GlobalImageGrid({ modules, imagePrefix }) {
 
   async function handleUpload(m, file) {
     if (!file) return
+    const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+    if (!isSvg && !file.type.startsWith('image/')) { toast('Please select an image or SVG file.'); return }
     setUploading(m.key)
     try {
       const W = 800, H = 500
@@ -566,7 +569,6 @@ function GlobalImageGrid({ modules, imagePrefix }) {
       const ctx = canvas.getContext('2d')
       ctx.fillStyle = '#111'
       ctx.fillRect(0, 0, W, H)
-      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
       if (isSvg) {
         const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
         ctx.drawImage(bitmap, 0, 0, W, H)
@@ -643,7 +645,7 @@ function GlobalImageGrid({ modules, imagePrefix }) {
               <button className="btn btn-sm btn-primary" disabled={isUploading} onClick={() => fileRefs.current[m.key]?.click()} style={{ fontSize: 10, padding: '3px 8px', flexShrink: 0 }}>
                 {currentUrl ? '↑' : '+'}
               </button>
-              <input type="file" accept="image/*,.svg" ref={el => fileRefs.current[m.key] = el} style={{ display: 'none' }} onChange={e => handleUpload(m, e.target.files[0])} />
+              <input type="file" ref={el => fileRefs.current[m.key] = el} style={{ display: 'none' }} onChange={e => handleUpload(m, e.target.files[0])} />
             </div>
           </div>
         )

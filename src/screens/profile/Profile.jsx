@@ -1609,7 +1609,7 @@ function IconImageManager({ toast }) {
                     {uploading === m.key ? '⏳ Uploading…' : '📷 Click to upload'}
                   </div>
                 </div>
-                <input ref={el => fileRefs.current[m.key] = el} type="file" accept="image/*,.svg" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) uploadImage(m.key, e.target.files[0]) }} />
+                <input ref={el => fileRefs.current[m.key] = el} type="file" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) uploadImage(m.key, e.target.files[0]) }} />
               </div>
               <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.icon} {m.label}</div>
