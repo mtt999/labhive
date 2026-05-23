@@ -654,7 +654,7 @@ function AdminProfile() {
         ))}
       </div>
       {adminTab === 'admin'     && <AdminSettings session={session} toast={toast} />}
-      {adminTab === 'icons'     && <IconImageManager toast={toast} />}
+      {adminTab === 'icons'     && <IconImageManager toast={toast} session={session} />}
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
       {adminTab === 'org'       && <OrgContactPanel session={session} toast={toast} />}
@@ -1510,7 +1510,7 @@ function AccessControl({ toast, session }) {
   )
 }
 
-function IconImageManager({ toast }) {
+function IconImageManager({ toast, session }) {
   const ALL_MODULES = [
     { key: 'supply',         label: 'Supply Inventory',    icon: '📦', bg: '#e8f2ee' },
     { key: 'projects',       label: 'Project & Material',  icon: '🧪', bg: '#f3eeff' },
@@ -1529,11 +1529,17 @@ function IconImageManager({ toast }) {
   const [images, setImages] = useState({})
   const [uploading, setUploading] = useState(null)
   const fileRefs = useRef({})
+  const orgId = session?.organizationId || null
   useEffect(() => { loadImages() }, [])
   async function loadImages() {
     const keys = ALL_MODULES.map(m => `img_${m.key}`)
     const { data } = await sb.from('settings').select('key, value').in('key', keys)
-    const map = {}; (data || []).forEach(r => { map[r.key.replace('img_', '')] = r.value }); setImages(map)
+    const map = {}; (data || []).forEach(r => { map[r.key.replace('img_', '')] = r.value })
+    if (orgId) {
+      const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
+      Object.assign(map, orgData?.module_images || {})
+    }
+    setImages(map)
   }
   async function uploadImage(moduleKey, file) {
     if (!file?.type.startsWith('image/') && !file?.name.toLowerCase().endsWith('.svg')) { toast('Please select an image file.'); return }
@@ -1589,15 +1595,29 @@ function IconImageManager({ toast }) {
       const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (error) throw error
       const publicUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
-      const { error: saveErr } = await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl }, { onConflict: 'key' })
-      if (saveErr) throw new Error('Save failed: ' + saveErr.message)
+      if (orgId) {
+        const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
+        const current = orgData?.module_images || {}
+        const { error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [moduleKey]: publicUrl } }).eq('id', orgId)
+        if (saveErr) throw new Error('Save failed: ' + saveErr.message)
+      } else {
+        const { error: saveErr } = await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl }, { onConflict: 'key' })
+        if (saveErr) throw new Error('Save failed: ' + saveErr.message)
+      }
       setImages(prev => ({ ...prev, [moduleKey]: publicUrl }))
       toast(`Image updated for ${ALL_MODULES.find(m => m.key === moduleKey)?.label} ✓`)
     } catch (e) { toast('Upload failed: ' + (e?.message || e)) }
     setUploading(null)
   }
   async function removeImage(moduleKey) {
-    await sb.from('settings').delete().eq('key', `img_${moduleKey}`)
+    if (orgId) {
+      const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
+      const current = { ...(orgData?.module_images || {}) }
+      delete current[moduleKey]
+      await sb.from('organizations').update({ module_images: Object.keys(current).length ? current : null }).eq('id', orgId)
+    } else {
+      await sb.from('settings').delete().eq('key', `img_${moduleKey}`)
+    }
     setImages(prev => { const n = { ...prev }; delete n[moduleKey]; return n }); toast('Image removed.')
   }
   return (
