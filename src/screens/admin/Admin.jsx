@@ -110,7 +110,7 @@ function ModuleImagesPanel({ orgId }) {
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
       )
       const path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
-      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (upErr) throw new Error('Storage: ' + upErr.message)
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
@@ -589,7 +589,7 @@ function GlobalImageGrid({ modules, imagePrefix }) {
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
       )
       const path = `module-images/global/${imagePrefix}${m.key}-${Date.now()}.jpg`
-      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (upErr) throw new Error('Storage: ' + upErr.message)
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl

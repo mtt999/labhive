@@ -105,7 +105,7 @@ function SoloProfile({ session }) {
         img.src = url
       })
       const path = `avatars/solo_${user.id}_${Date.now()}.jpg`
-      const { error: uploadErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })
+      const { error: uploadErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (uploadErr) throw uploadErr
       const photoUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
       await sb.from('solo_users').update({ photo_url: photoUrl }).eq('id', user.id)
@@ -1260,7 +1260,7 @@ function UserProfileForm({ session, toast }) {
         img.src = url
       })
       const path = `avatars/${user.id}_${Date.now()}.jpg`
-      const { error: uploadErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })
+      const { error: uploadErr } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (uploadErr) throw uploadErr
       const photoUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
       await sb.from('users').update({ photo_url: photoUrl }).eq('id', user.id)
@@ -1586,7 +1586,7 @@ function IconImageManager({ toast }) {
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
       )
       const path = `module-icons/${moduleKey}_${Date.now()}.jpg`
-      const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })
+      const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
       if (error) throw error
       const publicUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
       await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl })
