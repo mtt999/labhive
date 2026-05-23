@@ -1536,27 +1536,36 @@ function IconImageManager({ toast }) {
     const map = {}; (data || []).forEach(r => { map[r.key.replace('img_', '')] = r.value }); setImages(map)
   }
   async function uploadImage(moduleKey, file) {
-    if (!file?.type.startsWith('image/')) { toast('Please select an image file.'); return }
+    if (!file?.type.startsWith('image/') && !file?.name.toLowerCase().endsWith('.svg')) { toast('Please select an image file.'); return }
     setUploading(moduleKey)
     try {
-      const compressed = await new Promise(resolve => {
-        const img = new Image(); const url = URL.createObjectURL(file)
-        img.onload = () => {
-          const W = 800, H = 500
-          const canvas = document.createElement('canvas')
-          canvas.width = W; canvas.height = H
-          const ctx = canvas.getContext('2d')
-          ctx.fillStyle = '#111'
-          ctx.fillRect(0, 0, W, H)
-          const scale = Math.max(W / img.width, H / img.height)
-          const sw = img.width * scale, sh = img.height * scale
-          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-          URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
-        }
-        img.src = url
-      })
-      const path = `module-icons/${moduleKey}_${Date.now()}.jpg`
-      const { error } = await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg', upsert: true })
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+      let uploadBlob, path, contentType
+      if (isSvg) {
+        uploadBlob = file
+        path = `module-icons/${moduleKey}_${Date.now()}.svg`
+        contentType = 'image/svg+xml'
+      } else {
+        uploadBlob = await new Promise(resolve => {
+          const img = new Image(); const url = URL.createObjectURL(file)
+          img.onload = () => {
+            const W = 800, H = 500
+            const canvas = document.createElement('canvas')
+            canvas.width = W; canvas.height = H
+            const ctx = canvas.getContext('2d')
+            ctx.fillStyle = '#111'
+            ctx.fillRect(0, 0, W, H)
+            const scale = Math.max(W / img.width, H / img.height)
+            const sw = img.width * scale, sh = img.height * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
+          }
+          img.src = url
+        })
+        path = `module-icons/${moduleKey}_${Date.now()}.jpg`
+        contentType = 'image/jpeg'
+      }
+      const { error } = await sb.storage.from('project-files').upload(path, uploadBlob, { contentType, upsert: true })
       if (error) throw error
       const publicUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
       await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl })
@@ -1593,7 +1602,7 @@ function IconImageManager({ toast }) {
                     {uploading === m.key ? '⏳ Uploading…' : '📷 Click to upload'}
                   </div>
                 </div>
-                <input ref={el => fileRefs.current[m.key] = el} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) uploadImage(m.key, e.target.files[0]) }} />
+                <input ref={el => fileRefs.current[m.key] = el} type="file" accept="image/*,.svg" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) uploadImage(m.key, e.target.files[0]) }} />
               </div>
               <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.icon} {m.label}</div>

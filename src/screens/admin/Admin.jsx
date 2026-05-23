@@ -79,27 +79,36 @@ function ModuleImagesPanel({ orgId }) {
     if (!file) return
     setUploading(def.key)
     try {
-      // Compress & crop to 800×500 landscape so images always fill the card correctly
-      const compressed = await new Promise(resolve => {
-        const img = new Image()
-        const url = URL.createObjectURL(file)
-        img.onload = () => {
-          const W = 800, H = 500
-          const canvas = document.createElement('canvas')
-          canvas.width = W; canvas.height = H
-          const ctx = canvas.getContext('2d')
-          ctx.fillStyle = '#111'
-          ctx.fillRect(0, 0, W, H)
-          const scale = Math.max(W / img.width, H / img.height)
-          const sw = img.width * scale, sh = img.height * scale
-          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-          URL.revokeObjectURL(url)
-          canvas.toBlob(resolve, 'image/jpeg', 0.85)
-        }
-        img.src = url
-      })
-      const path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
-      const { error: upErr } = await sb.storage.from('project-files').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+      let uploadBlob, path, contentType
+      if (isSvg) {
+        uploadBlob = file
+        path = `module-images/${orgId}/${def.key}-${Date.now()}.svg`
+        contentType = 'image/svg+xml'
+      } else {
+        // Compress & crop to 800×500 landscape so images always fill the card correctly
+        uploadBlob = await new Promise(resolve => {
+          const img = new Image()
+          const url = URL.createObjectURL(file)
+          img.onload = () => {
+            const W = 800, H = 500
+            const canvas = document.createElement('canvas')
+            canvas.width = W; canvas.height = H
+            const ctx = canvas.getContext('2d')
+            ctx.fillStyle = '#111'
+            ctx.fillRect(0, 0, W, H)
+            const scale = Math.max(W / img.width, H / img.height)
+            const sw = img.width * scale, sh = img.height * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            URL.revokeObjectURL(url)
+            canvas.toBlob(resolve, 'image/jpeg', 0.85)
+          }
+          img.src = url
+        })
+        path = `module-images/${orgId}/${def.key}-${Date.now()}.jpg`
+        contentType = 'image/jpeg'
+      }
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, uploadBlob, { upsert: true, contentType })
       if (upErr) { toast('Storage upload failed: ' + upErr.message); return }
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
       const url = urlData.publicUrl
@@ -158,7 +167,7 @@ function ModuleImagesPanel({ orgId }) {
                   <button className="btn btn-sm btn-primary" disabled={isUploading} onClick={() => fileRefs.current[def.key]?.click()}>
                     {currentUrl ? 'Replace' : 'Upload'}
                   </button>
-                  <input type="file" accept="image/*" ref={el => fileRefs.current[def.key] = el} style={{ display: 'none' }}
+                  <input type="file" accept="image/*,.svg" ref={el => fileRefs.current[def.key] = el} style={{ display: 'none' }}
                     onChange={e => { handleUpload(def, e.target.files[0]) }} />
                 </div>
                 {currentUrl && (
