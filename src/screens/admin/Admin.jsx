@@ -87,28 +87,25 @@ function ModuleImagesPanel({ orgId }) {
       const ctx = canvas.getContext('2d')
       ctx.fillStyle = '#111'
       ctx.fillRect(0, 0, W, H)
-      if (isSvg) {
-        const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
-        ctx.drawImage(bitmap, 0, 0, W, H)
-        bitmap.close?.()
-      } else {
-        await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onerror = () => reject(new Error('File read failed'))
-          reader.onload = e => {
-            const img = new Image()
-            img.onerror = () => reject(new Error('Image load failed'))
-            img.onload = () => {
-              const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
-              const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale
-              ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-              resolve()
-            }
-            img.src = e.target.result
+      await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('File read failed'))
+        reader.onload = e => {
+          const img = new Image()
+          img.onerror = () => reject(new Error('Image render failed'))
+          img.onload = () => {
+            const iw = img.naturalWidth || W, ih = img.naturalHeight || H
+            const scale = Math.max(W / iw, H / ih)
+            const sw = iw * scale, sh = ih * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            resolve()
           }
-          reader.readAsDataURL(file)
-        })
-      }
+          img.src = isSvg
+            ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(e.target.result)
+            : e.target.result
+        }
+        isSvg ? reader.readAsText(file) : reader.readAsDataURL(file)
+      })
       const compressed = await new Promise((resolve, reject) =>
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
       )
@@ -569,28 +566,25 @@ function GlobalImageGrid({ modules, imagePrefix }) {
       const ctx = canvas.getContext('2d')
       ctx.fillStyle = '#111'
       ctx.fillRect(0, 0, W, H)
-      if (isSvg) {
-        const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
-        ctx.drawImage(bitmap, 0, 0, W, H)
-        bitmap.close?.()
-      } else {
-        await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onerror = () => reject(new Error('File read failed'))
-          reader.onload = e => {
-            const img = new Image()
-            img.onerror = () => reject(new Error('Image load failed'))
-            img.onload = () => {
-              const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
-              const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale
-              ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
-              resolve()
-            }
-            img.src = e.target.result
+      await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('File read failed'))
+        reader.onload = e => {
+          const img = new Image()
+          img.onerror = () => reject(new Error('Image render failed'))
+          img.onload = () => {
+            const iw = img.naturalWidth || W, ih = img.naturalHeight || H
+            const scale = Math.max(W / iw, H / ih)
+            const sw = iw * scale, sh = ih * scale
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+            resolve()
           }
-          reader.readAsDataURL(file)
-        })
-      }
+          img.src = isSvg
+            ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(e.target.result)
+            : e.target.result
+        }
+        isSvg ? reader.readAsText(file) : reader.readAsDataURL(file)
+      })
       const compressed = await new Promise((resolve, reject) =>
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.85)
       )

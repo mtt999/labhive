@@ -1547,9 +1547,23 @@ function IconImageManager({ toast }) {
       ctx.fillRect(0, 0, W, H)
       const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
       if (isSvg) {
-        const bitmap = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
-        ctx.drawImage(bitmap, 0, 0, W, H)
-        bitmap.close?.()
+        await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(new Error('File read failed'))
+          reader.onload = e => {
+            const img = new Image()
+            img.onerror = () => reject(new Error('Image render failed'))
+            img.onload = () => {
+              const iw = img.naturalWidth || W, ih = img.naturalHeight || H
+              const scale = Math.max(W / iw, H / ih)
+              const sw = iw * scale, sh = ih * scale
+              ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh)
+              resolve()
+            }
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(e.target.result)
+          }
+          reader.readAsText(file)
+        })
       } else {
         await new Promise((resolve, reject) => {
           const reader = new FileReader()
