@@ -500,7 +500,7 @@ export default function Dashboard() {
     if (!urlInput.trim()) return
     setSavingUrl(true)
     const key = editingUrl === 'mileage' ? 'mileage_url' : 'labsafety_url'
-    await sb.from('settings').upsert({ key, value: urlInput.trim() })
+    await sb.from('settings').upsert({ key, value: urlInput.trim() }, { onConflict: 'key' })
     if (editingUrl === 'mileage') setMileageUrl(urlInput.trim())
     else setLabSafetyUrl(urlInput.trim())
     setEditingUrl(null); setSavingUrl(false)
