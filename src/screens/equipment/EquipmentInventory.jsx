@@ -188,7 +188,7 @@ function EquipmentList({ session }) {
     setLoading(true)
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
-    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setItems(data || [])
     setLoading(false)

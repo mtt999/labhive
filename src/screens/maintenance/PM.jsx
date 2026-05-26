@@ -422,7 +422,7 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId }) {
 
   useEffect(() => {
     let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
-    if (!isSolo && orgId) q = q.eq('organization_id', orgId)
+    if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
     const staffQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
     Promise.all([q, staffQ])
@@ -572,7 +572,7 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
 
   useEffect(() => {
     let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
-    if (!isSolo && orgId) q = q.eq('organization_id', orgId)
+    if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
     q.then(({ data: t }) => { setTasks(t || []); setLoading(false) })
   }, [userId, isOwnerAdmin, isSolo, orgId])
@@ -713,7 +713,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
   async function load() {
     try {
       let query = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team').order('deadline', { ascending: true, nullsFirst: false })
-      if (!isSolo && orgId) query = query.eq('organization_id', orgId)
+      if (!isSolo) query = query.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
       if (!isOwnerAdmin && userId) query = query.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
       const usersQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
       const [{ data, error }, { data: users }] = await Promise.all([query, usersQ])
@@ -979,7 +979,7 @@ function Team({ orgId, isSolo }) {
     let usersQ = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name')
     if (orgId) usersQ = usersQ.eq('organization_id', orgId)
     let tasksQ = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
-    if (!isSolo && orgId) tasksQ = tasksQ.eq('organization_id', orgId)
+    if (!isSolo) tasksQ = tasksQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
   }, [orgId, isSolo])
 

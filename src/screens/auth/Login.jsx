@@ -1,6 +1,6 @@
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 function ILabLogo({ size = 120 }) {
   return (
@@ -102,24 +102,45 @@ function SignUpForm({ onSuccess, onCancel }) {
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
     setLoading(true)
 
-    const { data: authData, error: authError } = await sb.auth.signUp({
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
-    })
+    const emailLC = form.email.trim().toLowerCase()
+    let authUserId = null
+
+    const { data: authData, error: authError } = await sb.auth.signUp({ email: emailLC, password: form.password })
     if (authError) {
-      setError(authError.message.includes('already registered') ? 'An account with this email already exists. Please sign in.' : authError.message)
-      setLoading(false); return
+      if (authError.message.toLowerCase().includes('already registered') || authError.message.toLowerCase().includes('already been registered')) {
+        // Auth account exists — may be an orphaned record (solo_users insert failed previously).
+        // Try signing in with the provided password to recover.
+        const { data: signInData, error: signInErr } = await sb.auth.signInWithPassword({ email: emailLC, password: form.password })
+        if (signInErr) {
+          // Wrong password → genuine existing account
+          setError('An account with this email already exists. Please sign in.')
+          setLoading(false); return
+        }
+        authUserId = signInData.user.id
+        const { data: existing } = await sb.from('solo_users').select('id').eq('auth_id', authUserId).maybeSingle()
+        if (existing) {
+          // Complete account exists → redirect to sign in
+          await sb.auth.signOut()
+          setError('An account with this email already exists. Please sign in.')
+          setLoading(false); return
+        }
+        // Orphaned auth record — continue to create the solo_users row below
+      } else {
+        setError(authError.message)
+        setLoading(false); return
+      }
+    } else {
+      authUserId = authData.user.id
     }
 
     const { data, error: insertErr } = await sb.from('solo_users').insert({
       name: form.name.trim(),
-      email: form.email.trim().toLowerCase(),
-      auth_id: authData.user.id,
-      is_active: true,
+      email: emailLC,
+      auth_id: authUserId,
       active_modules: [],
     }).select().single()
 
-    if (insertErr) { await sb.auth.signOut(); setError('Error creating account. Please try again.'); setLoading(false); return }
+    if (insertErr) { await sb.auth.signOut(); setError('Error creating account: ' + insertErr.message); setLoading(false); return }
     setLoading(false)
     onSuccess(data)
   }
@@ -197,6 +218,23 @@ export default function Login() {
   const [helpEmail, setHelpEmail] = useState('')
   const [helpResult, setHelpResult] = useState(null)
   const [helpLoading, setHelpLoading] = useState(false)
+  const [failCount, setFailCount] = useState(0)
+  const [lockUntil, setLockUntil] = useState(0)
+  const lockTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (lockUntil <= Date.now()) return
+    lockTimerRef.current = setInterval(() => {
+      const remaining = Math.ceil((lockUntil - Date.now()) / 1000)
+      if (remaining <= 0) {
+        clearInterval(lockTimerRef.current)
+        setError('')
+      } else {
+        setError(`Too many failed attempts. Please wait ${remaining} second${remaining !== 1 ? 's' : ''}.`)
+      }
+    }, 500)
+    return () => clearInterval(lockTimerRef.current)
+  }, [lockUntil])
 
   const accentColor = mode === 'solo' ? '#534AB7' : '#0d47a1'
 
@@ -215,21 +253,42 @@ export default function Login() {
     if (!helpEmail.trim()) return
     setHelpLoading(true); setHelpResult(null)
     const { data: user } = await sb.from('users').select('organization_id').ilike('email', helpEmail.trim()).maybeSingle()
-    if (!user?.organization_id) { setHelpResult({ notFound: true }); setHelpLoading(false); return }
-    const { data: org } = await sb.from('organizations').select('name, contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
-    setHelpResult(org || { notFound: true })
+    let org = null
+    if (user?.organization_id) {
+      const { data } = await sb.from('organizations').select('name, contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
+      org = data
+    }
+    setHelpResult(org || { noContact: true })
     setHelpLoading(false)
   }
 
   async function handleLogin(e) {
     e.preventDefault()
+    if (lockUntil > Date.now()) {
+      const remaining = Math.ceil((lockUntil - Date.now()) / 1000)
+      setError(`Too many failed attempts. Please wait ${remaining} second${remaining !== 1 ? 's' : ''}.`)
+      return
+    }
     if (!mode) { setError('Please select how you are using iLab first.'); return }
     if (!identifier.trim() || !password.trim()) { setError('Please enter your email and password.'); return }
     setLoading(true); setError('')
     const emailLower = identifier.trim().toLowerCase()
 
     const { data: authData, error: authError } = await sb.auth.signInWithPassword({ email: emailLower, password })
-    if (authError) { setError('Incorrect email or password.'); setLoading(false); return }
+    if (authError) {
+      const newCount = failCount + 1
+      setFailCount(newCount)
+      if (newCount >= 3) {
+        const until = Date.now() + 30_000
+        setLockUntil(until)
+        setError('Too many failed attempts. Please wait 30 seconds.')
+      } else {
+        setError('Incorrect email or password.')
+      }
+      setLoading(false)
+      return
+    }
+    setFailCount(0); setLockUntil(0)
     const authUserId = authData.user.id
 
     if (mode === 'team') {
@@ -383,8 +442,8 @@ export default function Login() {
                 )}
 
                 <button type="submit"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px', background: mode ? accentColor : 'var(--border)', color: mode ? '#fff' : 'var(--text3)', border: 'none', borderRadius: 8, cursor: mode ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.2s' }}
-                  disabled={loading || !mode}>
+                  style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px', background: (mode && lockUntil <= Date.now()) ? accentColor : 'var(--border)', color: (mode && lockUntil <= Date.now()) ? '#fff' : 'var(--text3)', border: 'none', borderRadius: 8, cursor: (mode && lockUntil <= Date.now()) ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.2s' }}
+                  disabled={loading || !mode || lockUntil > Date.now()}>
                   {loading ? 'Signing in…' : mode === 'team' ? 'Sign in to iLab Team' : mode === 'solo' ? 'Sign in to iLab Solo' : 'Select a login type above'}
                 </button>
               </form>
@@ -413,12 +472,12 @@ export default function Login() {
                         </button>
                       </div>
                       {helpResult && (
-                        <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 8, background: helpResult.notFound || !helpResult.contact_email ? 'var(--surface)' : '#E1F5EE', border: '1px solid var(--border)' }}>
-                          {helpResult.notFound || !helpResult.contact_email ? (
+                        <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 8, background: helpResult.noContact || !helpResult.contact_email ? 'var(--surface)' : '#E1F5EE', border: '1px solid var(--border)' }}>
+                          {helpResult.noContact || !helpResult.contact_email ? (
                             <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                              {helpResult.notFound
-                                ? 'No account found with that email. Please check the address or contact your lab manager directly.'
-                                : `Your organization is ${helpResult.name}, but no contact email has been set yet. Please reach out to your lab manager.`}
+                              {helpResult.noContact
+                                ? 'No organization contact was found for that email address. Please verify the address or reach out to your lab manager directly.'
+                                : `Your organization is ${helpResult.name}, but no contact email has been configured yet. Please reach out to your lab manager.`}
                             </div>
                           ) : (
                             <>

@@ -1,55 +1,64 @@
 import { useState } from 'react'
+import { useAppStore } from '../store/useAppStore'
+import CustomerServiceModal from './CustomerServiceModal'
 
 const HELP_CONTENT = {
   dashboard: {
     title: 'Dashboard',
     description: 'Your home screen. All modules you have access to are shown as cards. Click any card to navigate to that section.',
     tips: [
-      'Click the iLab logo anytime to return here',
-      'Your profile picture/avatar is in the top right — click it to edit your profile',
-      'Admin users see all modules; students see their assigned modules only',
+      'Click the iLab logo anytime to return to the dashboard',
+      'Your profile picture or avatar is in the top right — click it to go to your profile',
+      'Use Cards view for a quick overview, or Dashboard view for a detailed layout',
+      'Org admins can customize background images for each module card',
+      'Solo users can pick which modules appear on their dashboard from Profile → Dashboard Icons',
+      'Admin users see an Admin Panel shortcut at the top of the dashboard',
     ],
   },
   home: {
     title: 'Supply Inventory',
-    description: 'Track lab supplies across all rooms. Log inspections, import/export data, and manage supply levels.',
+    description: 'Track lab supplies across all rooms. Log inspections, import/export data, and monitor supply levels. Data is fully isolated to your organization.',
     tips: [
-      'Use the Rooms tab to browse supplies by location',
-      'Export to Excel for reports or sharing with your supervisor',
-      'Supplies low on stock are highlighted in red',
-      'Admin can import bulk supply data via Excel upload',
+      'Use the Rooms tab to browse and manage supplies by location',
+      'Run an inspection to record current supply counts and flag low-stock items',
+      'Export to Excel for reports — single inspection or full history',
+      'Import bulk supply data via Excel upload (Admin only)',
+      'Supplies highlighted in red are below the minimum quantity threshold',
+      'Each organization sees only its own rooms and supplies',
     ],
   },
   projects: {
-    title: 'Projects',
-    description: 'Manage research projects, track materials used, and store project files. Each project has its own materials log and file storage.',
+    title: 'Projects & Materials',
+    description: 'Manage research projects, track materials used, and store project files. Each project has its own materials log, file storage, and status tracking.',
     tips: [
-      'Create a project first, then add materials and files to it',
+      'Create a project first, then add materials and upload files to it',
       'Use the floor plan picker to assign storage locations to materials',
-      'Project Database tab shows cross-project material summaries',
-      'Staff can manage all projects; students see only their own',
+      'Project Database tab shows a cross-project material summary',
+      'Staff can manage all projects; students see only their assigned projects',
+      'Use the barcode scanner to look up materials by QR code',
     ],
   },
   training: {
     title: 'Training Records',
-    description: 'Track student training status across 4 categories: Fresh Student orientation, Golf Car, Equipment, and Building Alarm.',
+    description: 'Track training status across 4 categories: Fresh Student orientation, Golf Car, Equipment, and Building Alarm.',
     tips: [
       'Fresh Student tab: upload certificates and track admin approval',
-      'Equipment tab: view your training status per equipment',
-      'Request retraining if you haven\'t used equipment in 3+ months',
-      'Exam tab: take equipment knowledge exams before training sessions',
+      'Equipment tab: view your training status per piece of equipment',
+      'Request retraining if you have not used equipment in 3+ months',
+      'Exam tab: take a knowledge exam before your training session',
       'Training Requests tab (admin): schedule and approve training sessions',
     ],
   },
   equipmenthub: {
-    title: 'Equipment',
+    title: 'Equipment Hub',
     description: 'Browse all lab equipment. View photos, training videos, SOPs, and standards for each piece of equipment.',
     tips: [
       'Search or filter by category in the left panel',
       'Training videos and SOPs are visible only after completing training',
       'Admin can grant 1-week temporary access for pre-training review',
-      'Scroll to the bottom to take the equipment knowledge exam',
-      'SOP Notes section lets you leave feedback for improvement',
+      'Scroll to the bottom of an equipment page to take the knowledge exam',
+      'SOP Notes section lets you leave feedback or improvement suggestions',
+      'Standards tab shows applicable safety and calibration standards',
     ],
   },
   equipment: {
@@ -58,39 +67,83 @@ const HELP_CONTENT = {
     tips: [
       'Import your full equipment list from Excel in one click',
       'Maintenance Due tab shows equipment approaching service intervals',
-      'Maintenance Records shows usage hours from booking data',
+      'Maintenance Records shows usage hours pulled from booking data',
       'Admin can assign maintenance responsibility to specific staff',
-      'Settings tab lets you add/edit equipment categories',
+      'Settings tab lets you add and edit equipment categories',
+      'Each organization sees only its own equipment',
     ],
   },
   booking: {
     title: 'Booking Equipment',
-    description: 'Reserve lab equipment using the calendar. Drag on the calendar to select your time slot. All bookings are visible to everyone.',
+    description: 'Reserve lab equipment using the calendar. Drag to select your time slot. All bookings within your organization are visible.',
     tips: [
-      'Select equipment on the left first to enable drag-to-book',
-      'Drag across days for multi-day bookings',
+      'Select an equipment item on the left first, then drag on the calendar to book',
+      'Drag across multiple days for multi-day bookings',
       'Equipment with a red RETRAIN badge requires retraining before booking',
       'Admin can book on behalf of any user',
       'History & Usage tab lets you export booking records as CSV',
+      'Team tab shows booking requests from teammates',
     ],
   },
   profile: {
     title: 'Profile',
-    description: 'Manage your personal information, profile photo, and login password. Admin can manage all users and set admin levels here.',
+    description: 'Manage your personal information, profile photo, login password, and dashboard icons. Org admins can manage users and customize module images here.',
     tips: [
-      'Upload a photo or choose an emoji avatar — shown in the top navigation',
+      'Upload a photo or choose an emoji avatar — shown in the navigation bar',
       'Change your password in the Password tab',
-      'Admin: use the Students tab to add, edit, and assign roles to all users',
-      'Admin 1 and Admin 2 levels can be assigned to trusted staff',
-      'Supervisor list is populated from staff and admin accounts',
+      'Dashboard Icons tab: choose which module cards appear on your home screen',
+      'Org admin — Module Images tab: upload a background photo for each dashboard card',
+      'Org admin — Users and Lab Users tabs: add, edit, and manage all accounts',
+      'Admin 1 and Admin 2 levels can be assigned to trusted staff members',
+    ],
+  },
+  pm: {
+    title: 'Project Management',
+    description: 'Kanban-style board for tracking tasks and to-dos across your lab projects.',
+    tips: [
+      'Create tasks and assign them to team members',
+      'Drag tasks between columns to update their status',
+      'Filter by assignee or project to focus your view',
+    ],
+  },
+  remessages: {
+    title: 'Messages',
+    description: 'Direct messaging between lab members and managers. Use this to ask questions, report issues, or coordinate with your team.',
+    tips: [
+      'Messages are organized by conversation thread',
+      'Lab managers can see all conversations in their organization',
+      'Attach files or images to your messages',
+    ],
+  },
+  labmanagement: {
+    title: 'Lab Management',
+    description: 'Centralized hub for lab administration — manage safety documents, compliance records, lab policies, and facility information.',
+    tips: [
+      'Upload and organize lab safety documents and SOPs',
+      'Track compliance and certification expiry dates',
+      'Admins can publish announcements visible to all lab members',
+      'Each organization manages its own lab documents independently',
+    ],
+  },
+  barcode: {
+    title: 'Barcode Scanner',
+    description: 'Scan QR codes and barcodes to quickly look up equipment, supplies, or project materials.',
+    tips: [
+      'Point the camera at any iLab QR code to pull up the linked item',
+      'Equipment QR codes open the full equipment detail page',
+      'Use the Barcode Manager (admin) to generate and print QR labels',
     ],
   },
 }
 
 export default function HelpPanel({ screen }) {
+  const { session } = useAppStore()
   const [open, setOpen] = useState(false)
+  const [showCS, setShowCS] = useState(false)
   const help = HELP_CONTENT[screen]
   if (!help) return null
+
+  const isSolo = session?.loginMode === 'solo'
 
   return (
     <>
@@ -100,7 +153,7 @@ export default function HelpPanel({ screen }) {
         style={{
           width: 28, height: 28, borderRadius: '50%',
           background: open ? 'var(--accent)' : 'var(--accent-light)',
-          border: `1px solid ${open ? 'var(--accent)' : 'var(--accent)'}`,
+          border: `1px solid var(--accent)`,
           color: open ? '#fff' : 'var(--accent)',
           fontSize: 13, fontWeight: 700, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -142,8 +195,20 @@ export default function HelpPanel({ screen }) {
                 </div>
               ))}
             </div>
+
             <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
-              Need more help? Contact your ICT-RE or admin.
+              {isSolo ? (
+                <>
+                  Need more help?{' '}
+                  <button
+                    onClick={() => { setOpen(false); setShowCS(true) }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, fontSize: 12, textDecoration: 'underline' }}>
+                    Contact customer service
+                  </button>
+                </>
+              ) : (
+                'Need more help? Contact your admin.'
+              )}
             </div>
           </div>
         </div>
@@ -152,6 +217,8 @@ export default function HelpPanel({ screen }) {
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.2)' }} />
       )}
+
+      {showCS && <CustomerServiceModal onClose={() => setShowCS(false)} />}
     </>
   )
 }

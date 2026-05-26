@@ -8,9 +8,11 @@
     "postbuild": "node scripts/post-build.mjs",
     "build:mobile": "BUILD_TARGET=mobile vite build",
     "sync": "npm run build:mobile && npx cap sync",
+    "ios": "npm run sync && cd ios/App && xcodebuild -project App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -configuration Debug build 2>&1 | tail -3 && xcrun simctl install 2DEB2734-7379-42F3-8214-C645F6BB56A9 $(find ~/Library/Developer/Xcode/DerivedData -name 'App.app' -path '*/Build/Products/Debug-iphonesimulator/App.app' -not -path '*/Index.noindex/*' | head -1) && xcrun simctl launch 2DEB2734-7379-42F3-8214-C645F6BB56A9 com.motlagh.ilab",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@basecom-gmbh/capacitor-jailbreak-root-detection": "^7.0.4",
     "@capacitor-mlkit/barcode-scanning": "^8.1.0",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.0",
@@ -23,6 +25,7 @@
     "@supabase/supabase-js": "^2.45.0",
     "bcryptjs": "^3.0.3",
     "exceljs": "^4.4.0",
+    "jsqr": "^1.4.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "xlsx": "^0.18.5",
@@ -32,6 +35,8 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@vitejs/plugin-react": "^4.3.0",
-    "vite": "^5.4.0"
+    "javascript-obfuscator": "^5.4.3",
+    "vite": "^5.4.0",
+    "vite-plugin-javascript-obfuscator": "^3.1.0"
   }
 }

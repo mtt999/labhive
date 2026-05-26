@@ -365,7 +365,7 @@ function ExportData() {
 
   async function load() {
     let q = sb.from('inspections').select('*').eq('login_mode', loginMode).order('inspected_at', { ascending: false }).limit(200)
-    if (!isSolo && orgId) q = q.eq('organization_id', orgId)
+    if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setData(data || []); setLoading(false)
   }
@@ -387,13 +387,13 @@ function ExportData() {
     if (!dateStr) { toast('Please select a date.'); return }
     toast('Loading…')
     let rq = sb.from('inspections').select('*').eq('login_mode', loginMode).order('inspected_at', { ascending: true })
-    if (!isSolo && orgId) rq = rq.eq('organization_id', orgId)
+    if (!isSolo) rq = rq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     const { data: allRecs } = await rq
     const dateRecs = (allRecs || []).filter(r => new Date(r.inspected_at).toLocaleDateString('en-CA') === dateStr)
     let roomQ = sb.from('rooms').select('*').eq('login_mode', loginMode).order('name')
-    if (!isSolo && orgId) roomQ = roomQ.eq('organization_id', orgId)
+    if (!isSolo) roomQ = roomQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     let supQ = sb.from('supplies').select('*').eq('login_mode', loginMode)
-    if (!isSolo && orgId) supQ = supQ.eq('organization_id', orgId)
+    if (!isSolo) supQ = supQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     const { data: allRooms } = await roomQ
     const { data: allSupplies } = await supQ
 
@@ -436,7 +436,7 @@ function ExportData() {
   async function exportAll() {
     toast('Loading…')
     let aq = sb.from('inspections').select('*').eq('login_mode', loginMode).order('inspected_at', { ascending: true })
-    if (!isSolo && orgId) aq = aq.eq('organization_id', orgId)
+    if (!isSolo) aq = aq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     const { data: allRecs } = await aq
     if (!allRecs?.length) { toast('No records found.'); return }
 
@@ -698,9 +698,9 @@ function ImportTab() {
     const orgId = session?.organizationId || null
     try {
       let rq = sb.from('rooms').select('*').eq('login_mode', loginMode)
-      if (loginMode === 'team' && orgId) rq = rq.eq('organization_id', orgId)
+      if (loginMode === 'team') rq = rq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
       let sq = sb.from('supplies').select('*').eq('login_mode', loginMode)
-      if (loginMode === 'team' && orgId) sq = sq.eq('organization_id', orgId)
+      if (loginMode === 'team') sq = sq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
       const { data: existingRooms } = await rq
       const { data: existingSupplies } = await sq
       const roomByName = {}; (existingRooms || []).forEach(r => roomByName[r.name.toLowerCase()] = r)

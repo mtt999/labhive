@@ -7,6 +7,7 @@ import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MOD
 import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
+import FloorPlanEditor from '../../components/FloorPlanEditor'
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
 const DEGREES = ['MS', 'PhD', 'BS', 'Other']
@@ -268,18 +269,27 @@ function DashboardIconsPanel({ session }) {
         setSelected(new Set(savedArr || displayKeys))
         setDisplayOrder(initOrder(savedArr, displayKeys))
       } else {
-        const [prefsRes, orgRes, appRes] = await Promise.all([
+        const [prefsRes, orgResRaw, appRes] = await Promise.all([
           sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
           session?.organizationId
-            ? sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+            ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
             : Promise.resolve(null),
           sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
         ])
+        let orgRes = orgResRaw
+        if (orgResRaw?.error && session?.organizationId) {
+          orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+        }
         const data = prefsRes.data?.[0] ?? null
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-        const orgPool = orgRes?.data?.allowed_modules || null
-        // Org pool overrides global pool; global is the default when no org pool is set
+        // Role-specific org pool: lab users use labusers pool, staff use labmanagers pool, org admin uses outer pool
+        const outerOrgPool = session?.role === 'student'
+          ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
+          : session?.role === 'user'
+            ? (orgRes?.data?.allowed_modules_labmanagers ?? orgRes?.data?.allowed_modules)
+            : orgRes?.data?.allowed_modules
+        const orgPool = outerOrgPool || null
         const effectivePool = orgPool ?? appPool
         setAdminPool(effectivePool)
         if (session?.role === 'student') {
@@ -400,7 +410,9 @@ function DashboardIconsPanel({ session }) {
     <div>
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Dashboard Icons</div>
-        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>Choose which shortcuts appear on your dashboard.</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+          Choose which shortcuts appear on your dashboard.
+        </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {displayModules.length} selected</div>
@@ -633,11 +645,12 @@ function AdminProfile() {
   }
 
   const tabs = [
-    { key: 'admin',    label: '🔑 Admin Settings' },
-    { key: 'icons',    label: '🖼️ Icon Images' },
-    { key: 'dashboard',label: '🎛️ Dashboard Icons' },
-    { key: 'notifs',   label: '🔔 Notifications' },
-    { key: 'org',      label: '🏢 Organization' },
+    { key: 'admin',     label: '🔑 Admin Settings' },
+    { key: 'icons',     label: '🖼️ Icon Images' },
+    { key: 'floorplan', label: '🗺️ Floor Plan' },
+    { key: 'dashboard', label: '🎛️ Dashboard Icons' },
+    { key: 'notifs',    label: '🔔 Notifications' },
+    { key: 'org',       label: '🏢 Organization' },
   ]
   return (
     <div>
@@ -655,6 +668,7 @@ function AdminProfile() {
       </div>
       {adminTab === 'admin'     && <AdminSettings session={session} toast={toast} />}
       {adminTab === 'icons'     && <IconImageManager toast={toast} session={session} />}
+      {adminTab === 'floorplan' && <FloorPlanEditor />}
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
       {adminTab === 'org'       && <OrgContactPanel session={session} toast={toast} />}
@@ -707,6 +721,7 @@ export function StudentsPanel({ toast, session }) {
   const [showModal, setShowModal] = useState(false)
   const [editStudent, setEditStudent] = useState(null)
   const [iconStudent, setIconStudent] = useState(null)
+  const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
   const [importing, setImporting] = useState(false)
   const fileRef = useRef(null)
@@ -746,11 +761,14 @@ export function StudentsPanel({ toast, session }) {
     if (id) {
       const { error } = await sb.from('users').update(payload).eq('id', id)
       if (error) { toast('Error: ' + error.message); return }
+      setShowModal(false); setEditStudent(null); load(); toast('Student saved ✓')
     } else {
-      const { error } = await sb.from('users').insert(payload)
+      const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single()
       if (error) { toast('Error: ' + error.message); return }
+      setShowModal(false); setEditStudent(null)
+      const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
+      setPendingIconSetup({ userId: newUser.id, displayName: dispName })
     }
-    setShowModal(false); setEditStudent(null); load(); toast('Student saved ✓')
   }
 
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
@@ -843,7 +861,8 @@ export function StudentsPanel({ toast, session }) {
         ))
       }
       {showModal && <StudentModal student={editStudent} session={session} onClose={() => { setShowModal(false); setEditStudent(null) }} onSave={saveStudent} />}
-      {iconStudent && <StudentIconManager student={iconStudent} onClose={(saved) => { setIconStudent(null); if (saved) toast(`Icons updated for ${iconStudent.email || iconStudent.name} ✓`) }} />}
+      {iconStudent && <StudentIconManager student={iconStudent} orgId={session?.organizationId} onClose={(saved) => { setIconStudent(null); if (saved) toast(`Icons updated for ${iconStudent.email || iconStudent.name} ✓`) }} />}
+      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="student" onDone={() => { setPendingIconSetup(null); load(); toast('Lab user created & icons saved ✓') }} />}
     </div>
   )
 }
@@ -948,6 +967,7 @@ function StaffListPanel({ toast, session }) {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editStaff, setEditStaff] = useState(null)
+  const [pendingIconSetup, setPendingIconSetup] = useState(null)
   useEffect(() => { load() }, [])
   async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setStaff(data || []); setLoading(false) }
   async function saveStaff(form, id) {
@@ -964,9 +984,8 @@ function StaffListPanel({ toast, session }) {
         if (authUser) payload.auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
-    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return } }
-    else { const { error } = await sb.from('users').insert(payload); if (error) { toast('Error: ' + error.message); return } }
-    setShowModal(false); setEditStaff(null); load(); toast('Staff saved ✓')
+    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); load(); toast('Staff saved ✓') }
+    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: form.name.trim() }) }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function deleteStaff(id) { if (!confirm('Delete this staff member?')) return; await sb.from('users').delete().eq('id', id); load(); toast('Deleted.') }
@@ -1003,6 +1022,7 @@ function StaffListPanel({ toast, session }) {
         ))
       }
       {showModal && <StaffModal staff={editStaff} onClose={() => { setShowModal(false); setEditStaff(null) }} onSave={saveStaff} onRoleChange={setMemberRole} />}
+      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="user" onDone={() => { setPendingIconSetup(null); load(); toast('Lab manager created & icons saved ✓') }} />}
     </div>
   )
 }
@@ -1078,6 +1098,116 @@ function SupervisorSelect({ value, onChange }) {
       <option value="">— Select supervisor —</option>
       {supervisors.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
     </select>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANDATORY ICON SETUP MODAL (shown after new user creation)
+// ══════════════════════════════════════════════════════════════
+function IconSetupModal({ userId, displayName, organizationId, userRole = 'student', onDone }) {
+  const [orgPool, setOrgPool] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [userId])
+
+  async function load() {
+    let pool = null
+    if (organizationId) {
+      const { data } = await sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', organizationId).maybeSingle()
+      const outerPool = data?.allowed_modules
+      const rolePool = userRole === 'student' ? data?.allowed_modules_labusers : data?.allowed_modules_labmanagers
+      pool = rolePool ?? outerPool
+    }
+    const allKeys = ALL_MODULES_META.filter(m => !m.adminOnly && !m.soloLocked).map(m => m.key)
+    const availablePool = pool ?? allKeys
+    setOrgPool(availablePool)
+    const initSelected = new Set([...availablePool, 'profile'])
+    setSelected(initSelected)
+  }
+
+  function toggle(key) {
+    if (key === 'profile') return
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function save() {
+    if (!selected || saving) return
+    setSaving(true)
+    const modules = ['profile', ...Array.from(selected).filter(k => k !== 'profile')]
+    const { data: existing } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId).maybeSingle()
+    if (existing) {
+      await sb.from('user_dashboard_prefs').update({ allowed_modules: modules }).eq('user_id', userId)
+    } else {
+      await sb.from('user_dashboard_prefs').insert({ user_id: userId, allowed_modules: modules })
+    }
+    setSaving(false)
+    onDone()
+  }
+
+  const displayModules = orgPool ? ALL_MODULES_META.filter(m => orgPool.includes(m.key) || m.key === 'profile') : []
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(3px)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+        <div style={{ padding: '22px 26px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 6 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e0f7ef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🎛️</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>Step 2 of 2 — Dashboard Icons</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 3 }}>Choose which icons <strong>{displayName}</strong> will see on their dashboard.</div>
+            </div>
+          </div>
+          <div style={{ background: '#fef3c7', borderRadius: 8, padding: '8px 14px', marginTop: 14, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+            ⚠️ This step is required to complete user setup. Select icons, then click "Save &amp; complete".
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 14px' }}>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+              {selected ? <><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selected.size}</span> of {displayModules.length} selected</> : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => orgPool && setSelected(new Set([...orgPool, 'profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
+              <span style={{ color: 'var(--border)' }}>·</span>
+              <button onClick={() => setSelected(new Set(['profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+            </div>
+          </div>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '0 26px', flex: 1 }}>
+          {selected === null ? (
+            <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10, paddingBottom: 20 }}>
+              {displayModules.map(m => {
+                const pinned = m.key === 'profile'
+                const sel = pinned || selected.has(m.key)
+                return (
+                  <div key={m.key} onClick={() => toggle(m.key)}
+                    style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '12px 12px 10px', cursor: pinned ? 'default' : 'pointer', position: 'relative', transition: 'all 0.15s', opacity: pinned ? 0.75 : 1, userSelect: 'none' }}>
+                    <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                      {sel && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </div>
+                    <div style={{ fontSize: 24, marginBottom: 6, pointerEvents: 'none' }}>{m.icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{m.label}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
+                    {pinned && <div style={{ marginTop: 4, fontSize: 9, color: m.color, fontWeight: 700, pointerEvents: 'none' }}>Always visible</div>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '14px 26px 22px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Profile is always visible. Tap icons to toggle.</div>
+          <button className="btn btn-primary" onClick={save} disabled={saving || selected === null}>
+            {saving ? 'Saving…' : 'Save & complete ✓'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1444,32 +1574,54 @@ export default function Profile() {
 
 function AccessControl({ toast, session }) {
   const ALL_SCREENS = [
-    { key: 'home',        label: 'Supply Inventory',    icon: '📦' },
-    { key: 'projects',    label: 'Project & Material',   icon: '🧪' },
-    { key: 'training',    label: 'Training Records',    icon: '🎓' },
-    { key: 'equipment',   label: 'Equipment Inventory', icon: '🔧' },
-    { key: 'equipmenthub',label: 'Equipment Hub',       icon: '📚' },
-    { key: 'booking',     label: 'Booking Equipment',   icon: '📅' },
-    { key: 'remessages',  label: 'Contact Lab Manager', icon: '💬' },
-    { key: 'mileage',     label: 'Mileage Form',        icon: '🚗' },
-    { key: 'labsafety',   label: 'Lab Safety',          icon: '🦺' },
-    { key: 'pm',          label: 'Project Management',  icon: '📋' },
-    { key: 'barcode',     label: 'Barcode Scanner',     icon: '📷' },
-    { key: 'profile',     label: 'Profile',             icon: '👤' },
-    { key: 'barcodeqr',  label: 'Barcode/QR Scan',     icon: '🔲' },
+    { key: 'home',         label: 'Supply Inventory',    icon: '📦', moduleKey: 'supply' },
+    { key: 'projects',     label: 'Project & Material',  icon: '🧪', moduleKey: 'projects' },
+    { key: 'training',     label: 'Training Records',    icon: '🎓', moduleKey: 'training' },
+    { key: 'equipment',    label: 'Equipment Inventory', icon: '🔧', moduleKey: 'equipment' },
+    { key: 'equipmenthub', label: 'Equipment Hub',       icon: '📚', moduleKey: 'equipmenthub' },
+    { key: 'booking',      label: 'Booking Equipment',   icon: '📅', moduleKey: 'booking' },
+    { key: 'remessages',   label: 'Contact Lab Manager', icon: '💬', moduleKey: 'remessages' },
+    { key: 'mileage',      label: 'Mileage Form',        icon: '🚗', moduleKey: 'mileage' },
+    { key: 'labsafety',    label: 'Lab Safety',          icon: '🦺', moduleKey: 'labsafety' },
+    { key: 'pm',           label: 'Project Management',  icon: '📋', moduleKey: 'pm' },
+    { key: 'barcode',      label: 'QR Scan',             icon: '📷', moduleKey: 'barcode' },
+    { key: 'profile',      label: 'Profile',             icon: '👤', moduleKey: 'profile' },
+    { key: 'barcodeqr',    label: 'QR Scan',             icon: '🔲', moduleKey: 'barcodeqr' },
   ]
   const [users, setUsers] = useState([])
   const [selected, setSelected] = useState(null)
   const [access, setAccess] = useState({})
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [orgPool, setOrgPool] = useState(null)
   useEffect(() => { loadUsers() }, [])
   useEffect(() => { if (selected) loadAccess(selected.id) }, [selected])
-  async function loadUsers() { setLoading(true); let q = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setUsers(data || []); setLoading(false) }
+  async function loadUsers() {
+    setLoading(true)
+    let q = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name')
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const [{ data }, orgResRaw] = await Promise.all([
+      q,
+      session?.organizationId
+        ? sb.from('organizations').select('allowed_modules, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
+        : Promise.resolve(null),
+    ])
+    let orgRes = orgResRaw
+    if (orgResRaw?.error && session?.organizationId) {
+      orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+    }
+    const pool = orgRes?.data?.allowed_modules_labmanagers ?? orgRes?.data?.allowed_modules ?? null
+    setOrgPool(pool)
+    setUsers(data || [])
+    setLoading(false)
+  }
+  const visibleScreens = orgPool
+    ? ALL_SCREENS.filter(s => orgPool.includes(s.moduleKey))
+    : ALL_SCREENS
   async function loadAccess(userId) {
     const { data } = await sb.from('user_screen_access').select('screen_key').eq('user_id', userId)
     const map = {}
-    if (data?.length) { data.forEach(r => { map[r.screen_key] = true }) } else { ALL_SCREENS.forEach(s => { map[s.key] = true }) }
+    if (data?.length) { data.forEach(r => { map[r.screen_key] = true }) } else { visibleScreens.forEach(s => { map[s.key] = true }) }
     setAccess(map)
   }
   async function saveAccess() {
@@ -1495,7 +1647,7 @@ function AccessControl({ toast, session }) {
       {selected && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginBottom: 16 }}>
-            {ALL_SCREENS.map(s => (
+            {visibleScreens.map(s => (
               <label key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1px solid ${access[s.key] ? 'var(--accent)' : 'var(--border)'}`, background: access[s.key] ? 'var(--accent-light)' : 'var(--surface2)', cursor: 'pointer', marginBottom: 0 }}>
                 <input type="checkbox" checked={!!access[s.key]} onChange={e => setAccess(a => ({ ...a, [s.key]: e.target.checked }))} style={{ width: 'auto' }} />
                 <span style={{ fontSize: 16 }}>{s.icon}</span>
@@ -1598,8 +1750,9 @@ function IconImageManager({ toast, session }) {
       if (orgId) {
         const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
         const current = orgData?.module_images || {}
-        const { error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [moduleKey]: publicUrl } }).eq('id', orgId)
+        const { data: updated, error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [moduleKey]: publicUrl } }).eq('id', orgId).select()
         if (saveErr) throw new Error('Save failed: ' + saveErr.message)
+        if (!updated?.length) throw new Error('Save failed: org not found (orgId: ' + orgId + ')')
       } else {
         const { error: saveErr } = await sb.from('settings').upsert({ key: `img_${moduleKey}`, value: publicUrl }, { onConflict: 'key' })
         if (saveErr) throw new Error('Save failed: ' + saveErr.message)

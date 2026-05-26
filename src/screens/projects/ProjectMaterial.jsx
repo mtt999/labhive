@@ -112,19 +112,37 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 
 // ── New Project Modal ──────────────────────────────────────────
 function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
-  const { toast } = useAppStore()
+  const { session, toast } = useAppStore()
   const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', student_ids: [], sampling_date: '', storage_date: '', notes: '' })
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
 
   function toggleStudent(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
   async function create() {
-    if (!form.name.trim()) { toast('Project name is required.'); return }
-    if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null, solo_owner_id: soloOwnerId || null, organization_id: !soloOwnerId ? (session?.organizationId || null) : null }
+    setErrMsg('')
+    if (!form.name.trim()) { setErrMsg('Project name is required.'); return }
+    if (!form.project_id.trim()) { setErrMsg('Project title is required.'); return }
+    setSaving(true)
+    const payload = {
+      name: form.name.trim(),
+      project_id: form.project_id.trim(),
+      cfop: form.cfop.trim() || null,
+      status: form.status,
+      project_group: form.project_group || null,
+      pi_user_id: form.pi_user_id || null,
+      student_ids: form.student_ids,
+      sampling_date: form.sampling_date || null,
+      storage_date: form.storage_date || null,
+      notes: form.notes.trim() || null,
+      solo_owner_id: soloOwnerId || null,
+      organization_id: isSolo ? null : (session?.organizationId || null),
+    }
     const { data, error } = await sb.from('projects').insert(payload).select().single()
-    if (error) { toast('Error creating project.'); return }
+    setSaving(false)
+    if (error) { setErrMsg(error.message); return }
     toast('Project created!'); onCreated(data.id); onClose()
   }
 
@@ -148,8 +166,15 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
       </div>
       <div className="field"><label>Notes</label><textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} /></div>
+      {errMsg && (
+        <div style={{ background: '#fdf0ed', border: '1px solid #e24b4a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#c0392b' }}>
+          ⚠️ {errMsg}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className={`btn ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={create}>Create project</button>
+        <button className={`btn ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={create} disabled={saving}>
+          {saving ? 'Creating…' : 'Create project'}
+        </button>
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>
@@ -398,7 +423,7 @@ function ResultsTab({ projects, session, allowedNames }) {
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     q.then(({ data }) => setEquipment(data || []))
   }, [])
 
@@ -1039,7 +1064,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    if (!isSolo) eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
     if (session?.organizationId) {
       sb.from('projects').select('id, name, project_id, pi_user_id, student_ids, project_group').eq('status', 'active').eq('organization_id', session.organizationId).order('project_id')
@@ -1434,7 +1459,7 @@ function RecordsPanel({ projects, allowedNames, session }) {
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name')
-    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    if (!isSolo) eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => setEquipment(data || []))
   }, [])
 
@@ -1680,7 +1705,7 @@ function MaterialInventoryTab({ session, isSolo }) {
 
   async function loadUsers() {
     let q = sb.from('users').select('id, name').order('name')
-    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setUsers(data || [])
   }

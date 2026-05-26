@@ -168,10 +168,17 @@ export default function MaterialStorage({ project }) {
   function printLabel() {
     const printContents = document.getElementById('print-label')?.outerHTML
     if (!printContents) return
-    const win = window.open('', '_blank')
-    win.document.write(`<!DOCTYPE html><html><head><title>LabStock Label</title><style>@page{size:4in 4in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:4in}*{box-sizing:border-box}</style></head><body>${printContents}</body></html>`)
-    win.document.close(); win.focus()
-    setTimeout(() => { win.print(); win.close() }, 400)
+    const css = '@page{size:4in 4in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:4in}*{box-sizing:border-box}'
+    const html = `<!DOCTYPE html><html><head><title>LabStock Label</title><style>${css}</style></head><body>${printContents}</body></html>`
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const win = window.open(url, '_blank')
+    if (!win) return
+    win.addEventListener('load', () => {
+      win.focus()
+      win.print()
+      win.addEventListener('afterprint', () => { win.close(); URL.revokeObjectURL(url) })
+    })
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>

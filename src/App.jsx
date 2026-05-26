@@ -50,7 +50,7 @@ const DEEP_LINK_SCREEN = new URLSearchParams(window.location.search).get('screen
 const DEEP_LINK_TAB    = new URLSearchParams(window.location.search).get('tab')
 
 export default function App() {
-  const { session, screen, refreshCache, setScreen, setActiveModules, setScanEquipmentId, setSession, setSharedWorkspaces } = useAppStore()
+  const { session, screen, refreshCache, setScreen, setActiveModules, setScanEquipmentId, setSession, setSharedWorkspaces, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
@@ -129,6 +129,8 @@ export default function App() {
   useEffect(() => {
     if (session?.loginMode) {
       localStorage.setItem('ilab_login_mode', session.loginMode)
+      // Re-sync the rooms/supplies cache now that we have the correct org in session
+      refreshCache()
       // QR scan takes priority
       if (SCAN_EQ_ID) { setScreen('equipmentscan'); return }
       // Deep-link from email notification
@@ -179,6 +181,23 @@ export default function App() {
       setShowIconPicker(false)
     }
   }
+
+  // Super admin idle timeout: sign out after 30 minutes of inactivity
+  useEffect(() => {
+    if (!session || session.userId !== null) return
+    const IDLE_MS = 30 * 60 * 1000
+    let lastActivity = Date.now()
+    const touch = () => { lastActivity = Date.now() }
+    const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click']
+    events.forEach(ev => window.addEventListener(ev, touch, { passive: true }))
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity >= IDLE_MS) clearSession()
+    }, 60_000)
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, touch))
+      clearInterval(interval)
+    }
+  }, [session?.userId])
 
   useEffect(() => {
     if (session?.userId && (session?.role === 'user' || session?.role === 'admin' || session?.role === 'student')) {

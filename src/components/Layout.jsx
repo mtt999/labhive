@@ -106,7 +106,7 @@ export default function Layout({ children }) {
         margin: '0 auto',
         width: '100%',
         padding: screen === 'booking' ? '16px 10px' : '24px 16px',
-        paddingBottom: '24px',
+        paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : '24px',
       }}>
         {children}
       </main>

@@ -789,7 +789,7 @@ function BookingCalendar({ session }) {
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
-    if (!isSolo && session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setEquipment(data || [])
     if (!isSolo && session?.userId && session?.organizationId) {

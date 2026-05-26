@@ -36,9 +36,10 @@ export const useAppStore = create((set, get) => ({
     const mode = isSolo ? 'solo' : 'team'
     let roomsQ = sb.from('rooms').select('*').eq('login_mode', mode).order('created_at')
     let suppliesQ = sb.from('supplies').select('*').eq('login_mode', mode).order('created_at')
-    if (!isSolo && session?.organizationId) {
-      roomsQ = roomsQ.eq('organization_id', session.organizationId)
-      suppliesQ = suppliesQ.eq('organization_id', session.organizationId)
+    if (!isSolo) {
+      const safeOrgId = session?.organizationId || '00000000-0000-0000-0000-000000000000'
+      roomsQ = roomsQ.eq('organization_id', safeOrgId)
+      suppliesQ = suppliesQ.eq('organization_id', safeOrgId)
     }
     const [r, s, cfg] = await Promise.all([roomsQ, suppliesQ, sb.from('settings').select('*')])
     const settings = {}

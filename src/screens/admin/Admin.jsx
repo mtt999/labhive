@@ -116,8 +116,9 @@ function ModuleImagesPanel({ orgId }) {
       const url = urlData.publicUrl
       const { data: orgData } = await sb.from('organizations').select('module_images').eq('id', orgId).maybeSingle()
       const current = orgData?.module_images || {}
-      const { error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [def.key]: url } }).eq('id', orgId)
+      const { data: updated, error: saveErr } = await sb.from('organizations').update({ module_images: { ...current, [def.key]: url } }).eq('id', orgId).select()
       if (saveErr) throw new Error('Save: ' + saveErr.message)
+      if (!updated?.length) throw new Error('Save failed: org not found (orgId: ' + orgId + ')')
       setImages(prev => ({ ...prev, [def.key]: url }))
       toast(`${def.label} image saved ✓`)
     } catch (e) {
@@ -304,6 +305,136 @@ function StudentDefaultIconsPanel({ orgId }) {
       <button className="btn btn-sm btn-primary" onClick={save} disabled={saving}>
         {saving ? 'Saving…' : 'Save defaults'}
       </button>
+    </div>
+  )
+}
+
+// ── Per-pool editor with drag-to-reorder (used by OrgIconPoolsPanel) ──
+function OrgPoolEditor({ orgId, poolKey, label }) {
+  const { toast } = useAppStore()
+  const [poolModules, setPoolModules] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [order, setOrder] = useState(null)
+  const [dragKey, setDragKey] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
+  const dragRef = useRef(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [orgId, poolKey])
+
+  async function load() {
+    const [orgRes, appRes] = await Promise.all([
+      sb.from('organizations').select(`allowed_modules, ${poolKey}`).eq('id', orgId).maybeSingle(),
+      sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
+    ])
+    let appPool = null
+    try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
+    const outerKeys = orgRes?.data?.allowed_modules ?? appPool
+    const mods = outerKeys
+      ? ALL_MODULES_META.filter(m => outerKeys.includes(m.key) && !m.staffOnly && !m.adminOnly && m.key !== 'profile')
+      : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked && m.key !== 'profile')
+    setPoolModules(mods)
+    const allKeys = mods.map(m => m.key)
+    const saved = orgRes?.data?.[poolKey]
+    const selKeys = saved?.length ? saved.filter(k => allKeys.includes(k)) : allKeys
+    setSelected(new Set(selKeys))
+    const savedFiltered = saved?.filter(k => allKeys.includes(k))
+    setOrder(savedFiltered?.length
+      ? [...savedFiltered, ...allKeys.filter(k => !savedFiltered.includes(k))]
+      : allKeys)
+  }
+
+  function toggle(key) {
+    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+
+  async function save() {
+    if (saving || !poolModules) return
+    setSaving(true)
+    const allKeys = poolModules.map(m => m.key)
+    const toSave = (order || allKeys).filter(k => selected.has(k))
+    const { error } = await sb.from('organizations').update({ [poolKey]: toSave }).eq('id', orgId)
+    if (error) toast('Error saving: ' + error.message)
+    else toast(`${label} icon pool saved ✓`)
+    setSaving(false)
+  }
+
+  if (!poolModules || !selected || !order) return (
+    <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+  )
+
+  const dispModules = order.map(k => poolModules.find(m => m.key === k)).filter(Boolean)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, color: 'var(--text2)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{selected.size}</span> of {poolModules.length} selected
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setSelected(new Set(poolModules.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
+          <span style={{ color: 'var(--border)' }}>·</span>
+          <button onClick={() => setSelected(new Set())} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>💡 Drag cards to set the default icon order for this group</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10, marginBottom: 20 }}>
+        {dispModules.map(m => {
+          const sel = selected.has(m.key)
+          const isDragging = dragKey === m.key
+          const isOver = dragOver === m.key && dragKey !== m.key
+          return (
+            <div key={m.key}
+              draggable
+              onDragStart={e => { dragRef.current = m.key; e.dataTransfer.effectAllowed = 'move'; setDragKey(m.key) }}
+              onDragOver={e => { e.preventDefault(); setDragOver(m.key) }}
+              onDrop={e => {
+                e.preventDefault()
+                const src = dragRef.current
+                if (!src || src === m.key) { setDragKey(null); setDragOver(null); return }
+                setOrder(ord => {
+                  const from = ord.indexOf(src); const to = ord.indexOf(m.key)
+                  if (from === -1 || to === -1) return ord
+                  const next = [...ord]; next.splice(from, 1); next.splice(to, 0, src); return next
+                })
+                dragRef.current = null; setDragKey(null); setDragOver(null)
+              }}
+              onDragEnd={() => { dragRef.current = null; setDragKey(null); setDragOver(null) }}
+              onClick={() => toggle(m.key)}
+              style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : `2px solid ${isOver ? 'var(--accent)' : 'var(--border)'}`, background: sel ? `${m.color}12` : isOver ? '#e8f2ee' : 'var(--surface)', padding: '12px 12px 10px', cursor: 'grab', position: 'relative', transition: 'all 0.15s', opacity: isDragging ? 0.35 : 1, userSelect: 'none' }}>
+              <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                {sel && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </div>
+              <div style={{ fontSize: 24, marginBottom: 6, pointerEvents: 'none' }}>{m.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{m.label}</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
+            </div>
+          )
+        })}
+      </div>
+      <button className="btn btn-primary" onClick={save} disabled={saving}>
+        {saving ? 'Saving…' : `Save ${label.toLowerCase()} icon pool`}
+      </button>
+    </div>
+  )
+}
+
+function OrgIconPoolsPanel({ orgId }) {
+  const [subTab, setSubTab] = useState('labusers')
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Organization Icon Pools</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+          Define which icons are available to lab users and lab managers in your organization. Available icons are within those granted by the system administrator. Drag cards to set the default display order.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        <button onClick={() => setSubTab('labusers')} style={{ padding: '6px 18px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: subTab === 'labusers' ? 'var(--accent)' : 'var(--surface2)', color: subTab === 'labusers' ? '#fff' : 'var(--text2)' }}>👥 Lab User Icons</button>
+        <button onClick={() => setSubTab('labmanagers')} style={{ padding: '6px 18px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: subTab === 'labmanagers' ? 'var(--accent)' : 'var(--surface2)', color: subTab === 'labmanagers' ? '#fff' : 'var(--text2)' }}>👨‍💼 Lab Manager Icons</button>
+      </div>
+      {subTab === 'labusers' && <OrgPoolEditor key="labusers" orgId={orgId} poolKey="allowed_modules_labusers" label="Lab user" />}
+      {subTab === 'labmanagers' && <OrgPoolEditor key="labmanagers" orgId={orgId} poolKey="allowed_modules_labmanagers" label="Lab manager" />}
     </div>
   )
 }
@@ -538,7 +669,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile')
 
 // ── Shared image grid for global icon images ──────────────────
-function GlobalImageGrid({ modules, imagePrefix }) {
+function GlobalImageGrid({ modules, imagePrefix, alsoPrefix }) {
   const { toast } = useAppStore()
   const [images, setImages] = useState(null)
   const [uploading, setUploading] = useState(null)
@@ -595,6 +726,9 @@ function GlobalImageGrid({ modules, imagePrefix }) {
       const url = urlData.publicUrl
       const { error } = await sb.from('settings').upsert({ key: `${imagePrefix}${m.key}`, value: url }, { onConflict: 'key' })
       if (error) throw new Error('Save: ' + error.message)
+      if (alsoPrefix) {
+        await sb.from('settings').upsert({ key: `${alsoPrefix}${m.key}`, value: url }, { onConflict: 'key' })
+      }
       setImages(prev => ({ ...prev, [m.key]: url }))
       toast(`${m.label} image saved ✓`)
     } catch (e) {
@@ -607,6 +741,7 @@ function GlobalImageGrid({ modules, imagePrefix }) {
 
   async function clearImage(m) {
     await sb.from('settings').delete().eq('key', `${imagePrefix}${m.key}`)
+    if (alsoPrefix) await sb.from('settings').delete().eq('key', `${alsoPrefix}${m.key}`)
     setImages(prev => { const n = { ...prev }; delete n[m.key]; return n })
     toast(`${m.label} image removed.`)
   }
@@ -734,7 +869,7 @@ function AppModulesModal({ onClose }) {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
             These images appear as backgrounds on dashboard icon cards for all team users. Best size: landscape ~800×500 px. Org admins can override images for their own organization.
           </div>
-          <GlobalImageGrid modules={ORG_CONFIGURABLE_MODULES} imagePrefix="img_" />
+          <GlobalImageGrid modules={ORG_CONFIGURABLE_MODULES} imagePrefix="img_" alsoPrefix="solo_img_" />
         </div>
       )}
     </Modal>
@@ -1035,6 +1170,7 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set())
 
   const [userModal, setUserModal]               = useState(null)
+  const [addAdminOrgId, setAddAdminOrgId]       = useState(null)
   const [orgModal, setOrgModal]                 = useState(null)
   const [accessModal, setAccessModal]           = useState(null)
   const [orgModulesModal, setOrgModulesModal]   = useState(null)
@@ -1044,7 +1180,7 @@ export default function Admin() {
   // Super admin: images tab is accessed standalone (no tab bar), so exclude it from the tab list
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: 'Organizations' }]
-    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'images', label: 'Module Images' }, { key: 'orgsettings', label: 'Org Settings' }]
+    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'orgsettings', label: 'Org Settings' }]
 
   useEffect(() => { loadOrgs() }, [])
   useEffect(() => {
@@ -1146,6 +1282,14 @@ export default function Admin() {
     toast('Organization deleted.')
   }
 
+  async function removeAdmin(admin) {
+    if (!confirm(`Remove ${admin.name} as admin? This will delete their account.`)) return
+    const { error } = await sb.from('users').delete().eq('id', admin.id)
+    if (error) { toast('Remove failed: ' + error.message); return }
+    toast(`${admin.name} removed.`)
+    loadOrgs()
+  }
+
   const orgName = (id) => orgs.find(o => o.id === id)?.name || '—'
 
   const filteredUsers = users.filter(u =>
@@ -1182,7 +1326,6 @@ export default function Admin() {
       {/* ── USERS / STUDENTS (org admin only) ── */}
       {!isSuperAdmin && (tab === 'users' || tab === 'students') && (
         <div>
-          {tab === 'students' && <StudentDefaultIconsPanel orgId={myOrgId} />}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ flex: 1, minWidth: 180 }} />
             <button className="btn btn-primary btn-sm" onClick={() => setUserModal('add')}>
@@ -1251,6 +1394,9 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ── ICON POOLS (org admin only) ── */}
+      {!isSuperAdmin && tab === 'iconpools' && <OrgIconPoolsPanel orgId={myOrgId} />}
+
       {/* ── MODULE IMAGES ── */}
       {tab === 'images' && <ModuleImagesPanel orgId={myOrgId} />}
 
@@ -1311,19 +1457,27 @@ export default function Admin() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {admins.length > 0 && (
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {admins.map(a => (
-                          <button key={a.id} onClick={() => setUserModal(a)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {admins.map(a => (
+                        <div key={a.id} style={{ position: 'relative' }}>
+                          <button onClick={() => setUserModal(a)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', textAlign: 'left' }}>
                             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 99, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>Admin</span>
+                              <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 99, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>👤 Admin</span>
                               {a.name}
                             </span>
                             <span style={{ fontSize: 11, color: 'var(--text3)' }}>{a.email}</span>
                           </button>
-                        ))}
-                      </div>
-                    )}
+                          <button onClick={() => removeAdmin(a)}
+                            style={{ position: 'absolute', top: -7, right: -7, width: 18, height: 18, borderRadius: '50%', background: '#ef4444', border: '2px solid var(--bg)', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                      <button onClick={() => { setAddAdminOrgId(o.id); setUserModal('add') }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--surface2)', border: '1.5px dashed var(--border)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: 'var(--accent)', fontSize: 12, fontWeight: 600, minHeight: 42 }}>
+                        <span style={{ fontSize: 15 }}>👤</span> + Add Admin
+                      </button>
+                    </div>
                     <button className="btn btn-sm" onClick={() => setOrgModulesModal(o)}>Icons</button>
                     <button className="btn btn-sm" onClick={() => setOrgModal(o)}>Edit</button>
                     <button className="btn btn-sm btn-danger" onClick={() => deleteOrg(o.id)}>Delete</button>
@@ -1340,11 +1494,11 @@ export default function Admin() {
         <UserModal
           user={userModal === 'add' ? null : userModal}
           orgs={orgs}
-          defaultOrgId={isSuperAdmin ? orgFilter : myOrgId}
+          defaultOrgId={addAdminOrgId || (isSuperAdmin ? orgFilter : myOrgId)}
           isSuperAdmin={isSuperAdmin}
           defaultRole={isSuperAdmin ? 'admin' : 'user'}
-          onClose={() => setUserModal(null)}
-          onSaved={loadUsers}
+          onClose={() => { setUserModal(null); setAddAdminOrgId(null) }}
+          onSaved={() => { loadUsers(); loadOrgs() }}
         />
       )}
       {orgModal && (

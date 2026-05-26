@@ -130,10 +130,14 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
 
   if (isStudent) {
     const allMods = getAllModulesForStudent()
-    // null = no preference (show all); [] = no icons assigned yet (show none)
+    // Restrict to lab manager's per-user assignment first (allowed_modules, level #3)
+    const assignedMods = (studentAllowedPool && studentAllowedPool.size > 0)
+      ? allMods.filter(m => studentAllowedPool.has(m.key))
+      : allMods
+    // Then apply student's personal visibility toggle (active_modules, level #4)
     const visibleMods = activeModules === null || activeModules === undefined
-      ? allMods
-      : allMods.filter(m => activeModules.includes(m.key))
+      ? assignedMods
+      : assignedMods.filter(m => activeModules.includes(m.key))
     return (
       <>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
@@ -166,7 +170,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
   )
 }
 
-function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, activeModules }) {
+function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, activeModules, studentAllowedPool }) {
   const [data, setData] = useState({ myProjects: 0, trainingsComplete: 0, trainingsTotal: 4, upcomingBookings: [], pendingCert: false })
   const [loading, setLoading] = useState(true)
   const [confirmExternal, setConfirmExternal] = useState(null)
@@ -212,9 +216,12 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     { key:'remessages',  icon:'💬', label:'Contact Lab Manager',  sub:'Ask REs a question',             screen:'remessages',  color:'#2a6049' },
     { key:'mileage',     icon:'🚗', label:'Mileage Form',         sub:'Submit reimbursement',           screen:null,          color:'#c84b2f', external:true },
   ]
+  const assignedQuickLinks = (studentAllowedPool && studentAllowedPool.size > 0)
+    ? allQuickLinks.filter(m => studentAllowedPool.has(m.key))
+    : allQuickLinks
   const quickLinks = activeModules === null || activeModules === undefined
-    ? allQuickLinks
-    : allQuickLinks.filter(m => activeModules.includes(m.key))
+    ? assignedQuickLinks
+    : assignedQuickLinks.filter(m => activeModules.includes(m.key))
   return (
     <>
       <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap:20, alignItems:'start' }}>
@@ -342,8 +349,187 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
   )
 }
 
+// ── Support Inbox modal (super admin only) ────────────────────
+function SupportInbox({ onClose, onRead }) {
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [filter, setFilter]     = useState('open')
+
+  useEffect(() => { load() }, [filter])
+
+  async function load() {
+    setLoading(true)
+    let q = sb.from('support_messages').select('*').order('created_at', { ascending: false })
+    if (filter !== 'all') q = q.eq('status', filter)
+    const { data } = await q
+    setMessages(data || [])
+    setLoading(false)
+  }
+
+  async function setStatus(id, status) {
+    await sb.from('support_messages').update({ status }).eq('id', id)
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status } : m))
+    if (selected?.id === id) setSelected(s => ({ ...s, status }))
+    onRead()
+  }
+
+  async function deleteMsg(id) {
+    if (!confirm('Delete this message?')) return
+    await sb.from('support_messages').delete().eq('id', id)
+    setMessages(prev => prev.filter(m => m.id !== id))
+    if (selected?.id === id) setSelected(null)
+    onRead()
+  }
+
+  const statusColor = { open: '#ef4444', read: '#f59e0b', resolved: '#10b981' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.45)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 960, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 18 }}>💬 Customer Service Inbox</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {['open','read','resolved','all'].map(f => (
+              <button key={f} onClick={() => { setFilter(f); setSelected(null) }}
+                style={{ padding: '5px 14px', borderRadius: 99, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', background: filter === f ? 'var(--accent)' : 'var(--surface2)', color: filter === f ? '#fff' : 'var(--text2)' }}>
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+            <button onClick={onClose} style={{ marginLeft: 6, background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 4px' }}>×</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+
+          {/* Message list */}
+          <div style={{ width: 280, flexShrink: 0, overflowY: 'auto', borderRight: '1px solid var(--border)', padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {loading
+              ? <div className="spinner" style={{ margin: '40px auto' }} />
+              : messages.length === 0
+                ? <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, marginTop: 60 }}>No messages</div>
+                : messages.map(m => (
+                  <div key={m.id} onClick={() => { setSelected(m); if (m.status === 'open') setStatus(m.id, 'read') }}
+                    style={{ padding: '11px 13px', borderRadius: 10, border: `1.5px solid ${selected?.id === m.id ? 'var(--accent)' : 'var(--border)'}`, cursor: 'pointer', background: selected?.id === m.id ? 'var(--accent-light)' : 'var(--surface)', transition: 'all 0.12s' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[m.status] || '#ccc', flexShrink: 0 }} />
+                      <div style={{ fontSize: 13, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{m.user_name || m.user_email}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(m.created_at).toLocaleDateString()}</div>
+                  </div>
+                ))
+            }
+          </div>
+
+          {/* Message detail */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {!selected ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', gap: 10 }}>
+                <div style={{ fontSize: 36 }}>💬</div>
+                <div style={{ fontSize: 14 }}>Select a message to read</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Message header */}
+                <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.3 }}>{selected.subject}</div>
+                    <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 99, background: selected.status === 'open' ? '#FEE2E2' : selected.status === 'resolved' ? '#D1FAE5' : '#FEF3C7', color: selected.status === 'open' ? '#991B1B' : selected.status === 'resolved' ? '#065F46' : '#92400E' }}>
+                      {selected.status.charAt(0).toUpperCase() + selected.status.slice(1)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 13, color: 'var(--text2)' }}>
+                    <span>👤 <strong>{selected.user_name || 'Unknown'}</strong></span>
+                    <span>✉️ {selected.user_email}</span>
+                    <span>🕐 {new Date(selected.created_at).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Message body */}
+                <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.8, whiteSpace: 'pre-wrap', background: 'var(--surface2)', borderRadius: 10, padding: '16px 20px' }}>
+                    {selected.message}
+                  </div>
+                  {selected.attachment_url && (
+                    <div style={{ marginTop: 16 }}>
+                      <a href={selected.attachment_url} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 16px', border: '1px solid var(--accent)', borderRadius: 8, fontSize: 13, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
+                        📎 View attachment
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', background: 'var(--surface)', flexShrink: 0 }}>
+                  <a href={`mailto:${selected.user_email}?subject=Re: ${encodeURIComponent(selected.subject)}`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                    ✉️ Reply by email
+                  </a>
+                  {selected.status !== 'resolved'
+                    ? <button onClick={() => setStatus(selected.id, 'resolved')} style={{ padding: '9px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>✓ Mark resolved</button>
+                    : <button onClick={() => setStatus(selected.id, 'open')} className="btn" style={{ fontSize: 14, padding: '9px 18px' }}>Reopen</button>
+                  }
+                  <button onClick={() => deleteMsg(selected.id)} style={{ marginLeft: 'auto', padding: '9px 18px', background: 'none', color: '#ef4444', border: '1px solid #ef4444', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Delete</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Super admin home view ─────────────────────────────────────
+function SuperAdminDashboard({ session, setScreen, greeting, dateStr }) {
+  const [inboxOpen, setInboxOpen]     = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => { loadUnread() }, [])
+
+  async function loadUnread() {
+    const { count } = await sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open')
+    setUnreadCount(count || 0)
+  }
+
+  const card = (onClick, bg, color, border, icon, label, badge) => (
+    <div onClick={onClick} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10, background: bg, color, border: border || 'none', borderRadius: 'var(--radius-lg)', padding: '14px 24px', cursor: 'pointer', fontWeight: 600, fontSize: 15, boxShadow: bg !== 'var(--surface2)' ? '0 2px 10px rgba(0,0,0,0.12)' : 'none', transition: 'opacity 0.15s' }}
+      onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+      onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+      <span style={{ fontSize: 20 }}>{icon}</span>
+      {label}
+      {badge > 0 && (
+        <span style={{ position: 'absolute', top: -8, right: -8, minWidth: 20, height: 20, borderRadius: 99, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', border: '2px solid var(--bg)' }}>
+          {badge}
+        </span>
+      )}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.4px', marginBottom: 4 }}>{greeting()}, {session?.username}</div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{dateStr} · iLab Super Admin</div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {card(() => setScreen('orgadmin'), 'var(--accent)', '#fff', null, '⚙️', 'Admin Panel', 0)}
+        {card(() => setInboxOpen(true),    'var(--surface2)', 'var(--text)', '1px solid var(--border)', '💬', 'Customer Service', unreadCount)}
+        {card(() => setScreen('profile'),  'var(--surface2)', 'var(--text)', '1px solid var(--border)', '🔐', 'Profile', 0)}
+      </div>
+      {inboxOpen && <SupportInbox onClose={() => setInboxOpen(false)} onRead={loadUnread} />}
+    </div>
+  )
+}
+
 export default function Dashboard() {
-  const { session, screen, setScreen, activeModules, setActiveModules, setPendingAdminTab } = useAppStore()
+  const { session, screen, setScreen, activeModules, setActiveModules } = useAppStore()
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
   const [mileageUrl, setMileageUrl] = useState('https://bw4qh7p8sn.us-east-1.awsapprunner.com/')
   const [labSafetyUrl, setLabSafetyUrl] = useState('https://canvas.illinois.edu/')
@@ -399,37 +585,56 @@ export default function Dashboard() {
         } catch {}
         setActiveModules(mods?.length ? mods : null)
       } else {
-        const [prefsRes, orgRes, appRes] = await Promise.all([
-          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
+        const [prefsRes, orgResRaw, appRes] = await Promise.all([
+          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules, has_set_dashboard').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
           session?.organizationId
-            ? sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+            ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
             : Promise.resolve(null),
           sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
         ])
+        // If new role-pool columns don't exist yet (migration not run), fall back to base query
+        let orgRes = orgResRaw
+        if (orgResRaw?.error && session?.organizationId) {
+          orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+        }
         const row = prefsRes.data?.[0]
         let mods = row?.active_modules
+        const userHasConfigured = row?.has_set_dashboard === true
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-          const orgPool = orgRes?.data?.allowed_modules || null
-          // Org pool overrides global pool; global is the default when no org pool is set
+          // Role-specific org pool: students use labusers pool, staff use labmanagers pool
+          const outerOrgPool = session?.role === 'student'
+            ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
+            : session?.role === 'user'
+              ? (orgRes?.data?.allowed_modules_labmanagers ?? orgRes?.data?.allowed_modules)
+              : orgRes?.data?.allowed_modules
+          const orgPool = outerOrgPool || null
           const effectivePool = orgPool ?? appPool
           if (effectivePool !== null) {
             if (mods?.length) {
-              // Keep saved order, remove no-longer-allowed modules, append newly-allowed ones
+              // Remove modules no longer in the pool; keep profile and staff-pinned always
               const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || STAFF_PINNED_MODULES.includes(k))
-              const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !STAFF_PINNED_MODULES.includes(k))
-              mods = [...filtered, ...missing]
+              if (userHasConfigured) {
+                // User explicitly configured — respect their choices, don't re-add unchecked modules
+                mods = filtered
+              } else {
+                // User never configured — append newly-added pool modules so they appear automatically
+                const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !STAFF_PINNED_MODULES.includes(k))
+                mods = [...filtered, ...missing]
+              }
             } else if (session?.role !== 'student') {
               // No saved prefs — pool defines what's visible (not for students: they see nothing until admin assigns)
               mods = effectivePool
             }
           }
-          // Ensure labmanagement is always present for admin/user
+          // Ensure pinned modules are always present for admin/user
           if (session?.role === 'admin' || session?.role === 'user') {
             if (!mods) mods = [...STAFF_PINNED_MODULES]
             else if (!mods.includes('labmanagement')) mods = ['labmanagement', ...mods]
           }
+          // Ensure profile is always present for all team users
+          if (mods && !mods.includes('profile')) mods = [...mods, 'profile']
         } catch {}
         // Students with no config see only Profile until admin assigns icons
         const defaultMods = session?.role === 'student' ? ['profile'] : null
@@ -516,35 +721,9 @@ export default function Dashboard() {
 
   const isSuperAdmin = isAdmin && !session?.userId
 
-  // Super admin: greeting + shortcut to admin panel
-  if (isSuperAdmin) {
-    return (
-      <div>
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.4px', marginBottom: 4 }}>{greeting()}, {session?.username}</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{dateStr} · iLab Super Admin</div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <div
-            onClick={() => setScreen('orgadmin')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius-lg)', padding: '14px 24px', cursor: 'pointer', fontWeight: 600, fontSize: 15, boxShadow: '0 2px 10px rgba(0,0,0,0.12)', transition: 'opacity 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <span style={{ fontSize: 20 }}>⚙️</span> Admin Panel
-          </div>
-          <div
-            onClick={() => setScreen('profile')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'var(--surface2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px 24px', cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'opacity 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <span style={{ fontSize: 20 }}>🔐</span> Profile
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Super admin: greeting + shortcut cards
+  if (isSuperAdmin) return <SuperAdminDashboard session={session} setScreen={setScreen} greeting={greeting} dateStr={dateStr} />
+
 
   return (
     <div>
@@ -584,7 +763,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} />}
+      {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
       {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
       {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} />}
       {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}

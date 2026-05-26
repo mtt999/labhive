@@ -2,16 +2,28 @@ import { useState, useEffect } from 'react'
 import { sb } from '../lib/supabase'
 import { ALL_MODULES_META, PINNED_MODULES } from './DashboardIconPicker'
 
-// All 11 icons staff can assign to students
-const STUDENT_POOL = ALL_MODULES_META
-
-export default function StudentIconManager({ student, onClose }) {
-  const [allowed, setAllowed] = useState(null) // null = loading
+export default function StudentIconManager({ student, orgId, onClose }) {
+  const [poolModules, setPoolModules] = useState(null) // module meta available for this org
+  const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { load() }, [student.id])
 
   async function load() {
+    // Load org's lab user pool (the boundary for what can be assigned)
+    let pool = null
+    if (orgId) {
+      const { data } = await sb.from('organizations')
+        .select('allowed_modules, allowed_modules_labusers')
+        .eq('id', orgId).maybeSingle()
+      pool = data?.allowed_modules_labusers ?? data?.allowed_modules
+    }
+    const mods = pool
+      ? ALL_MODULES_META.filter(m => pool.includes(m.key) || m.key === 'profile')
+      : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked)
+    setPoolModules(mods)
+
+    // Load student's currently assigned allowed_modules
     const { data: rows } = await sb.from('user_dashboard_prefs')
       .select('allowed_modules')
       .eq('user_id', student.id)
@@ -46,42 +58,41 @@ export default function StudentIconManager({ student, onClose }) {
 
   const name = [student.email, student.name].filter(Boolean).join(' ')
   const selectedCount = allowed?.size ?? 0
+  const totalCount = poolModules?.length ?? 0
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(3px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(false) }}>
       <div style={{ background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 620, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
 
-        {/* Header */}
         <div style={{ padding: '22px 26px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
             <div style={{ width: 42, height: 42, borderRadius: 12, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎛️</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Dashboard icons for {name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Select which icons this student is allowed to choose from on their dashboard.</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Select which icons this lab user is allowed to choose from on their dashboard.</div>
             </div>
             <button onClick={() => onClose(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: '4px 8px' }}>✕</button>
           </div>
           <div style={{ background: '#e0f2fe', borderRadius: 8, padding: '8px 14px', marginTop: 14, fontSize: 12, color: '#0369a1', lineHeight: 1.5 }}>
-            ℹ️ The student will pick from <strong>only these icons</strong> when customizing their dashboard. Profile is always visible.
+            ℹ️ Icons shown are within your organization's lab user pool. The student picks from <strong>only these icons</strong>. Profile is always visible.
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 14px' }}>
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {STUDENT_POOL.length} allowed</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {totalCount} assigned</div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setAllowed(new Set(STUDENT_POOL.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Allow all</button>
+              <button onClick={() => poolModules && setAllowed(new Set(poolModules.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Assign all</button>
               <span style={{ color: 'var(--border)' }}>·</span>
               <button onClick={() => setAllowed(new Set())} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
             </div>
           </div>
         </div>
 
-        {/* Grid */}
         <div style={{ overflowY: 'auto', padding: '0 26px', flex: 1 }}>
-          {allowed === null ? (
+          {poolModules === null || allowed === null ? (
             <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10, paddingBottom: 20 }}>
-              {STUDENT_POOL.map(m => {
+              {poolModules.map(m => {
                 const pinned = PINNED_MODULES.includes(m.key)
                 const sel = pinned || allowed.has(m.key)
                 return (
@@ -101,13 +112,12 @@ export default function StudentIconManager({ student, onClose }) {
           )}
         </div>
 
-        {/* Footer */}
         <div style={{ padding: '14px 26px 22px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Student picks their favorites from this list on their first login.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Student picks their visible icons from this assigned list.</div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn" onClick={() => onClose(false)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save allowed icons'}
+              {saving ? 'Saving…' : 'Save assigned icons'}
             </button>
           </div>
         </div>

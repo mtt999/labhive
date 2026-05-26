@@ -463,19 +463,41 @@ function ProjectInfo({ project, users, onSaved }) {
 }
 
 function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
-  const { toast } = useAppStore()
+  const { session, toast } = useAppStore()
   const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', pi_user_id: '', student_ids: [], sampling_date: '', storage_date: '', notes: '' })
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
 
   function toggleStudent(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
   async function create() {
-    if (!form.name.trim()) { toast('Project name is required.'); return }
-    if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, pi_user_id: form.pi_user_id || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null, solo_owner_id: soloOwnerId || null }
+    setErrMsg('')
+    if (!form.name.trim()) { setErrMsg('Project name is required.'); return }
+    if (!form.project_id.trim()) { setErrMsg('Project title is required.'); return }
+    setSaving(true)
+    const isSolo = session?.loginMode === 'solo'
+    const payload = {
+      name: form.name.trim(),
+      project_id: form.project_id.trim(),
+      cfop: form.cfop.trim() || null,
+      status: form.status,
+      pi_user_id: form.pi_user_id || null,
+      student_ids: form.student_ids,
+      sampling_date: form.sampling_date || null,
+      storage_date: form.storage_date || null,
+      notes: form.notes.trim() || null,
+      solo_owner_id: soloOwnerId || null,
+      organization_id: isSolo ? null : (session?.organizationId || null),
+    }
     const { data, error } = await sb.from('projects').insert(payload).select().single()
-    if (error) { toast('Error creating project.'); return }
+    setSaving(false)
+    if (error) {
+      console.error('Project insert error:', error)
+      setErrMsg(error.message)
+      return
+    }
     toast('Project created!'); onCreated(data.id); onClose()
   }
 
@@ -518,8 +540,15 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
       </div>
       <div className="field"><label>Notes</label><textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Additional notes…" style={{ resize: 'vertical' }} /></div>
+      {errMsg && (
+        <div style={{ background: '#fdf0ed', border: '1px solid #e24b4a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#c0392b', lineHeight: 1.5 }}>
+          ⚠️ {errMsg}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn btn-purple" onClick={create}>Create project</button>
+        <button className="btn btn-purple" onClick={create} disabled={saving}>
+          {saving ? 'Creating…' : 'Create project'}
+        </button>
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>
@@ -544,7 +573,7 @@ function DataAnalysis() {
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-    if (!isSolo && session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    if (!isSolo) eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
   }, [])
 
@@ -801,7 +830,8 @@ function DataAnalysis() {
 }
 
 export default function Projects() {
-  const { toast } = useAppStore()
+  const { session, toast, viewingWorkspaceOwnerId } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const [mainTab, setMainTab] = useState('inventory')
   const [allProjects, setAllProjects] = useState([])
   const [projects, setProjects] = useState([])
@@ -849,7 +879,10 @@ export default function Projects() {
   }
 
   async function loadUsers() {
-    const { data } = await sb.from('users').select('id, name').order('name')
+    const isSolo = session?.loginMode === 'solo'
+    let q = sb.from('users').select('id, name').order('name')
+    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    const { data } = await q
     setUsers(data || [])
   }
 

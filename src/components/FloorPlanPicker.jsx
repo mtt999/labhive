@@ -326,11 +326,64 @@ function MPFMap({ occupancy, selected, onToggle, canEdit }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// CUSTOM FLOOR PLAN TAB (org-uploaded image + drawn zones)
+// ══════════════════════════════════════════════════════════════
+function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
+  function getZoneStyle(zone) {
+    const sel = selected.includes(zone.id)
+    const occ = occupancy[zone.id]?.occupied && !sel
+    return {
+      position: 'absolute',
+      left: `${zone.x}%`, top: `${zone.y}%`,
+      width: `${zone.w}%`, height: `${zone.h}%`,
+      border: `2px solid ${sel ? '#0F6E56' : occ ? '#a32d2d' : 'var(--accent)'}`,
+      background: sel ? 'rgba(159,225,203,0.45)' : occ ? 'rgba(226,75,74,0.35)' : 'rgba(83,74,183,0.15)',
+      borderRadius: 4, boxSizing: 'border-box',
+      cursor: occ ? 'not-allowed' : 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      transition: 'background 0.12s, border-color 0.12s',
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+      <img src={plan.image_url} alt={plan.name} draggable={false}
+        style={{ display: 'block', width: '100%', userSelect: 'none' }} />
+      {(plan.zones || []).map(zone => {
+        const occ = occupancy[zone.id]
+        const sel = selected.includes(zone.id)
+        return (
+          <div key={zone.id} style={getZoneStyle(zone)}
+            onClick={() => {
+              if (!canEdit) return
+              if (occ?.occupied && !sel) return
+              onToggle(zone.id, zone.label, plan.name)
+            }}
+            title={occ?.occupied && !sel ? `Occupied by ${occ.project_name || 'another project'}` : zone.label}>
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: sel ? '#0F6E56' : occ?.occupied && !sel ? '#fff' : 'var(--accent)',
+              background: sel || (occ?.occupied && !sel) ? 'transparent' : 'rgba(255,255,255,0.88)',
+              padding: '1px 6px', borderRadius: 4,
+              maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}>
+              {zone.label}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
 // MAIN FLOOR PLAN PICKER
 // ══════════════════════════════════════════════════════════════
 export default function FloorPlanPicker({ projectId, projectName, materialId, materialType, currentLocations = [], onConfirm, onClose }) {
   const { session } = useAppStore()
-  const [facility, setFacility] = useState('ICT')
+  const [customPlans, setCustomPlans] = useState([])
+  const [facility, setFacility] = useState(null)   // set after load
   const [occupancy, setOccupancy] = useState({})   // { location_id: { occupied, project_name, material_type } }
   const [selected, setSelected] = useState(        // pre-populate with existing locations
     currentLocations.map(l => l.location_id).filter(Boolean)
@@ -339,13 +392,31 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [saving, setSaving] = useState(false)
   const canEdit = session?.role === 'admin' || session?.role === 'user'
 
-  useEffect(() => { loadOccupancy() }, [])
+  useEffect(() => { loadAll() }, [])
 
-  async function loadOccupancy() {
+  async function loadAll() {
     setLoading(true)
-    const { data } = await sb.from('storage_locations').select('*')
+    const orgId = session?.organizationId
+    const isSolo = session?.loginMode === 'solo'
+
+    let locQuery = sb.from('storage_locations').select('*')
+    if (isSolo) {
+      locQuery = locQuery.is('organization_id', null)
+    } else if (orgId) {
+      locQuery = locQuery.eq('organization_id', orgId)
+    } else {
+      locQuery = locQuery.eq('organization_id', '00000000-0000-0000-0000-000000000000')
+    }
+
+    const [{ data: locData }, { data: planData }] = await Promise.all([
+      locQuery,
+      orgId
+        ? sb.from('floor_plans').select('*').eq('organization_id', orgId).order('created_at')
+        : Promise.resolve({ data: [] }),
+    ])
+
     const map = {}
-    ;(data || []).forEach(loc => {
+    ;(locData || []).forEach(loc => {
       map[loc.location_id] = {
         occupied: loc.occupied,
         project_name: loc.project_name,
@@ -354,6 +425,14 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       }
     })
     setOccupancy(map)
+
+    const plans = planData || []
+    setCustomPlans(plans)
+
+    // Default tab: first custom plan if any, else ICT
+    if (plans.length > 0) setFacility(`custom_${plans[0].id}`)
+    else setFacility('ICT')
+
     setLoading(false)
   }
 
@@ -362,6 +441,20 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     setSelected(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     )
+  }
+
+  function getLocationDetail(id) {
+    // Try to find the zone label from custom plans
+    for (const plan of customPlans) {
+      const zone = (plan.zones || []).find(z => z.id === id)
+      if (zone) return { location: plan.name, detail: zone.label, facility: plan.name }
+    }
+    // ICT/MPF fallback
+    return {
+      location: id.startsWith('MPF') ? 'MPF' : 'ICT Building',
+      detail: id,
+      facility: id.startsWith('MPF') ? 'MPF' : 'ICT',
+    }
   }
 
   async function confirm() {
@@ -386,13 +479,18 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
 
       // Occupy newly selected locations
       const toOccupy = selected.filter(id => !existingIds.includes(id))
+      const isSolo = session?.loginMode === 'solo'
+      const orgId = session?.organizationId || null
       for (const id of toOccupy) {
-        const label = id.startsWith('MPF') ? id.replace('MPF-', '').replace('P', 'Pallet ').replace('SD', 'Shelf D').replace('SC', 'Shelf C').replace('SB', 'Shelf B').replace('SA', 'Shelf A').replace('-R', ' · Row ') : id.replace('ICT-', '')
-        const { data: existing_loc } = await sb.from('storage_locations').select('id').eq('location_id', id).single()
+        const det = getLocationDetail(id)
+        let locLookup = sb.from('storage_locations').select('id').eq('location_id', id)
+        if (isSolo) locLookup = locLookup.is('organization_id', null)
+        else locLookup = locLookup.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+        const { data: existing_loc } = await locLookup.single()
         const payload = {
           location_id: id,
-          location_label: label,
-          facility: id.startsWith('MPF') ? 'MPF' : 'ICT',
+          location_label: det.detail,
+          facility: det.facility,
           occupied: true,
           project_id: projectId,
           material_id: materialId,
@@ -400,6 +498,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           material_type: materialType,
           occupied_at: new Date().toISOString(),
           occupied_by: session?.username,
+          organization_id: isSolo ? null : orgId,
         }
         if (existing_loc) {
           await sb.from('storage_locations').update(payload).eq('location_id', id)
@@ -409,11 +508,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       }
 
       // Return selected as location objects
-      const result = selected.map(id => ({
-        location_id: id,
-        location: id.startsWith('MPF') ? 'MPF' : 'ICT Building',
-        detail: id,
-      }))
+      const result = selected.map(id => {
+        const det = getLocationDetail(id)
+        return { location_id: id, location: det.location, detail: det.detail }
+      })
       onConfirm(result)
       onClose()
     } catch (e) {
@@ -444,10 +542,16 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         </div>
 
         {/* Facility tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+          {customPlans.map(plan => (
+            <button key={plan.id} onClick={() => setFacility(`custom_${plan.id}`)}
+              style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === `custom_${plan.id}` ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === `custom_${plan.id}` ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+              🗺️ {plan.name}
+            </button>
+          ))}
           {['ICT', 'MPF'].map(f => (
             <button key={f} onClick={() => setFacility(f)}
-              style={{ flex: 1, padding: '10px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === f ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === f ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s' }}>
+              style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === f ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === f ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
               {f === 'ICT' ? 'ICT Building' : 'MPF'}
             </button>
           ))}
@@ -467,6 +571,14 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         <div style={{ padding: 16, overflowX: 'auto' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+          ) : facility && facility.startsWith('custom_') ? (
+            <CustomPlanTab
+              plan={customPlans.find(p => `custom_${p.id}` === facility)}
+              selected={selected}
+              onToggle={toggleLocation}
+              occupancy={occupancy}
+              canEdit={canEdit}
+            />
           ) : facility === 'ICT' ? (
             <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={canEdit} />
           ) : (
@@ -477,13 +589,16 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         {/* Selected chips */}
         <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {selected.length === 0
-            ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap rooms, shelf rows, or pallets above</span>
-            : selected.map(id => (
-                <span key={id} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px 3px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  {id.replace('ICT-', '').replace('MPF-', 'MPF ').replace('SD-', 'Shelf D ').replace('SC-', 'Shelf C ').replace('SB-', 'Shelf B ').replace('SA-', 'Shelf A ').replace('-R', '·R').replace('P', 'P')}
-                  {canEdit && <button onClick={() => toggleLocation(id, '', '')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
-                </span>
-              ))
+            ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
+            : selected.map(id => {
+                const det = getLocationDetail(id)
+                return (
+                  <span key={id} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px 3px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    📍 {det.detail !== id ? det.detail : id.replace('ICT-', '').replace('MPF-', 'MPF ')}
+                    {canEdit && <button onClick={() => toggleLocation(id, '', '')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
+                  </span>
+                )
+              })
           }
         </div>
 

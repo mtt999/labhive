@@ -76,6 +76,7 @@ function downloadWb(wb, filename) {
 
 export default function Results() {
   const { lastRecord, setScreen, toast, session } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const orgId = session?.organizationId
   useEffect(() => { if (!lastRecord) setScreen('home') }, [lastRecord])
   if (!lastRecord) return null
@@ -99,7 +100,7 @@ export default function Results() {
     try {
       toast('Loading all records…')
       let q = sb.from('inspections').select('*').order('inspected_at', { ascending: true })
-      if (orgId) q = q.eq('organization_id', orgId)
+      if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
       const { data: allRecs, error } = await q
       if (error || !allRecs?.length) { toast('No records found.'); return }
 
