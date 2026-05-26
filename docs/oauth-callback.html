@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Connecting…</title></head>
+<body>
+<p style="font-family:sans-serif;text-align:center;margin-top:40px;color:#555">Connecting to iLab… you can close this tab.</p>
+<script>
+  // Forward the OAuth code back to the native app via deep link
+  const params = window.location.search;
+  if (params) {
+    window.location.href = 'ilab://oauth-callback' + params;
+  }
+</script>
+</body>
+</html>
