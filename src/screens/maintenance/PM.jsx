@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
+import ScrollTabs from '../../components/ScrollTabs'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -1638,14 +1639,14 @@ export default function PM() {
         <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Project Management</div>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Staff workspace</div>
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             style={{ padding: '10px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: activeTab === t.key ? BLUE : 'var(--text2)', borderBottom: `2px solid ${activeTab === t.key ? BLUE : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} />}
       {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} />}
       {activeTab === 'team'      && <Team orgId={orgId} isSolo={isSolo} />}

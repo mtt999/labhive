@@ -174,3 +174,19 @@ tr:last-child td { border-bottom: none; }
   .dashboard-grid { grid-template-columns: 1fr 1fr !important; }
   .booking-week-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
+
+/* Module icon grid — centered, last row centered */
+.module-icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+.module-icon-grid > * {
+  flex: 0 0 220px;
+}
+@media (max-width: 768px) {
+  .module-icon-grid > * {
+    flex: 0 0 calc(50% - 7px);
+  }
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { StudentsPanel, StaffPanel } from '../profile/Profile'
+import ScrollTabs from '../../components/ScrollTabs'
 
 export default function LabManagement() {
   const { session, toast } = useAppStore()
@@ -11,7 +12,7 @@ export default function LabManagement() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div className="section-title">Lab Management</div>
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {[
           { key: 'students', label: '👥 Lab Users' },
           { key: 'staff',    label: '👨‍💼 Lab Managers' },
@@ -21,7 +22,7 @@ export default function LabManagement() {
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {tab === 'students' && <StudentsPanel toast={toast} session={session} />}
       {tab === 'staff'    && <StaffPanel    toast={toast} session={session} />}
     </div>

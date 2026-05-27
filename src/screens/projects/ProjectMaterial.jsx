@@ -3,6 +3,7 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import StorageService from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
@@ -488,18 +489,21 @@ function ResultsTab({ projects, session, allowedNames }) {
     }
     if (uploadFile && savedId) {
       const path = `${form.project_id}/${form.equipment_id}/${Date.now()}-${uploadFile.name}`
-      const { error: upErr } = await sb.storage.from('project-records').upload(path, uploadFile, { contentType: uploadFile.type, upsert: false })
-      if (upErr) {
-        toast('File upload failed: ' + (upErr.message || 'Check that the "project-records" storage bucket exists and is public.'))
-      } else {
-        const { data: urlData } = sb.storage.from('project-records').getPublicUrl(path)
+      let fileUrl = null
+      try {
+        const { url } = await StorageService.upload('project-records', path, uploadFile, { personal: true })
+        fileUrl = url
+      } catch (upErr) {
+        toast('File upload failed: ' + (upErr?.message || 'Check storage settings.'))
+      }
+      if (fileUrl) {
         const { error: dbErr } = await sb.from('project_record_files').insert({
           project_id: form.project_id,
           equipment_id: form.equipment_id || null,
           test_result_id: savedId,
           file_name: uploadFile.name,
           file_path: path,
-          file_url: urlData.publicUrl,
+          file_url: fileUrl,
           file_size: uploadFile.size,
           file_type: uploadFile.type,
           created_by: session?.username || session?.email || null,
@@ -1111,22 +1115,21 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
 
     if (uploadFile && saved?.id) {
       const path = `${addForm.project_id}/${selected.id}/${Date.now()}-${uploadFile.name}`
-      const { error: upErr } = await sb.storage.from('project-records').upload(path, uploadFile, { contentType: uploadFile.type, upsert: false })
-      if (upErr) {
-        toast('Result saved but file upload failed: ' + upErr.message)
-      } else {
-        const { data: urlData } = sb.storage.from('project-records').getPublicUrl(path)
+      try {
+        const { url: fileUrl, ref: fileRef } = await StorageService.upload('project-records', path, uploadFile, { personal: true })
         await sb.from('project_record_files').insert({
           project_id: addForm.project_id,
           equipment_id: selected.id,
           test_result_id: saved.id,
           file_name: uploadFile.name,
-          file_path: path,
-          file_url: urlData.publicUrl,
+          file_path: fileRef,
+          file_url: fileUrl,
           file_size: uploadFile.size,
           file_type: uploadFile.type,
           created_by: session?.username || session?.email || null,
         })
+      } catch (upErr) {
+        toast('Result saved but file upload failed: ' + (upErr.message || ''))
       }
     }
 
@@ -1663,7 +1666,7 @@ function WorkspaceTab({ session, projects, isSolo, readOnly, allowedNames, userP
 }
 
 // ── Material Inventory Tab ─────────────────────────────────────
-function MaterialInventoryTab({ session, isSolo }) {
+function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const { toast, sharedWorkspaces, viewingWorkspaceOwnerId, setViewingWorkspaceOwnerId } = useAppStore()
   const [allProjects, setAllProjects] = useState([])
   const [projects, setProjects] = useState([])
@@ -1844,7 +1847,7 @@ function MaterialInventoryTab({ session, isSolo }) {
           isSolo={isSolo}
           soloOwnerId={isSolo ? session?.userId : null}
           onClose={() => setShowNewModal(false)}
-          onCreated={(id) => { setActiveProjectId(id); loadProjects() }}
+          onCreated={(id) => { setActiveProjectId(id); loadProjects(); onProjectCreated?.() }}
         />
       )}
     </div>
@@ -1965,7 +1968,7 @@ export default function ProjectMaterial() {
       </ScrollTabs>
 
       {mainTab === 'inventory' && (
-        <MaterialInventoryTab session={session} isSolo={isSolo} />
+        <MaterialInventoryTab session={session} isSolo={isSolo} onProjectCreated={loadAllProjects} />
       )}
 
       {mainTab === 'results' && (

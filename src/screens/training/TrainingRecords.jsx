@@ -5,6 +5,7 @@ import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './Training
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import StorageService from '../../lib/storage/StorageService'
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
 
@@ -92,12 +93,10 @@ function FreshTraining({ students, session }) {
     try {
       const certLabel = (label || '').trim() || file.name
       const path = `fresh/${userId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      const { error } = await sb.storage.from('project-files').upload(path, file, { upsert: true })
-      if (error) throw error
-      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path)
+      const { url } = await StorageService.upload('project-files', path, file, { personal: true })
       await sb.from('training_fresh').insert({
         user_id: userId,
-        certificate_url: urlData.publicUrl,
+        certificate_url: url,
         certificate_name: certLabel,
         certificate_uploaded_at: new Date().toISOString()
       })

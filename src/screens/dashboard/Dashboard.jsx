@@ -140,7 +140,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       : assignedMods.filter(m => activeModules.includes(m.key))
     return (
       <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+        <div className="module-icon-grid">
           {visibleMods.map(m => {
             const grantedByAdmin = m.locked && ((m.screen && studentAccess?.has(m.screen)) || studentAllowedPool?.has(m.key))
             if (m.locked && !grantedByAdmin) return <LockedCard key={m.key} m={m} />
@@ -161,7 +161,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
 
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+      <div className="module-icon-grid">
         {visibleModules.map(m => <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />)}
         {isAdmin && adminManageCards.map(card => <ModuleCard key={card.key} m={card} imgUrl={moduleImages[card.key]} isAdminManage onClick={() => onEditUrl(card.key)} />)}
       </div>

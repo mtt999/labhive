@@ -1,4 +1,7 @@
 import HelpPanel from '../../components/HelpPanel'
+import ScrollTabs from '../../components/ScrollTabs'
+import StorageProviderModal from '../../components/StorageProviderModal'
+import { getActiveProviderKey } from '../../lib/storage/StorageService'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
@@ -140,12 +143,13 @@ function SoloProfile({ session }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {[
           { key: 'info',          label: '👤 My Info' },
           { key: 'teammates',     label: '👥 Teammates' },
           { key: 'dashboard',     label: '🎛️ Dashboard Icons' },
           { key: 'notifications', label: '🔔 Notifications' },
+          { key: 'storage',       label: '🗄️ Storage' },
           { key: 'password',      label: '🔑 Password' },
           { key: 'photo',         label: '🖼️ Photo' },
         ].map(t => (
@@ -154,7 +158,7 @@ function SoloProfile({ session }) {
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
 
       {activeTab === 'info' && (
         <div className="card">
@@ -170,6 +174,8 @@ function SoloProfile({ session }) {
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
 
       {activeTab === 'notifications' && <NotificationPrefsPanel userId={session?.userId} role="solo" />}
+
+      {activeTab === 'storage' && <StorageTab toast={toast} />}
 
       {activeTab === 'password' && (
         <div className="card">
@@ -658,14 +664,14 @@ function AdminProfile() {
         <div className="section-title">Profile</div>
         <HelpPanel screen="profile" />
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setAdminTab(t.key)}
             style={{ padding: '10px 24px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: adminTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${adminTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {adminTab === 'admin'     && <AdminSettings session={session} toast={toast} />}
       {adminTab === 'icons'     && <IconImageManager toast={toast} session={session} />}
       {adminTab === 'floorplan' && <FloorPlanEditor />}
@@ -1012,11 +1018,13 @@ function StaffListPanel({ toast, session }) {
                   {s.password && <span style={{ fontSize: 11, color: 'var(--text3)' }}>🔑 ••••••••</span>}
                 </div>
               </div>
+              {!(session?.role === 'user' && s.role === 'admin') && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-sm" onClick={() => { setEditStaff(s); setShowModal(true) }}>Edit</button>
                 <button className="btn btn-sm" onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
                 <button className="btn btn-sm btn-danger" onClick={() => deleteStaff(s.id)}>Delete</button>
               </div>
+              )}
             </div>
           </div>
         ))
@@ -1305,11 +1313,12 @@ function StaffProfile({ session }) {
         <div className="section-title">Profile</div>
         <HelpPanel screen="profile" />
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {[
           { key: 'info',      label: '👤 My Profile' },
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
+          { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -1317,10 +1326,11 @@ function StaffProfile({ session }) {
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {activeTab === 'info'      && <UserProfileForm session={session} toast={toast} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
+      {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
     </div>
   )
@@ -1540,11 +1550,12 @@ function UserProfile({ session }) {
         <div className="section-title">My Profile</div>
         <HelpPanel screen="profile" />
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {[
           { key: 'info',      label: '👤 My Info' },
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
+          { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -1552,10 +1563,11 @@ function UserProfile({ session }) {
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {activeTab === 'info'      && <UserProfileForm session={session} toast={toast} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="student" />}
+      {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
     </div>
   )
@@ -1564,6 +1576,42 @@ function UserProfile({ session }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN EXPORT — routes by role
 // ══════════════════════════════════════════════════════════════
+const PROVIDER_LABELS = {
+  supabase:   { icon: '☁️', label: 'iLab Cloud' },
+  filesystem: { icon: '📱', label: 'iCloud / Device' },
+  gdrive:     { icon: '🟢', label: 'Google Drive' },
+  onedrive:   { icon: '🔵', label: 'OneDrive' },
+  webdav:     { icon: '🖥️', label: 'Personal Computer' },
+}
+
+function StorageTab({ toast }) {
+  const [showModal, setShowModal] = useState(false)
+  const [current, setCurrent] = useState(getActiveProviderKey())
+  const info = PROVIDER_LABELS[current] || PROVIDER_LABELS.supabase
+  return (
+    <div className="card">
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🗄️ File Storage</div>
+      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
+        Choose where your personal files (training certificates, project records) are stored. Shared team files always stay in iLab Cloud.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', borderRadius: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>{info.icon}</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{info.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{current === 'supabase' ? 'Default — iLab managed storage' : 'Personal storage active'}</div>
+          </div>
+        </div>
+        <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}>Change</button>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
+        Shared files (SOPs, equipment photos, org content) always stay in iLab Cloud regardless of this setting.
+      </div>
+      {showModal && <StorageProviderModal toast={toast} onClose={() => { setShowModal(false); setCurrent(getActiveProviderKey()) }} />}
+    </div>
+  )
+}
+
 export default function Profile() {
   const { session } = useAppStore()
   if (session?.role === 'admin') return <AdminProfile />

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import jsQR from 'jsqr'
+import ScrollTabs from '../../components/ScrollTabs'
 
 export const DEFAULT_TYPES = [
   { key: 'aggregate',      label: 'Aggregate' },
@@ -677,14 +678,14 @@ export function ScannerContent() {
   ]
   return (
     <div>
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 20, overflowX: 'auto' }}>
+      <ScrollTabs style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ padding: '10px 20px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: tab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `3px solid ${tab === t.key ? 'var(--accent)' : 'transparent'}`, marginBottom: -2, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
             {t.label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
       {tab === 'scan'      && <ScanTab typeLabels={typeLabels} />}
       {tab === 'materials' && <MaterialsTab typeLabels={typeLabels} typeColors={typeColors} />}
       {tab === 'summary'   && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}

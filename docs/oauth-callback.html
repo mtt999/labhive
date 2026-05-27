@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><title>Connecting…</title></head>
+<head><meta charset="utf-8"><title>iLab — connecting…</title></head>
 <body>
-<p style="font-family:sans-serif;text-align:center;margin-top:40px;color:#555">Connecting to iLab… you can close this tab.</p>
+<p style="font-family:sans-serif;color:#555;margin:40px auto;text-align:center;">Completing sign-in…</p>
 <script>
-  // Forward the OAuth code back to the native app via deep link
-  const params = window.location.search;
-  if (params) {
-    window.location.href = 'ilab://oauth-callback' + params;
+  var search = window.location.search;
+  if (search) {
+    // Native Capacitor in-app browser: deep link fires appUrlOpen in the app
+    window.location.href = 'ilab://oauth-callback' + search;
+    // Web fallback: if still here after 600ms, redirect to the SPA with the code in the URL
+    setTimeout(function() {
+      window.location.href = 'https://mtt999.github.io/ilab/' + search;
+    }, 600);
   }
 </script>
 </body>

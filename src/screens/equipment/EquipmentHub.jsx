@@ -2,6 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import ScrollTabs from '../../components/ScrollTabs'
 
 function canEdit(s) { return s?.role === 'admin' || s?.role === 'user' }
 
@@ -629,7 +630,7 @@ export default function EquipmentHub() {
               <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
               {selected.nickname && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
             </div>
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20, overflowX: 'auto' }}>
+            <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
               {[
                 { key: 'info', label: '📋 Equipment Info' },
                 { key: 'standards', label: '📑 Standards' },
@@ -640,7 +641,7 @@ export default function EquipmentHub() {
                   {t.label}
                 </button>
               ))}
-            </div>
+            </ScrollTabs>
             {subTab === 'info' && <EquipmentInfo equipment={selected} session={session} />}
             {subTab === 'standards' && <StandardsTab equipment={selected} session={session} />}
             {subTab === 'access' && canEdit(session) && <TemporaryAccessPanel equipment={selected} session={session} />}

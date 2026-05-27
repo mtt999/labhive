@@ -60,18 +60,54 @@ export default function App() {
     if (SCAN_EQ_ID) setScanEquipmentId(SCAN_EQ_ID)
   }, [])
 
-  // Native deep-link: ilab://?eq=<uuid> — fired when iOS opens the app via QR code URL scheme
+  // Web OAuth callback: when Google/OneDrive redirects back to the SPA with ?code=&state=
+  useEffect(() => {
+    if (isNative()) return
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const state = params.get('state')
+    if (code && (state === 'gdrive' || state === 'onedrive')) {
+      window.history.replaceState({}, '', window.location.pathname)
+      import('./lib/storage/StorageService').then(async ({ providers, setActiveProviderKey }) => {
+        try {
+          await providers[state].handleCallback(code)
+          setActiveProviderKey(state)
+          useAppStore.getState().toast(`${state === 'gdrive' ? 'Google Drive' : 'OneDrive'} connected ✓`)
+        } catch (e) {
+          useAppStore.getState().toast('Storage connection failed: ' + (e.message || ''))
+        }
+      })
+    }
+  }, [])
+
+  // Native deep-link: handles QR scan (ilab://?eq=<uuid>) and OAuth callbacks (ilab://oauth-callback?code=...&state=gdrive|onedrive)
   useEffect(() => {
     if (!isNative()) return
     let listenerHandle
     import('@capacitor/app').then(({ App: CapApp }) => {
-      CapApp.addListener('appUrlOpen', ({ url }) => {
-        let eq = null
-        try {
-          eq = new URL(url).searchParams.get('eq')
-        } catch {
-          eq = new URLSearchParams((url.split('?')[1]) || '').get('eq')
+      CapApp.addListener('appUrlOpen', async ({ url }) => {
+        let params
+        try { params = new URL(url).searchParams }
+        catch { params = new URLSearchParams((url.split('?')[1]) || '') }
+
+        // OAuth callback from Google Drive or OneDrive
+        const code = params.get('code')
+        const state = params.get('state')
+        if (code && (state === 'gdrive' || state === 'onedrive')) {
+          try {
+            import('@capacitor/browser').then(({ Browser }) => Browser.close().catch(() => {}))
+            const { providers, setActiveProviderKey } = await import('./lib/storage/StorageService')
+            await providers[state].handleCallback(code)
+            setActiveProviderKey(state)
+            useAppStore.getState().toast(`${state === 'gdrive' ? 'Google Drive' : 'OneDrive'} connected ✓`)
+          } catch (e) {
+            useAppStore.getState().toast('Storage connection failed: ' + (e.message || ''))
+          }
+          return
         }
+
+        // QR scan
+        const eq = params.get('eq')
         if (!eq) return
         setScanEquipmentId(eq)
         if (useAppStore.getState().session) setScreen('equipmentscan')
@@ -181,6 +217,22 @@ export default function App() {
       setShowIconPicker(false)
     }
   }
+
+  // In-app review prompt: trigger after 5th login, then once every 30 days
+  useEffect(() => {
+    if (!session?.userId || !isNative()) return
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+    const count = parseInt(localStorage.getItem('ilab_app_opens') || '0') + 1
+    const lastReview = parseInt(localStorage.getItem('ilab_last_review') || '0')
+    localStorage.setItem('ilab_app_opens', count)
+    const dueForReview = count === 5 || (count > 5 && Date.now() - lastReview > THIRTY_DAYS)
+    if (dueForReview) {
+      import('capacitor-rate-app').then(({ RateApp }) => {
+        RateApp.requestReview().catch(() => {})
+        localStorage.setItem('ilab_last_review', Date.now())
+      }).catch(() => {})
+    }
+  }, [session?.userId])
 
   // Super admin idle timeout: sign out after 30 minutes of inactivity
   useEffect(() => {
