@@ -8,7 +8,7 @@
   if (search) {
     // Native Capacitor in-app browser: deep link fires appUrlOpen in the app
     window.location.href = 'ilab://oauth-callback' + search;
-    // Web fallback: if still here after 600ms, redirect to the SPA with the code in the URL
+    // Web fallback: redirect to SPA (handles both success ?code= and error ?error=)
     setTimeout(function() {
       window.location.href = 'https://mtt999.github.io/ilab/' + search;
     }, 600);

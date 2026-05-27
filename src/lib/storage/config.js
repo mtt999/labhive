@@ -8,4 +8,4 @@ export const GOOGLE_CLIENT_ID = '600708618603-n5676no3iu5e8qrl235ukj0auvm49rj0.a
 
 // Azure Portal → App registrations → your app → Application (client) ID
 // Permission: Microsoft Graph → Files.ReadWrite.AppFolder | Redirect URI: ilab://oauth-callback
-export const ONEDRIVE_CLIENT_ID = 'YOUR_AZURE_CLIENT_ID_HERE'
+export const ONEDRIVE_CLIENT_ID = '27041806-4409-4030-b822-2ca83d18d000'
