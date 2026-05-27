@@ -100,7 +100,7 @@ export class GoogleDriveProvider {
       body: new URLSearchParams({ code, client_id: GOOGLE_CLIENT_ID, redirect_uri: REDIRECT_URI, grant_type: 'authorization_code', code_verifier: verifier }),
     })
     const data = await res.json()
-    if (data.error) throw new Error(data.error_description || 'OAuth failed')
+    if (!res.ok || data.error) throw new Error(data.error_description || data.error || `HTTP ${res.status}`)
     saveToken({ access_token: data.access_token, refresh_token: data.refresh_token, expires_at: Date.now() + data.expires_in * 1000 })
     localStorage.removeItem(VERIFIER_KEY)
   }

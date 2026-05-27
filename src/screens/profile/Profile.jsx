@@ -1,7 +1,6 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import StorageProviderModal from '../../components/StorageProviderModal'
-import { getActiveProviderKey } from '../../lib/storage/StorageService'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
@@ -1586,14 +1585,22 @@ const PROVIDER_LABELS = {
 
 function StorageTab({ toast }) {
   const [showModal, setShowModal] = useState(false)
-  const [current, setCurrent] = useState(getActiveProviderKey())
+  const current = useAppStore(s => s.storageProviderKey)
   const info = PROVIDER_LABELS[current] || PROVIDER_LABELS.supabase
+  const oauthError = localStorage.getItem('ilab_oauth_error')
+
   return (
     <div className="card">
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🗄️ File Storage</div>
       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
         Choose where your personal files (training certificates, project records) are stored. Shared team files always stay in iLab Cloud.
       </div>
+      {oauthError && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <span>Connection failed: {oauthError}</span>
+          <button onClick={() => { localStorage.removeItem('ilab_oauth_error'); toast('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', borderRadius: 10, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 28 }}>{info.icon}</span>
@@ -1607,7 +1614,7 @@ function StorageTab({ toast }) {
       <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
         Shared files (SOPs, equipment photos, org content) always stay in iLab Cloud regardless of this setting.
       </div>
-      {showModal && <StorageProviderModal toast={toast} onClose={() => { setShowModal(false); setCurrent(getActiveProviderKey()) }} />}
+      {showModal && <StorageProviderModal toast={toast} onClose={() => setShowModal(false)} />}
     </div>
   )
 }

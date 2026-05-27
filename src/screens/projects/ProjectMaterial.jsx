@@ -3,7 +3,7 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import StorageService from '../../lib/storage/StorageService'
+import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
@@ -179,6 +179,28 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>
+  )
+}
+
+// ── FileLink — resolves Supabase or external (ext:...) file refs ──
+function FileLink({ file }) {
+  const url = useStorageUrl(file.file_url)
+  const icon = (() => {
+    const t = file.file_type || ''
+    if (t.includes('pdf')) return '📑'
+    if (t.includes('image')) return '🖼️'
+    if (t.includes('csv') || t.includes('spreadsheet') || t.includes('excel')) return '📊'
+    if (t.includes('word') || t.includes('document')) return '📃'
+    if (t.includes('text')) return '📝'
+    if (t.includes('zip')) return '🗜️'
+    return '📄'
+  })()
+  if (!url) return <span style={{ fontSize: 12, color: 'var(--text3)' }}>{icon} {file.file_name}</span>
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
+      {icon} {file.file_name}
+    </a>
   )
 }
 
@@ -419,6 +441,7 @@ function ResultsTab({ projects, session, allowedNames }) {
   const [drillProject, setDrillProject] = useState(null) // project id
   const [drillEquip,   setDrillEquip]   = useState(null) // equipment id
   const [uploadFile,   setUploadFile]   = useState(null)
+  const [fileMap,      setFileMap]      = useState({}) // test_result_id → file row
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -433,13 +456,19 @@ function ResultsTab({ projects, session, allowedNames }) {
   async function loadResults() {
     setLoading(true)
     const ids = projects.map(p => p.id)
-    if (!ids.length) { setResults([]); setLoading(false); return }
-    const { data } = await sb.from('test_result_entries').select('*').in('project_id', ids).order('created_at', { ascending: false })
+    if (!ids.length) { setResults([]); setFileMap({}); setLoading(false); return }
+    const [{ data }, { data: files }] = await Promise.all([
+      sb.from('test_result_entries').select('*').in('project_id', ids).order('created_at', { ascending: false }),
+      sb.from('project_record_files').select('*').in('project_id', ids),
+    ])
     const all = data || []
     const visible = allowedNames !== null
       ? all.filter(r => r.created_by && allowedNames.has(r.created_by))
       : all
     setResults(visible)
+    const fm = {}
+    ;(files || []).forEach(f => { if (f.test_result_id) fm[f.test_result_id] = f })
+    setFileMap(fm)
     setLoading(false)
   }
 
@@ -721,6 +750,7 @@ function ResultsTab({ projects, session, allowedNames }) {
                         </div>
                         {r.explanation && <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5, marginTop: 4 }}>{r.explanation}</div>}
                         {r.created_by && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>by {r.created_by}</div>}
+                        {fileMap[r.id] && <FileLink file={fileMap[r.id]} />}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
                         <div style={{ fontSize: 12, color: 'var(--text3)', textAlign: 'right' }}>
@@ -1558,12 +1588,7 @@ function RecordsPanel({ projects, allowedNames, session }) {
                     <td style={{ padding: '8px 12px', color: 'var(--text2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.explanation || '—'}</td>
                     <td style={{ padding: '8px 12px', color: 'var(--text3)' }}>{r.created_by || '—'}</td>
                     <td style={{ padding: '8px 12px' }}>
-                      {file ? (
-                        <a href={file.file_url} target="_blank" rel="noopener noreferrer"
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 18, textDecoration: 'none' }} title={`${file.file_name} (${fmtSize(file.file_size)})`}>
-                          {fileIcon(file.file_type)}
-                        </a>
-                      ) : '—'}
+                      {file ? <FileLink file={file} /> : '—'}
                     </td>
                   </tr>
                 )

@@ -79,4 +79,11 @@ export const useAppStore = create((set, get) => ({
   scanEquipmentId: null,
   setScanEquipmentId: (id) => set({ scanEquipmentId: id }),
   clearScanEquipmentId: () => set({ scanEquipmentId: null }),
+
+  // ── Storage provider (mirrors localStorage ilab_storage_provider) ──
+  storageProviderKey: localStorage.getItem('ilab_storage_provider') || 'supabase',
+  setStorageProviderKey: (key) => {
+    localStorage.setItem('ilab_storage_provider', key)
+    set({ storageProviderKey: key })
+  },
 }))

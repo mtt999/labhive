@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { providers, getActiveProviderKey, setActiveProviderKey } from '../lib/storage/StorageService'
+import { providers, getActiveProviderKey } from '../lib/storage/StorageService'
+import { useAppStore } from '../store/useAppStore'
 import { getWebDAVConfig, saveWebDAVConfig } from '../lib/storage/WebDAVProvider'
 
 const OPTIONS = [
@@ -132,32 +133,41 @@ function WebDAVSetupModal({ onSave, onCancel, toast }) {
 }
 
 export default function StorageProviderModal({ onClose, toast }) {
-  const [current, setCurrent] = useState(getActiveProviderKey())
-  const [confirming, setConfirming] = useState(null)   // option pending explainer
+  const current = useAppStore(s => s.storageProviderKey)
+  const [confirming, setConfirming] = useState(null)
   const [webdavSetup, setWebdavSetup] = useState(false)
   const [connecting, setConnecting] = useState(null)
   const [statuses, setStatuses] = useState({})
 
-  useEffect(() => {
+  function refreshStatuses() {
     const s = {}
     OPTIONS.forEach(o => { s[o.key] = providers[o.key]?.isConnected() })
     setStatuses(s)
+  }
+
+  useEffect(() => {
+    refreshStatuses()
+    window.addEventListener('focus', refreshStatuses)
+    return () => window.removeEventListener('focus', refreshStatuses)
   }, [])
 
   function handleSelect(option) {
     if (option.key === current) return
     if (option.key === 'supabase') { activate(option); return }
+    // Skip explainer if already connected OR user has previously accepted it
+    if (providers[option.key]?.isConnected()) { activate(option); return }
+    if (localStorage.getItem(`ilab_storage_seen_${option.key}`)) { activate(option); return }
     setConfirming(option)
   }
 
   async function activate(option) {
     setConfirming(null)
+    if (option.personal) localStorage.setItem(`ilab_storage_seen_${option.key}`, '1')
     if (option.webdav) { setWebdavSetup(true); return }
     if (option.oauth && !providers[option.key].isConnected()) {
       setConnecting(option.key)
       try {
         await providers[option.key].connect()
-        // OAuth callback will finish the flow — provider becomes active after callback
         toast(`${option.label}: complete sign-in in the browser that opened.`)
       } catch (e) {
         toast('Could not open auth browser: ' + (e.message || ''))
@@ -165,15 +175,14 @@ export default function StorageProviderModal({ onClose, toast }) {
       setConnecting(null)
       return
     }
-    setActiveProviderKey(option.key)
-    setCurrent(option.key)
+    useAppStore.getState().setStorageProviderKey(option.key)
+    setStatuses(s => ({ ...s, [option.key]: true }))
     toast(`Storage switched to ${option.label} ✓`)
   }
 
   function handleWebDAVSaved() {
     setWebdavSetup(false)
-    setActiveProviderKey('webdav')
-    setCurrent('webdav')
+    useAppStore.getState().setStorageProviderKey('webdav')
     setStatuses(s => ({ ...s, webdav: true }))
   }
 
@@ -183,8 +192,7 @@ export default function StorageProviderModal({ onClose, toast }) {
     if (option.webdav) providers[option.key].disconnect?.()
     setStatuses(s => ({ ...s, [option.key]: false }))
     if (current === option.key) {
-      setActiveProviderKey('supabase')
-      setCurrent('supabase')
+      useAppStore.getState().setStorageProviderKey('supabase')
       toast(`Disconnected from ${option.label}. Switched back to iLab Cloud.`)
     } else {
       toast(`${option.label} disconnected.`)

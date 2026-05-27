@@ -28,6 +28,7 @@ import EquipmentScan from './screens/equipment/EquipmentScan'
 import Admin from './screens/admin/Admin'
 import LabManagement from './screens/labmanagement/LabManagement'
 import { isNative } from './lib/scanner.js'
+import { providers as storageProviders } from './lib/storage/StorageService'
 
 if (isNative()) {
   import('@basecom-gmbh/capacitor-jailbreak-root-detection').then(({ JailbreakRootDetection }) => {
@@ -65,18 +66,29 @@ export default function App() {
     if (isNative()) return
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
+    const error = params.get('error')
     const state = params.get('state')
-    if (code && (state === 'gdrive' || state === 'onedrive')) {
+    if ((code || error) && (state === 'gdrive' || state === 'onedrive')) {
       window.history.replaceState({}, '', window.location.pathname)
-      import('./lib/storage/StorageService').then(async ({ providers, setActiveProviderKey }) => {
+      if (error) {
+        const label = state === 'gdrive' ? 'Google Drive' : 'OneDrive'
+        const desc = params.get('error_description') || error
+        useAppStore.getState().toast(`${label} sign-in failed: ${desc}`)
+        return
+      }
+      ;(async () => {
         try {
-          await providers[state].handleCallback(code)
-          setActiveProviderKey(state)
+          await storageProviders[state].handleCallback(code)
+          useAppStore.getState().setStorageProviderKey(state)
+          setTimeout(() => window.dispatchEvent(new CustomEvent('ilab:storage-connected', { detail: { key: state } })), 0)
+          localStorage.removeItem('ilab_oauth_error')
           useAppStore.getState().toast(`${state === 'gdrive' ? 'Google Drive' : 'OneDrive'} connected ✓`)
         } catch (e) {
-          useAppStore.getState().toast('Storage connection failed: ' + (e.message || ''))
+          const msg = (e.message || 'Unknown error')
+          localStorage.setItem('ilab_oauth_error', `${state}: ${msg}`)
+          useAppStore.getState().toast('Storage connection failed: ' + msg, 8000)
         }
-      })
+      })()
     }
   }, [])
 
@@ -96,9 +108,9 @@ export default function App() {
         if (code && (state === 'gdrive' || state === 'onedrive')) {
           try {
             import('@capacitor/browser').then(({ Browser }) => Browser.close().catch(() => {}))
-            const { providers, setActiveProviderKey } = await import('./lib/storage/StorageService')
-            await providers[state].handleCallback(code)
-            setActiveProviderKey(state)
+            await storageProviders[state].handleCallback(code)
+            useAppStore.getState().setStorageProviderKey(state)
+            window.dispatchEvent(new CustomEvent('ilab:storage-connected', { detail: { key: state } }))
             useAppStore.getState().toast(`${state === 'gdrive' ? 'Google Drive' : 'OneDrive'} connected ✓`)
           } catch (e) {
             useAppStore.getState().toast('Storage connection failed: ' + (e.message || ''))
