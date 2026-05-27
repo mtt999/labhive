@@ -18,7 +18,7 @@ async function getValidToken() {
   if (!token) return null
   if (Date.now() < token.expires_at - 60_000) return token.access_token
   if (!token.refresh_token) { localStorage.removeItem(TOKEN_KEY); return null }
-  const res = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+  const res = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: ONEDRIVE_CLIENT_ID, refresh_token: token.refresh_token, grant_type: 'refresh_token', scope: SCOPE }),
@@ -64,7 +64,7 @@ export class OneDriveProvider {
       response_type: 'code', scope: SCOPE,
       code_challenge: challenge, code_challenge_method: 'S256', state: 'onedrive',
     })
-    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`
+    const url = `https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?${params}`
     if (window.Capacitor?.isNativePlatform?.()) {
       const { Browser } = await import('@capacitor/browser')
       await Browser.open({ url })
@@ -75,7 +75,7 @@ export class OneDriveProvider {
 
   async handleCallback(code) {
     const verifier = localStorage.getItem(VERIFIER_KEY)
-    const res = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    const res = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ code, client_id: ONEDRIVE_CLIENT_ID, redirect_uri: REDIRECT_URI, grant_type: 'authorization_code', code_verifier: verifier, scope: SCOPE }),
