@@ -40,7 +40,7 @@ async function createAuthUser(email, password) {
 // SOLO PROFILE — reads from solo_users table
 // ══════════════════════════════════════════════════════════════
 function SoloProfile({ session }) {
-  const { toast, setSession } = useAppStore()
+  const { toast, setSession, clearSession } = useAppStore()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('info')
@@ -151,6 +151,7 @@ function SoloProfile({ session }) {
           { key: 'storage',       label: '🗄️ Storage' },
           { key: 'password',      label: '🔑 Password' },
           { key: 'photo',         label: '🖼️ Photo' },
+          { key: 'danger',        label: '⚠️ Delete Account' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             style={{ padding: '10px 22px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: activeTab === t.key ? '#534AB7' : 'var(--text2)', borderBottom: `2px solid ${activeTab === t.key ? '#534AB7' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
@@ -214,6 +215,57 @@ function SoloProfile({ session }) {
           <button className="btn btn-sm btn-primary" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳ Uploading…' : '⬆️ Choose photo'}</button>
         </div>
       )}
+
+      {activeTab === 'danger' && (
+        <SoloDeleteAccountPanel session={session} clearSession={clearSession} toast={toast} />
+      )}
+    </div>
+  )
+}
+
+function SoloDeleteAccountPanel({ session, clearSession, toast }) {
+  const [typed, setTyped] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (typed !== 'DELETE') return
+    setDeleting(true)
+    try {
+      const uid = session.userId
+      const email = session.email?.toLowerCase()
+      await sb.from('solo_workspace_members').delete().eq('member_id', uid)
+      await sb.from('solo_workspace_members').delete().eq('owner_id', uid)
+      if (email) await sb.from('solo_workspace_invites').delete().eq('invitee_email', email)
+      await sb.from('solo_workspace_invites').delete().eq('owner_id', uid)
+      const { data: projs } = await sb.from('projects').select('id').eq('solo_owner_id', uid)
+      if (projs?.length) {
+        const ids = projs.map(p => p.id)
+        await sb.from('project_results').delete().in('project_id', ids)
+        await sb.from('project_links').delete().in('project_id', ids)
+        await sb.from('projects').delete().in('id', ids)
+      }
+      await sb.from('solo_users').delete().eq('id', uid)
+      await sb.auth.signOut()
+      clearSession()
+    } catch (err) {
+      toast('Error deleting account: ' + (err.message || String(err)))
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ border: '1.5px solid #fca5a5' }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: '#b91c1c', marginBottom: 8 }}>Delete Account</div>
+      <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+        This permanently deletes your account and all associated data — projects, records, teammates, and files. <strong>This cannot be undone.</strong>
+      </p>
+      <div className="field">
+        <label style={{ color: '#b91c1c', fontWeight: 600 }}>Type DELETE to confirm</label>
+        <input value={typed} onChange={e => setTyped(e.target.value)} placeholder="DELETE" />
+      </div>
+      <button className="btn btn-danger" onClick={handleDelete} disabled={typed !== 'DELETE' || deleting} style={{ marginTop: 8 }}>
+        {deleting ? 'Deleting…' : 'Delete my account permanently'}
+      </button>
     </div>
   )
 }
@@ -718,6 +770,29 @@ function AdminSettings({ session: sessionProp, toast }) {
   )
 }
 
+// ── Shared delete confirmation modal for team users ──
+function DeleteUserModal({ user, onClose, onConfirm, deleting }) {
+  const [typed, setTyped] = useState('')
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:28, maxWidth:440, width:'100%', border:'2px solid #fca5a5' }}>
+        <div style={{ fontWeight:700, fontSize:16, color:'#b91c1c', marginBottom:10 }}>Delete {user.name}?</div>
+        <p style={{ fontSize:14, color:'var(--text2)', marginBottom:16, lineHeight:1.6 }}>This permanently deletes the account and all access data. <strong>This cannot be undone.</strong></p>
+        <div className="field">
+          <label style={{ color:'#b91c1c', fontWeight:600 }}>Type DELETE to confirm</label>
+          <input value={typed} onChange={e=>setTyped(e.target.value)} placeholder="DELETE" autoFocus />
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:16 }}>
+          <button className="btn btn-danger" disabled={typed !== 'DELETE' || deleting} onClick={() => onConfirm(user.id)}>
+            {deleting ? 'Deleting…' : 'Delete permanently'}
+          </button>
+          <button className="btn" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── STUDENTS PANEL ── with 🎛️ icon button per student
 export function StudentsPanel({ toast, session }) {
   const [students, setStudents] = useState([])
@@ -729,6 +804,8 @@ export function StudentsPanel({ toast, session }) {
   const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
   const [importing, setImporting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const fileRef = useRef(null)
 
   useEffect(() => { load() }, [])
@@ -777,7 +854,13 @@ export function StudentsPanel({ toast, session }) {
   }
 
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
-  async function deleteStudent(id) { if (!confirm('Delete this student?')) return; await sb.from('users').delete().eq('id', id); load(); toast('Deleted.') }
+  async function deleteStudent(id) {
+    setDeleting(true)
+    await sb.from('user_screen_access').delete().eq('user_id', id)
+    await sb.from('user_dashboard_prefs').delete().eq('user_id', id)
+    await sb.from('users').delete().eq('id', id)
+    setDeleting(false); setDeleteTarget(null); load(); toast('Lab user deleted.')
+  }
 
   async function parseExcel(file) {
     const XLSX = await import('xlsx')
@@ -859,7 +942,7 @@ export function StudentsPanel({ toast, session }) {
                 <button className="btn btn-sm" onClick={() => setIconStudent(s)} title="Set allowed dashboard icons">🎛️ Icons</button>
                 <button className="btn btn-sm" onClick={() => { setEditStudent(s); setShowModal(true) }}>Edit</button>
                 <button className="btn btn-sm" onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
-                <button className="btn btn-sm btn-danger" onClick={() => deleteStudent(s.id)}>Delete</button>
+                <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(s)}>Delete</button>
               </div>
             </div>
           </div>
@@ -868,6 +951,7 @@ export function StudentsPanel({ toast, session }) {
       {showModal && <StudentModal student={editStudent} session={session} onClose={() => { setShowModal(false); setEditStudent(null) }} onSave={saveStudent} />}
       {iconStudent && <StudentIconManager student={iconStudent} orgId={session?.organizationId} onClose={(saved) => { setIconStudent(null); if (saved) toast(`Icons updated for ${iconStudent.email || iconStudent.name} ✓`) }} />}
       {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="student" onDone={() => { setPendingIconSetup(null); load(); toast('Lab user created & icons saved ✓') }} />}
+      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: sLastName(deleteTarget) || sFirstName(deleteTarget) || 'this user' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteStudent} deleting={deleting} />}
     </div>
   )
 }
@@ -973,6 +1057,8 @@ function StaffListPanel({ toast, session }) {
   const [showModal, setShowModal] = useState(false)
   const [editStaff, setEditStaff] = useState(null)
   const [pendingIconSetup, setPendingIconSetup] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   useEffect(() => { load() }, [])
   async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setStaff(data || []); setLoading(false) }
   async function saveStaff(form, id) {
@@ -993,7 +1079,13 @@ function StaffListPanel({ toast, session }) {
     else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: form.name.trim() }) }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
-  async function deleteStaff(id) { if (!confirm('Delete this staff member?')) return; await sb.from('users').delete().eq('id', id); load(); toast('Deleted.') }
+  async function deleteStaff(id) {
+    setDeleting(true)
+    await sb.from('user_screen_access').delete().eq('user_id', id)
+    await sb.from('user_dashboard_prefs').delete().eq('user_id', id)
+    await sb.from('users').delete().eq('id', id)
+    setDeleting(false); setDeleteTarget(null); load(); toast('Member deleted.')
+  }
   async function setMemberRole(u, newRole) { await sb.from('users').update({ role: newRole, admin_level: 0 }).eq('id', u.id); toast(`${u.name} updated to ${newRole === 'user' ? 'Staff' : 'Student'} ✓`); load() }
   return (
     <div>
@@ -1021,7 +1113,7 @@ function StaffListPanel({ toast, session }) {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-sm" onClick={() => { setEditStaff(s); setShowModal(true) }}>Edit</button>
                 <button className="btn btn-sm" onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
-                <button className="btn btn-sm btn-danger" onClick={() => deleteStaff(s.id)}>Delete</button>
+                <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(s)}>Delete</button>
               </div>
               )}
             </div>
@@ -1030,6 +1122,7 @@ function StaffListPanel({ toast, session }) {
       }
       {showModal && <StaffModal staff={editStaff} onClose={() => { setShowModal(false); setEditStaff(null) }} onSave={saveStaff} onRoleChange={setMemberRole} />}
       {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="user" onDone={() => { setPendingIconSetup(null); load(); toast('Lab manager created & icons saved ✓') }} />}
+      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: deleteTarget.name || 'this member' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteStaff} deleting={deleting} />}
     </div>
   )
 }
