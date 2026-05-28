@@ -9,7 +9,6 @@ import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MOD
 import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
-import FloorPlanEditor from '../../components/FloorPlanEditor'
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
 const DEGREES = ['MS', 'PhD', 'BS', 'Other']
@@ -704,7 +703,6 @@ function AdminProfile() {
   const tabs = [
     { key: 'admin',     label: '🔑 Admin Settings' },
     { key: 'icons',     label: '🖼️ Icon Images' },
-    { key: 'floorplan', label: '🗺️ Floor Plan' },
     { key: 'dashboard', label: '🎛️ Dashboard Icons' },
     { key: 'notifs',    label: '🔔 Notifications' },
     { key: 'org',       label: '🏢 Organization' },
@@ -725,7 +723,6 @@ function AdminProfile() {
       </ScrollTabs>
       {adminTab === 'admin'     && <AdminSettings session={session} toast={toast} />}
       {adminTab === 'icons'     && <IconImageManager toast={toast} session={session} />}
-      {adminTab === 'floorplan' && <FloorPlanEditor />}
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
       {adminTab === 'org'       && <OrgContactPanel session={session} toast={toast} />}
