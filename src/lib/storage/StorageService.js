@@ -10,16 +10,16 @@ import { SupabaseProvider } from './SupabaseProvider'
 import { FilesystemProvider } from './FilesystemProvider'
 import { GoogleDriveProvider } from './GoogleDriveProvider'
 import { OneDriveProvider } from './OneDriveProvider'
-import { WebDAVProvider } from './WebDAVProvider'
+import { LocalFolderProvider } from './LocalFolderProvider'
 
 export const PROVIDER_KEY = 'ilab_storage_provider'
 
 export const providers = {
-  supabase:    new SupabaseProvider(),
-  filesystem:  new FilesystemProvider(),
-  gdrive:      new GoogleDriveProvider(),
-  onedrive:    new OneDriveProvider(),
-  webdav:      new WebDAVProvider(),
+  supabase:     new SupabaseProvider(),
+  filesystem:   new FilesystemProvider(),
+  gdrive:       new GoogleDriveProvider(),
+  onedrive:     new OneDriveProvider(),
+  localfolder:  new LocalFolderProvider(),
 }
 
 export function getActiveProviderKey() {
@@ -62,7 +62,7 @@ const StorageService = {
       localStorage.setItem('ilab_storage_hint_shown', '1')
       setTimeout(() => {
         import('../../store/useAppStore').then(({ useAppStore }) => {
-          useAppStore.getState().toast('File saved to iLab Cloud. Go to Profile → Storage to use iCloud, Google Drive, or OneDrive instead.')
+          useAppStore.getState().toast('File saved to iLab Cloud. Go to Profile → Storage to use your local folder, Google Drive, or OneDrive instead.')
         }).catch(() => {})
       }, 900)
     }

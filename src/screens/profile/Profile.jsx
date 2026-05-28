@@ -1669,11 +1669,11 @@ function UserProfile({ session }) {
 // MAIN EXPORT — routes by role
 // ══════════════════════════════════════════════════════════════
 const PROVIDER_LABELS = {
-  supabase:   { icon: '☁️', label: 'iLab Cloud' },
-  filesystem: { icon: '📱', label: 'iCloud / Device' },
-  gdrive:     { icon: '🟢', label: 'Google Drive' },
-  onedrive:   { icon: '🔵', label: 'OneDrive' },
-  webdav:     { icon: '🖥️', label: 'Personal Computer' },
+  supabase:     { icon: '☁️', label: 'iLab Cloud' },
+  localfolder:  { icon: '🗂️', label: 'Local Folder' },
+  gdrive:       { icon: '🟢', label: 'Google Drive' },
+  onedrive:     { icon: '🔵', label: 'OneDrive' },
+  filesystem:   { icon: '📱', label: 'iCloud / Device' },
 }
 
 function StorageTab({ toast }) {

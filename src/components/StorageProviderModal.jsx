@@ -1,32 +1,33 @@
 import { useState, useEffect } from 'react'
-import { providers, getActiveProviderKey } from '../lib/storage/StorageService'
+import { providers } from '../lib/storage/StorageService'
 import { useAppStore } from '../store/useAppStore'
-import { getWebDAVConfig, saveWebDAVConfig } from '../lib/storage/WebDAVProvider'
+import { isSupported as localFolderSupported } from '../lib/storage/LocalFolderProvider'
 
 const OPTIONS = [
   {
     key: 'supabase',
     icon: '☁️',
     label: 'iLab Cloud',
-    sub: 'Default — files stored securely on iLab servers',
+    sub: 'Default. Your files are uploaded to iLab\'s secure servers. Works on any device, any browser, anywhere.',
     color: '#1D9E75',
     bg: '#e8f2ee',
     personal: false,
   },
   {
-    key: 'filesystem',
-    icon: '📱',
-    label: 'iCloud / Device',
-    sub: 'iOS: syncs to your iCloud Drive. Android: local Documents folder.',
-    color: '#0369a1',
-    bg: '#e0f2fe',
+    key: 'localfolder',
+    icon: '🗂️',
+    label: 'Local Folder',
+    sub: 'You pick a folder on your computer. Files are saved directly there — nothing is uploaded to any server. Works on Chrome and Edge.',
+    color: '#7c4dbd',
+    bg: '#f3eeff',
     personal: true,
+    localfolder: true,
   },
   {
     key: 'gdrive',
     icon: '🟢',
     label: 'Google Drive',
-    sub: 'Stored in your private "iLab Files" folder on Google Drive',
+    sub: 'Files go to a private "iLab Files" folder in your own Google Drive. Access them from any device through Google Drive.',
     color: '#1a73e8',
     bg: '#e8f0fe',
     personal: true,
@@ -36,21 +37,21 @@ const OPTIONS = [
     key: 'onedrive',
     icon: '🔵',
     label: 'Microsoft OneDrive',
-    sub: 'Stored in your private OneDrive app folder',
+    sub: 'Files go to a private app folder in your OneDrive. Access them from any device through OneDrive.',
     color: '#0078d4',
     bg: '#e3f2fd',
     personal: true,
     oauth: true,
   },
   {
-    key: 'webdav',
-    icon: '🖥️',
-    label: 'Personal Computer',
-    sub: 'Your own computer or NAS via WebDAV (same network or VPN)',
-    color: '#7c4dbd',
-    bg: '#f3eeff',
+    key: 'filesystem',
+    icon: '📱',
+    label: 'iCloud / Device',
+    sub: 'Mobile only. On iPhone/iPad, files sync to your iCloud Drive. On Android, files save to the app\'s local Documents folder.',
+    color: '#0369a1',
+    bg: '#e0f2fe',
     personal: true,
-    webdav: true,
+    mobileOnly: true,
   },
 ]
 
@@ -62,13 +63,13 @@ function ExplainerModal({ option, onAccept, onCancel }) {
         <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>How {option.label} works</div>
 
         <div style={{ background: '#fff3e0', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-          <strong>Hybrid mode (recommended):</strong> Shared files visible to your teammates (equipment SOPs, supply photos, module images) always stay in iLab Cloud. Only <em>your personal files</em> (training certificates, project records, your uploads) go to {option.label}.
+          <strong>Hybrid mode:</strong> Shared files visible to your team (equipment SOPs, supply photos, module images) always stay in iLab Cloud. Only <em>your personal files</em> (training certificates, project records, your uploads) go to {option.label}.
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
-          <div style={{ marginBottom: 8 }}>✅ <strong>Your files are private</strong> — the app only accesses the folder it creates, nothing else in your {option.label}.</div>
-          <div style={{ marginBottom: 8 }}>✅ <strong>You own your data</strong> — open your {option.label} at any time to see, download, or delete your files.</div>
-          <div style={{ marginBottom: 8 }}>⚠️ <strong>Sharing with teammates</strong> — files in {option.label} are private. To share a file with a teammate, you'll need to re-upload it from your {option.label} through the app.</div>
+          <div style={{ marginBottom: 8 }}>✅ <strong>Your files stay private</strong> — only you can see them. The app never accesses anything outside the folder/location it creates.</div>
+          <div style={{ marginBottom: 8 }}>✅ <strong>You own your data</strong> — open {option.label} at any time to see, download, or delete your files directly.</div>
+          <div style={{ marginBottom: 8 }}>⚠️ <strong>Sharing with teammates</strong> — personal files are private. To share one, re-upload it through the app.</div>
           <div>⚠️ <strong>Existing files stay in iLab Cloud</strong> — only new uploads go to {option.label}. Old files are not moved.</div>
         </div>
 
@@ -81,65 +82,17 @@ function ExplainerModal({ option, onAccept, onCancel }) {
   )
 }
 
-function WebDAVSetupModal({ onSave, onCancel, toast }) {
-  const existing = getWebDAVConfig() || {}
-  const [form, setForm] = useState({ url: existing.url || '', username: existing.username || '', password: existing.password || '' })
-  const [testing, setTesting] = useState(false)
-
-  async function handleSave() {
-    if (!form.url.trim()) { toast('Server URL is required'); return }
-    setTesting(true)
-    try {
-      const { WebDAVProvider } = await import('../lib/storage/WebDAVProvider')
-      const p = new WebDAVProvider()
-      const ok = await p.testConnection(form)
-      if (!ok) { toast('Could not connect. Check the URL and credentials.'); setTesting(false); return }
-      saveWebDAVConfig(form)
-      toast('WebDAV connected ✓')
-      onSave()
-    } catch (e) {
-      toast('Connection failed: ' + (e.message || 'Check server URL'))
-    }
-    setTesting(false)
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 480, width: '100%', border: '1px solid var(--border)' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🖥️ Connect personal computer</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 20 }}>Your computer must be running a WebDAV server and be reachable (same Wi-Fi or Tailscale VPN).</div>
-
-        <div style={{ background: '#f3eeff', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#7c4dbd' }}>
-          <strong>Quick setup:</strong> macOS → System Settings → Sharing → File Sharing → enable WebDAV.
-          Windows → IIS Manager → add WebDAV Authoring Rules.
-          Synology NAS → Control Panel → File Services → enable WebDAV.
-        </div>
-
-        <div className="field"><label>Server URL</label>
-          <input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="http://192.168.1.100:80 or https://yourserver.local" />
-        </div>
-        <div className="grid-2">
-          <div className="field"><label>Username</label><input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} /></div>
-          <div className="field"><label>Password</label><input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={testing}>{testing ? 'Testing connection…' : 'Connect & save'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function StorageProviderModal({ onClose, toast }) {
   const current = useAppStore(s => s.storageProviderKey)
-  const loginMode = useAppStore(s => s.session?.loginMode)
-  const visibleOptions = OPTIONS.filter(o => o.key !== 'webdav' || loginMode === 'solo')
   const [confirming, setConfirming] = useState(null)
-  const [webdavSetup, setWebdavSetup] = useState(false)
   const [connecting, setConnecting] = useState(null)
   const [statuses, setStatuses] = useState({})
+
+  // Filter out localfolder if browser doesn't support File System Access API
+  const visibleOptions = OPTIONS.filter(o => {
+    if (o.key === 'localfolder') return localFolderSupported()
+    return true
+  })
 
   function refreshStatuses() {
     const s = {}
@@ -156,7 +109,6 @@ export default function StorageProviderModal({ onClose, toast }) {
   function handleSelect(option) {
     if (option.key === current) return
     if (option.key === 'supabase') { activate(option); return }
-    // Skip explainer if already connected OR user has previously accepted it
     if (providers[option.key]?.isConnected()) { activate(option); return }
     if (localStorage.getItem(`ilab_storage_seen_${option.key}`)) { activate(option); return }
     setConfirming(option)
@@ -165,7 +117,21 @@ export default function StorageProviderModal({ onClose, toast }) {
   async function activate(option) {
     setConfirming(null)
     if (option.personal) localStorage.setItem(`ilab_storage_seen_${option.key}`, '1')
-    if (option.webdav) { setWebdavSetup(true); return }
+
+    if (option.localfolder) {
+      setConnecting(option.key)
+      try {
+        await providers.localfolder.pickFolder()
+        useAppStore.getState().setStorageProviderKey('localfolder')
+        setStatuses(s => ({ ...s, localfolder: true }))
+        toast('Local folder connected ✓')
+      } catch (e) {
+        if (e.name !== 'AbortError') toast('Could not access folder: ' + (e.message || 'Permission denied'))
+      }
+      setConnecting(null)
+      return
+    }
+
     if (option.oauth && !providers[option.key].isConnected()) {
       setConnecting(option.key)
       try {
@@ -177,21 +143,15 @@ export default function StorageProviderModal({ onClose, toast }) {
       setConnecting(null)
       return
     }
+
     useAppStore.getState().setStorageProviderKey(option.key)
     setStatuses(s => ({ ...s, [option.key]: true }))
     toast(`Storage switched to ${option.label} ✓`)
   }
 
-  function handleWebDAVSaved() {
-    setWebdavSetup(false)
-    useAppStore.getState().setStorageProviderKey('webdav')
-    setStatuses(s => ({ ...s, webdav: true }))
-  }
-
   async function disconnect(option, e) {
     e.stopPropagation()
-    if (option.oauth) providers[option.key].disconnect?.()
-    if (option.webdav) providers[option.key].disconnect?.()
+    await providers[option.key].disconnect?.()
     setStatuses(s => ({ ...s, [option.key]: false }))
     if (current === option.key) {
       useAppStore.getState().setStorageProviderKey('supabase')
@@ -225,6 +185,7 @@ export default function StorageProviderModal({ onClose, toast }) {
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{option.label}</span>
                     {isActive && <span style={{ fontSize: 11, background: option.color, color: '#fff', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>Active</span>}
                     {!isActive && isConnected && option.personal && <span style={{ fontSize: 11, background: '#e8f2ee', color: '#1D9E75', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>Connected</span>}
+                    {option.mobileOnly && <span style={{ fontSize: 11, background: '#f0efe9', color: '#6b6860', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>Mobile</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{option.sub}</div>
                 </div>
@@ -246,7 +207,6 @@ export default function StorageProviderModal({ onClose, toast }) {
       </div>
 
       {confirming && <ExplainerModal option={confirming} onAccept={() => activate(confirming)} onCancel={() => setConfirming(null)} />}
-      {webdavSetup && <WebDAVSetupModal onSave={handleWebDAVSaved} onCancel={() => setWebdavSetup(false)} toast={toast} />}
     </div>
   )
 }
