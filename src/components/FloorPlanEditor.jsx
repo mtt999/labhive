@@ -155,64 +155,101 @@ Rules:
     setAnalyzing(false)
   }
 
-  // ── Zone drawing ──────────────────────────────────────────────
-  function getRelPos(e) {
+  // ── Drag / resize refs ────────────────────────────────────────
+  const dragRef = useRef(null)
+  const [editingZoneId, setEditingZoneId] = useState(null)
+  const [editingLabel, setEditingLabel]   = useState('')
+
+  function getRel(clientX, clientY) {
     const rect = containerRef.current.getBoundingClientRect()
     return {
-      x: Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)),
-      y: Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)),
+      x: Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100)),
     }
   }
 
+  // global mousemove / mouseup to handle dragging outside the canvas
+  useEffect(() => {
+    function move(e) {
+      const d = dragRef.current
+      if (!d || !containerRef.current) return
+      const { x: cx, y: cy } = getRel(e.clientX, e.clientY)
+      const dx = cx - d.startX, dy = cy - d.startY
+      setZones(prev => prev.map(z => {
+        if (z.id !== d.zoneId) return z
+        if (d.type === 'move') {
+          return { ...z, x: Math.max(0, Math.min(100 - z.w, d.origX + dx)), y: Math.max(0, Math.min(100 - z.h, d.origY + dy)) }
+        }
+        // resize
+        const o = d.orig
+        let { x, y, w, h } = o
+        if (d.handle === 'se') { w = Math.max(3, o.w + dx); h = Math.max(3, o.h + dy) }
+        else if (d.handle === 'sw') { x = Math.min(o.x + o.w - 3, o.x + dx); w = Math.max(3, o.w - dx); h = Math.max(3, o.h + dy) }
+        else if (d.handle === 'ne') { y = Math.min(o.y + o.h - 3, o.y + dy); w = Math.max(3, o.w + dx); h = Math.max(3, o.h - dy) }
+        else if (d.handle === 'nw') { x = Math.min(o.x + o.w - 3, o.x + dx); y = Math.min(o.y + o.h - 3, o.y + dy); w = Math.max(3, o.w - dx); h = Math.max(3, o.h - dy) }
+        return { ...z, x: Math.max(0, x), y: Math.max(0, y), w: Math.min(100 - Math.max(0, x), w), h: Math.min(100 - Math.max(0, y), h) }
+      }))
+    }
+    function up() { dragRef.current = null }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+  }, [])
+
+  // ── Zone drawing (on empty canvas) ───────────────────────────
   function onMouseDown(e) {
     if (pendingZone) return
     e.preventDefault()
-    const pos = getRelPos(e)
+    const pos = getRel(e.clientX, e.clientY)
     setDrawStart(pos)
     setDraft({ x: pos.x, y: pos.y, w: 0, h: 0 })
   }
 
   function onMouseMove(e) {
     if (!drawStart) return
-    const pos = getRelPos(e)
-    setDraft({
-      x: Math.min(drawStart.x, pos.x),
-      y: Math.min(drawStart.y, pos.y),
-      w: Math.abs(pos.x - drawStart.x),
-      h: Math.abs(pos.y - drawStart.y),
-    })
+    const pos = getRel(e.clientX, e.clientY)
+    setDraft({ x: Math.min(drawStart.x, pos.x), y: Math.min(drawStart.y, pos.y), w: Math.abs(pos.x - drawStart.x), h: Math.abs(pos.y - drawStart.y) })
   }
 
   function onMouseUp(e) {
     if (!drawStart) return
-    const pos = getRelPos(e)
-    const rect = {
-      x: Math.min(drawStart.x, pos.x),
-      y: Math.min(drawStart.y, pos.y),
-      w: Math.abs(pos.x - drawStart.x),
-      h: Math.abs(pos.y - drawStart.y),
-    }
-    setDrawStart(null)
-    setDraft(null)
+    const pos = getRel(e.clientX, e.clientY)
+    const rect = { x: Math.min(drawStart.x, pos.x), y: Math.min(drawStart.y, pos.y), w: Math.abs(pos.x - drawStart.x), h: Math.abs(pos.y - drawStart.y) }
+    setDrawStart(null); setDraft(null)
     if (rect.w < 2 || rect.h < 2) return
-    setPendingZone(rect)
-    setPendingLabel('')
+    setPendingZone(rect); setPendingLabel('')
   }
 
   function confirmZone() {
     if (!pendingLabel.trim()) return
     setZones(z => [...z, { id: `zone_${Date.now()}`, label: pendingLabel.trim(), ...pendingZone }])
-    setPendingZone(null)
-    setPendingLabel('')
+    setPendingZone(null); setPendingLabel('')
   }
 
-  function cancelPending() {
-    setPendingZone(null)
-    setPendingLabel('')
+  function cancelPending() { setPendingZone(null); setPendingLabel('') }
+  function deleteZone(id) { setZones(z => z.filter(z2 => z2.id !== id)) }
+
+  function startMove(e, zone) {
+    e.stopPropagation(); e.preventDefault()
+    if (pendingZone) return
+    const { x: sx, y: sy } = getRel(e.clientX, e.clientY)
+    dragRef.current = { type: 'move', zoneId: zone.id, startX: sx, startY: sy, origX: zone.x, origY: zone.y }
   }
 
-  function deleteZone(id) {
-    setZones(z => z.filter(z2 => z2.id !== id))
+  function startResize(e, zone, handle) {
+    e.stopPropagation(); e.preventDefault()
+    const { x: sx, y: sy } = getRel(e.clientX, e.clientY)
+    dragRef.current = { type: 'resize', zoneId: zone.id, handle, startX: sx, startY: sy, orig: { ...zone } }
+  }
+
+  function startEditLabel(e, zone) {
+    e.stopPropagation()
+    setEditingZoneId(zone.id); setEditingLabel(zone.label)
+  }
+
+  function commitLabel(id) {
+    if (editingLabel.trim()) setZones(z => z.map(z2 => z2.id === id ? { ...z2, label: editingLabel.trim() } : z2))
+    setEditingZoneId(null)
   }
 
   // ── Save ──────────────────────────────────────────────────────
@@ -302,9 +339,9 @@ Rules:
       {/* Editor canvas */}
       {imageUrl ? (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span>🖱️ Click and drag to draw a zone · Click the × on a zone to delete it</span>
-            {pendingZone && <span style={{ color: 'var(--accent)', fontWeight: 500 }}>Name the zone below and click Add</span>}
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+            🖱️ <strong>Drag</strong> a zone to move it · <strong>Corner handles</strong> to resize · <strong>Double-click</strong> label to rename · Drag on empty area to draw new zone
+            {pendingZone && <span style={{ color: 'var(--accent)', fontWeight: 500, marginLeft: 8 }}>Name the zone below and click Add</span>}
           </div>
 
           <div
@@ -324,41 +361,49 @@ Rules:
             <img src={imageUrl} alt="Floor plan" draggable={false}
               style={{ display: 'block', width: '100%', pointerEvents: 'none' }} />
 
-            {/* Existing zones */}
+            {/* Existing zones — drag to move, corner handles to resize, double-click to rename */}
             {zones.map(zone => (
-              <div key={zone.id} style={{
-                position: 'absolute',
-                left: `${zone.x}%`, top: `${zone.y}%`,
-                width: `${zone.w}%`, height: `${zone.h}%`,
-                border: '2px solid var(--accent)',
-                background: 'rgba(83,74,183,0.18)',
-                borderRadius: 4,
-                boxSizing: 'border-box',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                minWidth: 40, minHeight: 24,
-              }}>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, color: 'var(--accent)',
-                  background: 'rgba(255,255,255,0.9)', padding: '1px 6px',
-                  borderRadius: 4, maxWidth: '90%', overflow: 'hidden',
-                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
+              <div key={zone.id}
+                onMouseDown={e => startMove(e, zone)}
+                onDoubleClick={e => startEditLabel(e, zone)}
+                style={{
+                  position: 'absolute',
+                  left: `${zone.x}%`, top: `${zone.y}%`,
+                  width: `${zone.w}%`, height: `${zone.h}%`,
+                  border: '2px solid var(--accent)',
+                  background: 'rgba(83,74,183,0.18)',
+                  borderRadius: 4, boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'move', minWidth: 40, minHeight: 24,
                 }}>
-                  {zone.label}
-                </span>
-                <button
-                  onClick={e => { e.stopPropagation(); deleteZone(zone.id) }}
-                  onMouseDown={e => e.stopPropagation()}
-                  style={{
-                    position: 'absolute', top: -9, right: -9,
-                    width: 18, height: 18, borderRadius: '50%',
-                    border: 'none', background: '#e24b4a', color: '#fff',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    lineHeight: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-                  }}>
+                {/* Label / inline edit */}
+                {editingZoneId === zone.id ? (
+                  <input autoFocus value={editingLabel}
+                    onChange={e => setEditingLabel(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') commitLabel(zone.id) }}
+                    onBlur={() => commitLabel(zone.id)}
+                    onClick={e => e.stopPropagation()}
+                    onMouseDown={e => e.stopPropagation()}
+                    style={{ width: '80%', padding: '2px 6px', fontSize: 11, fontWeight: 700, border: '1.5px solid var(--accent)', borderRadius: 4, textAlign: 'center', background: '#fff' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(255,255,255,0.9)', padding: '1px 6px', borderRadius: 4, maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+                    {zone.label}
+                  </span>
+                )}
+                {/* Delete */}
+                <button onClick={e => { e.stopPropagation(); deleteZone(zone.id) }} onMouseDown={e => e.stopPropagation()}
+                  style={{ position: 'absolute', top: -9, right: -9, width: 18, height: 18, borderRadius: '50%', border: 'none', background: '#e24b4a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
                   ×
                 </button>
+                {/* Resize handles — 4 corners */}
+                {[['nw','top-left','nw-resize'],['ne','top-right','ne-resize'],['sw','bottom-left','sw-resize'],['se','bottom-right','se-resize']].map(([handle, corner, cur]) => {
+                  const [v, h] = corner.split('-')
+                  return (
+                    <div key={handle} onMouseDown={e => startResize(e, zone, handle)}
+                      style={{ position: 'absolute', [v]: -5, [h]: -5, width: 10, height: 10, background: '#fff', border: '2px solid var(--accent)', borderRadius: 2, cursor: cur, zIndex: 2 }} />
+                  )
+                })}
               </div>
             ))}
 
