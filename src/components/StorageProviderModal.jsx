@@ -134,6 +134,8 @@ function WebDAVSetupModal({ onSave, onCancel, toast }) {
 
 export default function StorageProviderModal({ onClose, toast }) {
   const current = useAppStore(s => s.storageProviderKey)
+  const loginMode = useAppStore(s => s.session?.loginMode)
+  const visibleOptions = OPTIONS.filter(o => o.key !== 'webdav' || loginMode === 'solo')
   const [confirming, setConfirming] = useState(null)
   const [webdavSetup, setWebdavSetup] = useState(false)
   const [connecting, setConnecting] = useState(null)
@@ -211,7 +213,7 @@ export default function StorageProviderModal({ onClose, toast }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {OPTIONS.map(option => {
+          {visibleOptions.map(option => {
             const isActive = current === option.key
             const isConnected = statuses[option.key]
             return (
