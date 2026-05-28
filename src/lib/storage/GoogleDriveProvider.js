@@ -2,7 +2,7 @@
 // Requires a Google Cloud project with Drive API enabled.
 // Set your Client ID in src/lib/storage/config.js
 
-import { GOOGLE_CLIENT_ID } from './config'
+import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './config'
 
 const REDIRECT_URI = 'https://mtt999.github.io/ilab/oauth-callback'
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
@@ -23,7 +23,7 @@ async function getValidToken() {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, refresh_token: token.refresh_token, grant_type: 'refresh_token' }),
+    body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, refresh_token: token.refresh_token, grant_type: 'refresh_token' }),
   })
   const data = await res.json()
   if (data.error) { localStorage.removeItem(TOKEN_KEY); return null }
@@ -97,7 +97,7 @@ export class GoogleDriveProvider {
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ code, client_id: GOOGLE_CLIENT_ID, redirect_uri: REDIRECT_URI, grant_type: 'authorization_code', code_verifier: verifier }),
+      body: new URLSearchParams({ code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, redirect_uri: REDIRECT_URI, grant_type: 'authorization_code', code_verifier: verifier }),
     })
     const data = await res.json()
     if (!res.ok || data.error) throw new Error(data.error_description || data.error || `HTTP ${res.status}`)
