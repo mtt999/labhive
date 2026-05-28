@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
+import FloorPlanEditor from '../../components/FloorPlanEditor'
 
 async function createAuthUser(email, password) {
   const { data: { session: prev } } = await sb.auth.getSession()
@@ -1180,7 +1181,7 @@ export default function Admin() {
   // Super admin: images tab is accessed standalone (no tab bar), so exclude it from the tab list
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: 'Organizations' }]
-    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'orgsettings', label: 'Org Settings' }]
+    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
 
   useEffect(() => { loadOrgs() }, [])
   useEffect(() => {
@@ -1399,6 +1400,9 @@ export default function Admin() {
 
       {/* ── MODULE IMAGES ── */}
       {tab === 'images' && <ModuleImagesPanel orgId={myOrgId} />}
+
+      {/* ── FLOOR PLAN (org admin only) ── */}
+      {!isSuperAdmin && tab === 'floorplan' && <FloorPlanEditor />}
 
       {/* ── ORG SETTINGS (org admin only) ── */}
       {!isSuperAdmin && tab === 'orgsettings' && <OrgSettingsPanel session={session} />}
