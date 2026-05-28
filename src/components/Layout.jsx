@@ -109,6 +109,13 @@ export default function Layout({ children }) {
         paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : '24px',
       }}>
         {children}
+        {!isMobile && (
+          <div style={{ textAlign: 'center', padding: '16px 0 4px', fontSize: 11, color: 'var(--text3)' }}>
+            <a href="/ilab/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
+            <span style={{ margin: '0 6px' }}>·</span>
+            <a href="/ilab/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
+          </div>
+        )}
       </main>
 
       {/* ── Mobile bottom nav ── */}

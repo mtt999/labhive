@@ -524,6 +524,11 @@ export default function Login() {
           <div>Intelligent Laboratory Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>App developed by Mohsen Motlagh</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
+          <div style={{ marginTop: 8 }}>
+            <a href="/ilab/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
+            <span style={{ margin: '0 6px' }}>·</span>
+            <a href="/ilab/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
+          </div>
         </div>
 
       </div>
