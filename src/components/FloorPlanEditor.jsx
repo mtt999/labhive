@@ -13,6 +13,7 @@ export default function FloorPlanEditor() {
   const [zones, setZones]             = useState([])
   const [saving, setSaving]           = useState(false)
   const [uploading, setUploading]     = useState(false)
+  const [analyzing, setAnalyzing]     = useState(false)
 
   // Drawing state
   const [drawStart, setDrawStart]     = useState(null)
@@ -85,6 +86,73 @@ export default function FloorPlanEditor() {
       toast('Upload failed: ' + (e.message || 'Could not read image'))
     }
     setUploading(false)
+  }
+
+  async function autoDetectZones() {
+    setAnalyzing(true)
+    try {
+      const { data: setting } = await sb.from('settings').select('value').eq('key', 'anthropic_api_key').maybeSingle()
+      if (!setting?.value) { toast('AI key not configured in settings.'); setAnalyzing(false); return }
+
+      const base64 = imageUrl.replace(/^data:image\/[a-z+]+;base64,/, '')
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': setting.value,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+              { type: 'text', text: `Analyze this floor plan image. Identify every distinct room, corridor, lab area, storage area, office, bathroom, and zone visible.
+
+For each zone return a bounding box as percentage of the full image where (0,0) is the top-left and (100,100) is the bottom-right.
+
+Respond ONLY with a valid JSON array, no markdown, no explanation:
+[{"label":"Room Name","x":10,"y":20,"w":30,"h":25},...]
+
+Rules:
+- Keep labels short (1-4 words)
+- Cover the entire floor plan — do not skip any area
+- Boxes should be tight around each room, not overlapping` },
+            ],
+          }],
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error?.message || `API error ${res.status}`)
+      }
+
+      const result = await res.json()
+      const text = result.content?.[0]?.text || ''
+      const match = text.match(/\[[\s\S]*\]/)
+      if (!match) throw new Error('Could not parse AI response')
+
+      const detected = JSON.parse(match[0])
+      const newZones = detected.map(z => ({
+        id: `zone_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        label: String(z.label || 'Zone'),
+        x: Math.max(0, Math.min(95, Number(z.x) || 0)),
+        y: Math.max(0, Math.min(95, Number(z.y) || 0)),
+        w: Math.max(3, Math.min(100, Number(z.w) || 10)),
+        h: Math.max(3, Math.min(100, Number(z.h) || 10)),
+      }))
+
+      setZones(newZones)
+      toast(`✨ ${newZones.length} zones detected — review and adjust labels as needed.`)
+    } catch (e) {
+      toast('AI analysis failed: ' + (e.message || 'Unknown error'))
+    }
+    setAnalyzing(false)
   }
 
   // ── Zone drawing ──────────────────────────────────────────────
@@ -213,16 +281,21 @@ export default function FloorPlanEditor() {
       {/* Image upload */}
       <div className="field">
         <label>Floor plan image (PNG or JPG) *</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 18px', border: '1px solid var(--border)', borderRadius: 8, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, background: 'var(--surface2)', fontWeight: 500 }}>
-            {uploading ? '⏳ Uploading…' : imageUrl ? '🔄 Replace image' : '📤 Upload image'}
+            {uploading ? '⏳ Processing…' : imageUrl ? '🔄 Replace image' : '📤 Upload image'}
             <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
               onChange={e => e.target.files[0] && uploadImage(e.target.files[0])} disabled={uploading} />
           </label>
-          {imageUrl && <span style={{ fontSize: 12, color: 'var(--text3)' }}>Image ready</span>}
+          {imageUrl && (
+            <button onClick={autoDetectZones} disabled={analyzing}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: analyzing ? 'not-allowed' : 'pointer', background: 'linear-gradient(135deg, #7c4dbd, #534AB7)', color: '#fff', opacity: analyzing ? 0.7 : 1 }}>
+              {analyzing ? '🔍 Analyzing…' : '✨ Auto-detect zones'}
+            </button>
+          )}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-          Tip: export a screenshot from your CAD software, Google Maps, or even a photo works.
+          Upload your floor plan then click <strong>✨ Auto-detect zones</strong> — AI will identify rooms automatically. You can adjust, rename, or add zones manually after.
         </div>
       </div>
 
