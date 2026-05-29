@@ -776,6 +776,7 @@ function CleanlinessSection({ booking, session, eqName, onUpdated }) {
 
   const isOwn = booking.user_id === session?.userId || booking.user_name === session?.username
   const isAdmin_ = isAdmin(session)
+  const isManager = canEdit(session)
 
   // Before photo allowed from 7am on booking day (or if booking day is in the past)
   const bookingDayAt7am = new Date(booking.start_time)
@@ -914,12 +915,68 @@ function CleanlinessSection({ booking, session, eqName, onUpdated }) {
     setCamera(type)
   }
 
+  // Manager-specific: reference photo settings
+  const [showRefSettings, setShowRefSettings] = useState(false)
+  const [refBusy, setRefBusy] = useState(false)
+  const [instrDraft, setInstrDraft] = useState('')
+  const [waiveResponding, setWaiveResponding] = useState(false)
+
+  useEffect(() => { setInstrDraft(referenceInstruction || '') }, [referenceInstruction])
+
+  async function handleManagerWaiveInline(accept) {
+    setWaiveResponding(true)
+    try {
+      const meta = notification => notification
+      const msg = accept
+        ? `✅ Your request to skip the before photo for ${eqName || 'equipment'} was accepted by ${session.username}.`
+        : `⚠️ Lab manager noted: next time a before photo is required for ${eqName || 'equipment'}.`
+      const { data: waiveNotif } = await sb.from('booking_notifications')
+        .select('id, meta').eq('booking_id', booking.id).eq('type', 'waive_before_photo').limit(1).maybeSingle()
+      const bookingUserId = waiveNotif?.meta?.booking_user_id || booking.user_id
+      await sb.from('booking_notifications').insert({
+        booking_id: booking.id, user_id: bookingUserId,
+        type: 'waive_response', message: msg, read: false,
+        meta: { accept, manager_name: session.username },
+      })
+      if (waiveNotif?.id) await sb.from('booking_notifications').update({ read: true }).eq('id', waiveNotif.id)
+      toast(accept ? 'Waive accepted — user notified.' : 'Response sent — user notified.')
+      onUpdated?.()
+    } catch(e) { toast('Failed: ' + e.message) }
+    setWaiveResponding(false)
+  }
+
+  async function uploadRefPhoto(file) {
+    setRefBusy(true)
+    try {
+      const dataUrl = await compressImage(file, 1200, 0.78)
+      const blob = await (await fetch(dataUrl)).blob()
+      const path = `equipment-photos/ref-${booking.equipment_id}-${Date.now()}.jpg`
+      const { error } = await sb.storage.from('project-files').upload(path, blob, { contentType: 'image/jpeg' })
+      if (error) throw new Error(error.message)
+      const url = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
+      await sb.from('equipment_booking_settings')
+        .upsert({ equipment_id: booking.equipment_id, reference_photo_url: url }, { onConflict: 'equipment_id' })
+      setReferenceUrl(url)
+      toast('Reference photo saved ✓')
+    } catch(e) { toast('Failed: ' + e.message) }
+    setRefBusy(false)
+  }
+
+  async function saveInstruction() {
+    try {
+      await sb.from('equipment_booking_settings')
+        .upsert({ equipment_id: booking.equipment_id, photo_instruction: instrDraft }, { onConflict: 'equipment_id' })
+      setReferenceInstruction(instrDraft)
+      toast('Instruction saved ✓')
+    } catch(e) { toast('Failed: ' + e.message) }
+  }
+
   if (!loaded) return (
     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 8 }}>
       <div className="spinner" style={{ margin: '8px auto', width: 16, height: 16 }} />
     </div>
   )
-  if (!isOwn && !isAdmin_ && !beforeUrl && !afterUrl) return null
+  if (!isOwn && !isManager) return null
 
   const labelStyle = { fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 5, fontWeight: 600 }
   const emptyBox = (extra) => ({ width: '100%', aspectRatio: '4/3', border: '1px dashed var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--surface2)', gap: 4, ...extra })
@@ -1113,6 +1170,86 @@ function CleanlinessSection({ booking, session, eqName, onUpdated }) {
       {isOwn && beforeUrl && !afterUrl && !analyzing && (
         <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
           Take or upload your after photo when done — AI will check for cleanliness issues automatically.
+        </div>
+      )}
+
+      {/* ── Manager Panel ── */}
+      {isManager && !isOwn && (
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+
+          {/* Status chips */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: beforeUrl ? '#e8f2ee' : waived ? '#fef3c7' : '#f3f4f6', color: beforeUrl ? '#1e4d39' : waived ? '#92400e' : '#6b7280', fontWeight: 600 }}>
+              Before: {beforeUrl ? '✅ Submitted' : waived ? '✋ Waive requested' : '⏳ Pending'}
+            </span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: afterUrl ? (status === 'pass' ? '#e8f2ee' : '#fcebeb') : '#f3f4f6', color: afterUrl ? (status === 'pass' ? '#1e4d39' : '#a32d2d') : '#6b7280', fontWeight: 600 }}>
+              After: {afterUrl ? (status === 'pass' ? '✅ Pass' : '⚠️ Needs attention') : '⏳ Pending'}
+            </span>
+          </div>
+
+          {/* Inline waive response for managers */}
+          {waived && (
+            <div style={{ background: '#fef3c7', border: '1px solid #f0d070', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 12, color: '#92400e', marginBottom: 6 }}>
+                ✋ {booking.user_name || 'User'} requested to skip the before photo
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-sm btn-primary" onClick={() => handleManagerWaiveInline(true)} disabled={waiveResponding}>
+                  {waiveResponding ? '…' : 'Accept'}
+                </button>
+                <button className="btn btn-sm" onClick={() => handleManagerWaiveInline(false)} disabled={waiveResponding}
+                  style={{ background: '#fee2e2', borderColor: '#f09595', color: '#a32d2d' }}>
+                  {waiveResponding ? '…' : 'Next time required'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Equipment Photo Settings (collapsible) */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <button onClick={() => setShowRefSettings(s => !s)}
+              style={{ width: '100%', background: 'var(--surface2)', border: 'none', padding: '9px 14px', textAlign: 'left', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>⚙️ Equipment Photo Settings</span>
+              <span style={{ fontSize: 10 }}>{showRefSettings ? '▲' : '▼'}</span>
+            </button>
+            {showRefSettings && (
+              <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* Reference photo */}
+                <div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 6, fontWeight: 600 }}>Reference Photo</div>
+                  {referenceUrl ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={referenceUrl} onClick={() => window.open(referenceUrl)}
+                        style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'zoom-in', display: 'block' }} />
+                      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>Shown as ghost overlay to users during capture</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>No reference photo set — users see a blank camera</div>
+                  )}
+                  <label style={{ marginTop: 6, display: 'inline-block' }}>
+                    <span className="btn btn-sm" style={{ cursor: 'pointer', opacity: refBusy ? 0.6 : 1 }}>
+                      {refBusy ? '…' : referenceUrl ? '🔄 Replace' : '📷 Upload reference photo'}
+                    </span>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} disabled={refBusy}
+                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadRefPhoto(f) }} />
+                  </label>
+                </div>
+
+                {/* Instructions */}
+                <div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 6, fontWeight: 600 }}>Photo Instructions</div>
+                  <textarea rows={2} value={instrDraft} onChange={e => setInstrDraft(e.target.value)}
+                    placeholder="e.g. Step back 2m to show the full bench and all equipment…"
+                    style={{ width: '100%', resize: 'vertical', fontSize: 12, boxSizing: 'border-box' }} />
+                  <button className="btn btn-sm btn-primary" onClick={saveInstruction} style={{ marginTop: 6, fontSize: 11 }}>
+                    Save instruction
+                  </button>
+                </div>
+
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1523,7 +1660,7 @@ function AfterPhotoReviewModal({ notification, session, onClose, onDone }) {
 // TAB 1 — BOOKING CALENDAR
 // ══════════════════════════════════════════════════════════════
 function BookingCalendar({ session }) {
-  const { toast, scanEquipmentId, clearScanEquipmentId, setScreen } = useAppStore()
+  const { toast, scanEquipmentId, clearScanEquipmentId, setScreen, pendingBookingNotif, setPendingBookingNotif } = useAppStore()
   const [fromQRScan] = useState(() => !!scanEquipmentId)
   const [equipment, setEquipment] = useState([])
   const [selectedEq, setSelectedEq] = useState([])
@@ -1557,6 +1694,14 @@ function BookingCalendar({ session }) {
       clearScanEquipmentId()
     }
   }, [scanEquipmentId, equipment])
+  // Open waive/review modal when arriving from notification bell
+  useEffect(() => {
+    if (!pendingBookingNotif) return
+    const n = pendingBookingNotif
+    setPendingBookingNotif(null)
+    if (n.type === 'waive_before_photo') setWaiveModal(n)
+    else if (n.type === 'after_photo_review') setReviewModal(n)
+  }, [pendingBookingNotif])
   // Auto-refresh every 30 seconds
   useEffect(() => {
     const interval = setInterval(loadBookings, 30000)

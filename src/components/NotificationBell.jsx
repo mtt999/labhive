@@ -18,7 +18,7 @@ const BOOKING_ICONS = {
 }
 
 export default function NotificationBell() {
-  const { session, setScreen, setPendingProfileTab } = useAppStore()
+  const { session, setScreen, setPendingProfileTab, setPendingBookingNotif } = useAppStore()
   const [notifications, setNotifications] = useState([])
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
@@ -77,6 +77,9 @@ export default function NotificationBell() {
   async function handleClick(n) {
     await markRead(n)
     if (n._src === 'booking') {
+      if (n.type === 'waive_before_photo' || n.type === 'after_photo_review') {
+        setPendingBookingNotif(n)
+      }
       setScreen('booking')
     } else if (n.type === 'team_invite') {
       setPendingProfileTab('team')

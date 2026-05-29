@@ -62,6 +62,8 @@ export const useAppStore = create((set, get) => ({
   setPendingAdminTab: (tab) => set({ pendingAdminTab: tab }),
   pendingProfileTab: null,
   setPendingProfileTab: (tab) => set({ pendingProfileTab: tab }),
+  pendingBookingNotif: null,
+  setPendingBookingNotif: (n) => set({ pendingBookingNotif: n }),
 
   // ── Inspection state ──
   inspection: null,
