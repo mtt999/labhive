@@ -2127,7 +2127,7 @@ function BookingCalendar({ session }) {
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
           selectedEquipment={selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null}
           session={session}
-          onSave={loadBookings}
+          onSave={() => { loadBookings(); loadNotifications() }}
           onClose={() => { setShowBookingModal(false); setBookingDraft(null); setEditBooking(null) }}
           initialSlot={bookingDraft}
           photoRequired={photoRequired}
