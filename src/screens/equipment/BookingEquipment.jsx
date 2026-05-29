@@ -25,8 +25,8 @@ async function sendBookingEmail(userId, type, subject, title, body) {
 
 function canEdit(s) { return s?.role === 'admin' || s?.role === 'user' }
 
-// Columns to select for booking lists — deliberately excludes photo blob columns
-const BOOKING_COLS = 'id, equipment_id, user_id, user_name, title, start_time, end_time, status, notes, denied_reason, booked_on_behalf_of, requires_approval, is_retraining, cleanliness_status, after_photo_last_reminded_at, after_photo_reminder_count, updated_at, created_by'
+// Columns to select for booking lists
+const BOOKING_COLS = '*'
 
 async function compressImage(file, maxPx = 1200, quality = 0.78) {
   return new Promise(resolve => {
@@ -1755,31 +1755,19 @@ function BookingCalendar({ session }) {
       .gte('start_time', start).lt('start_time', end)
       .order('start_time')
     if (selectedEq.length > 0) {
-      // Two parallel safe queries: selected-equipment bookings (for availability) + own bookings (personal schedule)
-      const baseFields = BOOKING_COLS
-      const [{ data: eqData }, { data: ownData }] = await Promise.all([
-        sb.from('equipment_bookings').select(baseFields)
-          .gte('start_time', start).lt('start_time', end)
-          .in('equipment_id', selectedEq).order('start_time'),
-        session?.userId
-          ? sb.from('equipment_bookings').select(baseFields)
-              .gte('start_time', start).lt('start_time', end)
-              .eq('user_id', session.userId).order('start_time')
-          : Promise.resolve({ data: [] }),
-      ])
-      const seen = new Set()
-      const combined = [...(eqData || []), ...(ownData || [])].filter(b => {
-        if (seen.has(b.id)) return false
-        seen.add(b.id)
-        return b.status !== 'cancelled'
-      })
-      setBookings(combined)
+      // Show all bookings for the selected equipment so users can see availability
+      const { data, error } = await sb.from('equipment_bookings').select(BOOKING_COLS)
+        .gte('start_time', start).lt('start_time', end)
+        .in('equipment_id', selectedEq).order('start_time')
+      if (error) console.error('[loadBookings] error:', error)
+      setBookings((data || []).filter(b => b.status !== 'cancelled'))
       return
-    } else if (scopedIds !== null) {
-      query = query.in('equipment_id', scopedIds)
     }
-    const { data } = await query
-    setBookings((data || []).filter(b => b.status !== 'cancelled'))
+    // No equipment selected → empty calendar
+    if (selectedEq.length === 0) {
+      setBookings([])
+      return
+    }
   }
 
   async function loadNotifications() {
