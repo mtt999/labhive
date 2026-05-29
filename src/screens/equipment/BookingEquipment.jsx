@@ -1755,15 +1755,30 @@ function BookingCalendar({ session }) {
       .gte('start_time', start).lt('start_time', end)
       .order('start_time')
     if (selectedEq.length > 0) {
-      // Always show selected equipment bookings (for availability) + own bookings (personal schedule)
-      const eqFilter = `equipment_id.in.(${selectedEq.join(',')})`
-      const ownFilter = session?.userId ? `,user_id.eq.${session.userId}` : ''
-      query = query.or(`${eqFilter}${ownFilter}`)
+      // Two parallel safe queries: selected-equipment bookings (for availability) + own bookings (personal schedule)
+      const baseFields = BOOKING_COLS
+      const [{ data: eqData }, { data: ownData }] = await Promise.all([
+        sb.from('equipment_bookings').select(baseFields)
+          .gte('start_time', start).lt('start_time', end)
+          .in('equipment_id', selectedEq).order('start_time'),
+        session?.userId
+          ? sb.from('equipment_bookings').select(baseFields)
+              .gte('start_time', start).lt('start_time', end)
+              .eq('user_id', session.userId).order('start_time')
+          : Promise.resolve({ data: [] }),
+      ])
+      const seen = new Set()
+      const combined = [...(eqData || []), ...(ownData || [])].filter(b => {
+        if (seen.has(b.id)) return false
+        seen.add(b.id)
+        return b.status !== 'cancelled'
+      })
+      setBookings(combined)
+      return
     } else if (scopedIds !== null) {
       query = query.in('equipment_id', scopedIds)
     }
     const { data } = await query
-    // Show all except cancelled on calendar — cancelled slots are available again
     setBookings((data || []).filter(b => b.status !== 'cancelled'))
   }
 
