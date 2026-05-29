@@ -506,7 +506,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
 
       {/* Sticky header row */}
       <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, 1fr)', minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
-        <div style={{ height: 40 }} />
+        <div style={{ height: 40, position: 'sticky', left: 0, zIndex: 21, background: 'var(--surface)' }} />
         {days.map((day, i) => (
           <div key={i} style={{ height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11, borderLeft: '1px solid var(--border)', background: sameDay(day, today) ? 'var(--accent-light)' : 'var(--surface)' }}>
             <div style={{ color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 10 }}>{DAYS[day.getDay()]}</div>
@@ -517,8 +517,8 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
 
       {/* Grid body */}
       <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, 1fr)', minWidth: 500, position: 'relative' }}>
-        {/* Time labels column */}
-        <div style={{ position: 'relative', height: TOTAL_H }}>
+        {/* Time labels column — sticky left on horizontal scroll */}
+        <div style={{ position: 'sticky', left: 0, zIndex: 10, background: 'var(--surface)', height: TOTAL_H }}>
           {HOURS.map(h => (
             <div key={h} style={{ position: 'absolute', top: h * 2 * SLOT_H, right: 4, fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', lineHeight: 1 }}>
               {h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`}

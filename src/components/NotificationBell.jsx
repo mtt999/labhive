@@ -4,6 +4,19 @@ import { useAppStore } from '../store/useAppStore'
 
 const BLUE = '#0d47a1'
 
+const BOOKING_ICONS = {
+  booking_confirmed: '📅',
+  booking_approved: '✅',
+  booking_denied: '❌',
+  before_photo_reminder: '📷',
+  after_photo_reminder: '📷',
+  after_photo_last_warning: '⚠️',
+  missing_photo_manager: '🔍',
+  waive_before_photo: '🙏',
+  after_photo_review: '🔍',
+  waive_response: '✅',
+}
+
 export default function NotificationBell() {
   const { session, setScreen, setPendingProfileTab } = useAppStore()
   const [notifications, setNotifications] = useState([])
@@ -15,11 +28,15 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!userId) return
     load()
-    const channel = sb.channel(`notifications_${userId}`)
+    const ch1 = sb.channel(`notifications_${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
-        setNotifications(prev => [payload.new, ...prev])
+        setNotifications(prev => [{ ...payload.new, _src: 'notif' }, ...prev])
       }).subscribe()
-    return () => sb.removeChannel(channel)
+    const ch2 = sb.channel(`booking_notifs_${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'booking_notifications', filter: `user_id=eq.${userId}` }, payload => {
+        setNotifications(prev => [{ ...payload.new, _src: 'booking' }, ...prev])
+      }).subscribe()
+    return () => { sb.removeChannel(ch1); sb.removeChannel(ch2) }
   }, [userId])
 
   useEffect(() => {
@@ -29,23 +46,39 @@ export default function NotificationBell() {
   }, [])
 
   async function load() {
-    const { data } = await sb.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(30)
-    setNotifications(data || [])
+    const [{ data: notifs }, { data: bookingNotifs }] = await Promise.all([
+      sb.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+      sb.from('booking_notifications').select('*').eq('user_id', userId).eq('read', false).order('created_at', { ascending: false }).limit(20),
+    ])
+    const tagged = (bookingNotifs || []).map(n => ({ ...n, _src: 'booking' }))
+    const merged = [...(notifs || []).map(n => ({ ...n, _src: 'notif' })), ...tagged]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 40)
+    setNotifications(merged)
   }
 
-  async function markRead(id) {
-    await sb.from('notifications').update({ read: true }).eq('id', id)
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  async function markRead(n) {
+    if (n._src === 'booking') {
+      await sb.from('booking_notifications').update({ read: true }).eq('id', n.id)
+    } else {
+      await sb.from('notifications').update({ read: true }).eq('id', n.id)
+    }
+    setNotifications(prev => prev.map(x => (x.id === n.id && x._src === n._src) ? { ...x, read: true } : x))
   }
 
   async function markAllRead() {
-    await sb.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false)
+    await Promise.all([
+      sb.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false),
+      sb.from('booking_notifications').update({ read: true }).eq('user_id', userId).eq('read', false),
+    ])
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
   }
 
   async function handleClick(n) {
-    await markRead(n.id)
-    if (n.type === 'team_invite') {
+    await markRead(n)
+    if (n._src === 'booking') {
+      setScreen('booking')
+    } else if (n.type === 'team_invite') {
       setPendingProfileTab('team')
       setScreen('profile')
     } else if (n.task_id) {
@@ -85,20 +118,26 @@ export default function NotificationBell() {
           </div>
           {notifications.length === 0
             ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No notifications yet.</div>
-            : notifications.map(n => (
-              <div key={n.id} onClick={() => handleClick(n)}
-                style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                onMouseLeave={e => e.currentTarget.style.background = n.read ? 'transparent' : '#f0f4ff'}>
-                <div style={{ fontSize: 18, flexShrink: 0 }}>{{ task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝' }[n.type] || '🔔'}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</div>
-                  {n.body && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</div>}
-                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{formatTime(n.created_at)}</div>
+            : notifications.map(n => {
+              const title = n._src === 'booking' ? n.message : n.title
+              const icon = n._src === 'booking'
+                ? (BOOKING_ICONS[n.type] || '📅')
+                : ({ task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝' }[n.type] || '🔔')
+              return (
+                <div key={`${n._src}_${n.id}`} onClick={() => handleClick(n)}
+                  style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = n.read ? 'transparent' : '#f0f4ff'}>
+                  <div style={{ fontSize: 18, flexShrink: 0 }}>{icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+                    {n.body && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{formatTime(n.created_at)}</div>
+                  </div>
+                  {!n.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: BLUE, flexShrink: 0, alignSelf: 'center' }} />}
                 </div>
-                {!n.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: BLUE, flexShrink: 0, alignSelf: 'center' }} />}
-              </div>
-            ))
+              )
+            })
           }
         </div>
       )}
