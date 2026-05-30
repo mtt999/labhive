@@ -27,7 +27,7 @@ export default defineConfig({
       },
     },
   ].filter(Boolean),
-  base: isMobile ? '/' : '/ilab/',
+  base: isMobile ? '/' : '/',
   build: {
     outDir: isMobile ? 'dist' : 'docs',
     sourcemap: false,

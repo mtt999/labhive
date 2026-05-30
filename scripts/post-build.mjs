@@ -78,7 +78,7 @@ writeFileSync('docs/privacy/index.html', `<!DOCTYPE html>
   <p>To request deletion of your account and associated data, contact your lab administrator or email us at the address below.</p>
   <h2>Contact</h2>
   <p>For privacy questions: <a href="mailto:motlagh999@gmail.com">motlagh999@gmail.com</a></p>
-  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 iLab. <a href="/ilab/" style="color:#aaa;">Back to app</a></p>
+  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 iLab. <a href="/" style="color:#aaa;">Back to app</a></p>
 </body>
 </html>`)
 console.log('✓ docs/privacy/index.html recreated')
@@ -128,7 +128,7 @@ writeFileSync('docs/terms/index.html', `<!DOCTYPE html>
   <p>We may update these terms from time to time. Continued use of the app after changes constitutes acceptance of the updated terms.</p>
   <h2>9. Contact</h2>
   <p>Questions about these terms: <a href="mailto:motlagh999@gmail.com">motlagh999@gmail.com</a></p>
-  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 iLab. <a href="/ilab/" style="color:#aaa;">Back to app</a></p>
+  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 iLab. <a href="/" style="color:#aaa;">Back to app</a></p>
 </body>
 </html>`)
 console.log('✓ docs/terms/index.html recreated')
