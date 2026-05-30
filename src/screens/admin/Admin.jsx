@@ -1184,12 +1184,30 @@ export default function Admin() {
   const [teamSearch, setTeamSearch]             = useState('')
   const [teamLoading, setTeamLoading]           = useState(false)
   const [userSubTab, setUserSubTab]             = useState('solo')
+  const [maintenanceMode, setMaintenanceMode]   = useState(false)
+  const [maintBusy, setMaintBusy]               = useState(false)
 
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: '🏢 Organizations' }, { key: 'useraccounts', label: '👥 User Accounts' }]
     : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
 
-  useEffect(() => { loadOrgs(); if (isSuperAdmin) loadSoloUsers() }, [])
+  useEffect(() => {
+    loadOrgs()
+    if (isSuperAdmin) {
+      loadSoloUsers()
+      sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle()
+        .then(({ data }) => setMaintenanceMode(data?.value === 'true'))
+    }
+  }, [])
+
+  async function toggleMaintenance() {
+    setMaintBusy(true)
+    const next = !maintenanceMode
+    await sb.from('settings').upsert({ key: 'maintenance_mode', value: next ? 'true' : 'false' }, { onConflict: 'key' })
+    setMaintenanceMode(next)
+    setMaintBusy(false)
+    toast(next ? '⚠️ Maintenance mode ON — users see Coming Soon.' : '✓ Maintenance mode OFF — site is live.')
+  }
 
   async function loadSoloUsers() {
     setSoloLoading(true)
@@ -1349,6 +1367,29 @@ export default function Admin() {
           )}
         </div>
       </div>
+
+      {/* Maintenance mode toggle — super admin only */}
+      {isSuperAdmin && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 18px', borderRadius: 'var(--radius)', marginBottom: 18, border: `2px solid ${maintenanceMode ? '#ef4444' : 'var(--border)'}`, background: maintenanceMode ? '#FEF2F2' : 'var(--surface2)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>{maintenanceMode ? '🔴' : '🟢'}</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: maintenanceMode ? '#ef4444' : 'var(--text)' }}>
+                {maintenanceMode ? 'Site is under maintenance — users see "Coming Soon"' : 'Site is live'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
+                Toggle to put the website in maintenance mode. Super admin is always exempt.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={toggleMaintenance}
+            disabled={maintBusy}
+            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', cursor: maintBusy ? 'default' : 'pointer', fontWeight: 700, fontSize: 13, background: maintenanceMode ? '#ef4444' : 'var(--accent)', color: '#fff', opacity: maintBusy ? 0.6 : 1, transition: 'all 0.15s', flexShrink: 0 }}>
+            {maintBusy ? 'Saving…' : maintenanceMode ? 'Turn Off' : 'Enable Maintenance'}
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>

@@ -50,11 +50,28 @@ const SCAN_EQ_ID = new URLSearchParams(window.location.search).get('eq')
 const DEEP_LINK_SCREEN = new URLSearchParams(window.location.search).get('screen')
 const DEEP_LINK_TAB    = new URLSearchParams(window.location.search).get('tab')
 
+function ComingSoonScreen() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#0F1B35', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+      <img src="/ilab/ilab-icon.png" alt="iLab" onError={e => { e.target.style.display='none' }}
+        style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }} />
+      <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>Coming Soon</div>
+      <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>
+        We're making some improvements. The app will be back shortly.
+      </div>
+      <a href="/ilab/admin" style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', textDecoration: 'none', marginTop: 16, fontFamily: 'monospace' }}>
+        admin
+      </a>
+    </div>
+  )
+}
+
 export default function App() {
   const { session, screen, refreshCache, setScreen, setActiveModules, setScanEquipmentId, setSession, setSharedWorkspaces, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
+  const [maintenanceMode, setMaintenanceMode] = useState(false)
 
   // Store the equipment ID from the QR code URL param so Login can redirect after auth
   useEffect(() => {
@@ -157,7 +174,11 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
-      const { data: { session: authSession } } = await sb.auth.getSession()
+      const [{ data: { session: authSession } }, { data: maintRow }] = await Promise.all([
+        sb.auth.getSession(),
+        sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle(),
+      ])
+      if (maintRow?.value === 'true') setMaintenanceMode(true)
       if (authSession?.user) await restoreSessionFromAuth(authSession.user)
       const loginMode = localStorage.getItem('ilab_login_mode')
       const done = () => {
@@ -299,6 +320,11 @@ export default function App() {
       <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text3)' }}>Connecting to database…</div>
     </div>
   )
+
+  // Maintenance mode: show Coming Soon to everyone except super admin and the /admin route
+  if (maintenanceMode && !IS_ADMIN_ROUTE && session?.userId !== null) {
+    return <ComingSoonScreen />
+  }
 
   // Admin-only route: /ilab/admin
   if (IS_ADMIN_ROUTE) {
