@@ -34,6 +34,10 @@ console.log('✓ docs/oauth-callback.html recreated')
 writeFileSync('docs/CNAME', 'ilabapp.org')
 console.log('✓ docs/CNAME recreated')
 
+// .nojekyll — prevents GitHub Pages from running Jekyll (which can strip/ignore files)
+writeFileSync('docs/.nojekyll', '')
+console.log('✓ docs/.nojekyll recreated')
+
 // Privacy policy
 mkdirSync('docs/privacy', { recursive: true })
 writeFileSync('docs/privacy/index.html', `<!DOCTYPE html>
