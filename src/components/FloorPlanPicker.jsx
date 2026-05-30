@@ -549,7 +549,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               🗺️ {plan.name}
             </button>
           ))}
-          {['ICT', 'MPF'].map(f => (
+          {!isSolo && ['ICT', 'MPF'].map(f => (
             <button key={f} onClick={() => setFacility(f)}
               style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === f ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === f ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
               {f === 'ICT' ? 'ICT Building' : 'MPF'}
