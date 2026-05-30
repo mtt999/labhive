@@ -17,7 +17,7 @@ async function sendMessageEmail(userId, senderName, messageBody) {
   }
   const title = `New message from ${senderName}`
   const body = messageBody.slice(0, 200) + (messageBody.length > 200 ? '…' : '')
-  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Message in iLab →', ctaUrl: 'https://mtt999.github.io/ilab/?screen=remessages', prefsUrl: 'https://mtt999.github.io/ilab/?screen=profile', orgContact })
+  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Message in iLab →', ctaUrl: 'https://ilabapp.org/ilab/?screen=remessages', prefsUrl: 'https://ilabapp.org/ilab/?screen=profile', orgContact })
   const { error } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'message_reply' })
   if (error) console.warn('Message email queue failed:', error.message)
 }

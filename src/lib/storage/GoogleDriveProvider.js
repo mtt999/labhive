@@ -4,7 +4,7 @@
 
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './config'
 
-const REDIRECT_URI = 'https://mtt999.github.io/ilab/oauth-callback'
+const REDIRECT_URI = 'https://ilabapp.org/ilab/oauth-callback'
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const TOKEN_KEY = 'ilab_gdrive_token'
 const FOLDER_KEY = 'ilab_gdrive_folder_id'

@@ -390,7 +390,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   )
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const canEdit = session?.role === 'admin' || session?.role === 'user'
+  const canEdit = !!session
 
   useEffect(() => { loadAll() }, [])
 

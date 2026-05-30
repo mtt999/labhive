@@ -5,7 +5,6 @@ import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 
 // ── Constants ─────────────────────────────────────────────────
-const NMAS_OPTIONS = ['37.5mm','25mm','19mm','12.5mm','9.5mm','4.75mm']
 const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
 const PG_GRADES    = ['PG 52-28','PG 58-22','PG 58-28','PG 64-22','PG 64-28','PG 70-22','PG 70-28','PG 76-22','PG 76-28','PG 82-22','Other']
 const LOCATIONS    = ['ICT-High Bay A','ICT-High Bay C','Shed','MFF - Soil Hall','MFF - Aggregate Hall','MFF - Saw Room','Other']
@@ -80,13 +79,6 @@ function MaterialTypeForm({ form, setForm }) {
       {form.material_type === 'aggregate' && (
         <div>
           <div className="field">
-            <label>NMAS (Nominal Maximum Aggregate Size) <span style={{ color: 'var(--accent2)' }}>*</span></label>
-            <select value={form.agg_nmas} onChange={e => setForm(f => ({ ...f, agg_nmas: e.target.value }))}>
-              <option value="">— Select NMAS —</option>
-              {NMAS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div className="field">
             <label>Sieve Sizes <span style={{ color: 'var(--accent2)' }}>*</span></label>
             <CheckList options={SIEVE_SIZES} selected={form.agg_sieve_sizes || []} onChange={v => setForm(f => ({ ...f, agg_sieve_sizes: v }))} required />
             {(!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) && (
@@ -149,13 +141,6 @@ function MaterialTypeForm({ form, setForm }) {
           <div className="field">
             <label>Mix Design</label>
             <input value={form.pm_mix_design || ''} onChange={e => setForm(f => ({ ...f, pm_mix_design: e.target.value }))} placeholder="e.g. Mix design #2024-07" />
-          </div>
-          <div className="field">
-            <label>NMAS <span style={{ color: 'var(--accent2)' }}>*</span></label>
-            <select value={form.pm_nmas || ''} onChange={e => setForm(f => ({ ...f, pm_nmas: e.target.value }))}>
-              <option value="">— Select NMAS —</option>
-              {NMAS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
           </div>
           <div className="field">
             <label>Binder PG Grade <span style={{ color: 'var(--accent2)' }}>*</span></label>
@@ -438,9 +423,9 @@ function typeBg(type) {
 function blankForm() {
   return {
     name: '', material_type: '',
-    agg_nmas: '', agg_sieve_sizes: [], agg_raw_or_rap: '',
+    agg_sieve_sizes: [], agg_raw_or_rap: '',
     ab_binder_pg: '', ab_mix_design: '', ab_has_polymer: false, ab_polymer_info: '', ab_other_additives: '',
-    pm_mix_design: '', pm_nmas: '', pm_binder_pg: '',
+    pm_mix_design: '', pm_binder_pg: '',
     other_info: '',
     source_type: '', source_name: '', source_location: '',
     qty_total: '', qty_unit: '', container_type: '', container_color: '', container_count: '', container_other: '',
@@ -454,12 +439,10 @@ function blankForm() {
 function validate(form, toast) {
   if (!form.material_type) { toast('Please select a material type.'); return false }
   if (form.material_type === 'aggregate') {
-    if (!form.agg_nmas) { toast('NMAS is required for aggregate.'); return false }
     if (!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) { toast('At least one sieve size is required for aggregate.'); return false }
   }
   if (form.material_type === 'asphalt_binder' && !form.ab_binder_pg) { toast('Binder PG grade is required.'); return false }
   if (form.material_type === 'plant_mix') {
-    if (!form.pm_nmas) { toast('NMAS is required for plant mix.'); return false }
     if (!form.pm_binder_pg) { toast('Binder PG grade is required for plant mix.'); return false }
   }
   if (form.material_type === 'other' && !form.other_info?.trim()) { toast('Please describe the material type.'); return false }
@@ -472,7 +455,6 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
   const [form, setForm] = useState(material ? {
     name: material.name || '',
     material_type: material.material_type || '',
-    agg_nmas: material.agg_nmas || '',
     agg_sieve_sizes: material.agg_sieve_sizes || [],
     agg_raw_or_rap: material.agg_raw_or_rap || '',
     ab_binder_pg: material.ab_binder_pg || '',
@@ -481,7 +463,6 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
     ab_polymer_info: material.ab_polymer_info || '',
     ab_other_additives: material.ab_other_additives || '',
     pm_mix_design: material.pm_mix_design || '',
-    pm_nmas: material.pm_nmas || '',
     pm_binder_pg: material.pm_binder_pg || '',
     other_info: material.other_info || '',
     source_type: material.source_type || '',
@@ -506,7 +487,6 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
       project_id: projectId,
       name: form.name.trim() || null,
       material_type: form.material_type,
-      agg_nmas: form.agg_nmas || null,
       agg_sieve_sizes: form.agg_sieve_sizes,
       agg_raw_or_rap: form.agg_raw_or_rap || null,
       ab_binder_pg: form.ab_binder_pg || null,
@@ -515,7 +495,6 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
       ab_polymer_info: form.ab_polymer_info || null,
       ab_other_additives: form.ab_other_additives || null,
       pm_mix_design: form.pm_mix_design || null,
-      pm_nmas: form.pm_nmas || null,
       pm_binder_pg: form.pm_binder_pg || null,
       other_info: form.other_info || null,
       source_type: form.source_type || null,
@@ -639,9 +618,8 @@ export default function ProjectMaterials({ project }) {
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 3, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {m.material_type === 'aggregate' && m.agg_nmas && <span>NMAS: {m.agg_nmas}</span>}
                     {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
-                    {m.material_type === 'plant_mix' && m.pm_nmas && <span>NMAS: {m.pm_nmas}</span>}
+                    {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
                     {m.source_name && <span>📍 {m.source_name}</span>}
                     {m.qty_total && <span>⚖️ {m.qty_total} {m.qty_unit}</span>}
                     {m.sampling_date && <span>📅 {m.sampling_date}</span>}
@@ -662,7 +640,6 @@ export default function ProjectMaterials({ project }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: m.photos?.length ? 16 : 0 }}>
                     {/* Type-specific details */}
                     {m.material_type === 'aggregate' && <>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.agg_nmas || '—'}</div></div>
                       <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
                       <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
                     </>}
@@ -673,7 +650,6 @@ export default function ProjectMaterials({ project }) {
                       {m.ab_other_additives && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
                     </>}
                     {m.material_type === 'plant_mix' && <>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas || '—'}</div></div>
                       <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
                       {m.pm_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
                     </>}

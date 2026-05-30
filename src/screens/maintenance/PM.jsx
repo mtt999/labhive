@@ -44,7 +44,7 @@ async function sendNotification(userId, type, title, body, taskId = null) {
         const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
         orgContact = org
       }
-      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Task in iLab →', ctaUrl: 'https://mtt999.github.io/ilab/?screen=pm', prefsUrl: 'https://mtt999.github.io/ilab/?screen=profile', orgContact })
+      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Task in iLab →', ctaUrl: 'https://ilabapp.org/ilab/?screen=pm', prefsUrl: 'https://ilabapp.org/ilab/?screen=profile', orgContact })
       await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type })
         .then(({ error }) => { if (error) console.warn('PM email queue failed:', error.message) })
     }

@@ -46,7 +46,7 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
 </svg>`
 
 function getScanUrl(equipmentId) {
-  const base = isNative() ? 'https://mtt999.github.io/ilab/' : `${window.location.origin}/ilab/`
+  const base = isNative() ? 'https://ilabapp.org/ilab/' : `${window.location.origin}/ilab/`
   return `${base}?eq=${equipmentId}`
 }
 

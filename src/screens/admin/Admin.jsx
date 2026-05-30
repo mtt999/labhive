@@ -1291,6 +1291,14 @@ export default function Admin() {
     loadOrgs()
   }
 
+  async function togglePhotoRequired(org) {
+    const newVal = !org.require_equipment_photos
+    const { error } = await sb.from('organizations').update({ require_equipment_photos: newVal }).eq('id', org.id)
+    if (error) { toast('Update failed: ' + error.message); return }
+    toast(newVal ? '📸 Before/after photos enabled for this org.' : 'Photos disabled for this org.')
+    loadOrgs()
+  }
+
   const orgName = (id) => orgs.find(o => o.id === id)?.name || '—'
 
   const filteredUsers = users.filter(u =>
@@ -1482,6 +1490,14 @@ export default function Admin() {
                         <span style={{ fontSize: 15 }}>👤</span> + Add Admin
                       </button>
                     </div>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => togglePhotoRequired(o)}
+                      title={o.require_equipment_photos ? 'Before/after photos ON — click to disable' : 'Before/after photos OFF — click to enable'}
+                      style={{ background: o.require_equipment_photos ? '#fef3c7' : undefined, color: o.require_equipment_photos ? '#92400e' : undefined, borderColor: o.require_equipment_photos ? '#f0d070' : undefined }}
+                    >
+                      📸 {o.require_equipment_photos ? 'Photos On' : 'Photos Off'}
+                    </button>
                     <button className="btn btn-sm" onClick={() => setOrgModulesModal(o)}>Icons</button>
                     <button className="btn btn-sm" onClick={() => setOrgModal(o)}>Edit</button>
                     <button className="btn btn-sm btn-danger" onClick={() => deleteOrg(o.id)}>Delete</button>
