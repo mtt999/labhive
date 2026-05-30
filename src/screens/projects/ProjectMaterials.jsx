@@ -10,6 +10,74 @@ const PG_GRADES    = ['PG 52-28','PG 58-22','PG 58-28','PG 64-22','PG 64-28','PG
 const LOCATIONS    = ['ICT-High Bay A','ICT-High Bay C','Shed','MFF - Soil Hall','MFF - Aggregate Hall','MFF - Saw Room','Other']
 const CONTAINER_TYPES = ['Pallet','Metal Bucket','Plastic Bucket','Other']
 
+// ── Solo material types & sub-fields ──────────────────────────
+const SOLO_MATERIAL_TYPES = [
+  'Chemical / Reagent', 'Biological Sample', 'Aggregate', 'Soil / Rock',
+  'Metal', 'Polymer / Plastic', 'Ceramic / Composite', 'Liquid',
+  'Powder', 'Fiber / Textile', 'Electronic Component', 'Other',
+]
+const SOLO_SUBFIELDS = {
+  'Chemical / Reagent': [
+    { key: 'grade',  label: 'Grade / Purity',  placeholder: 'e.g. ACS grade, 99.9%' },
+    { key: 'cas',    label: 'CAS Number',       placeholder: 'e.g. 7732-18-5' },
+    { key: 'hazard', label: 'Hazard Class',     placeholder: 'e.g. Flammable, Corrosive' },
+  ],
+  'Biological Sample': [
+    { key: 'organism',     label: 'Organism / Species',    placeholder: 'e.g. E. coli K-12' },
+    { key: 'bsl',          label: 'Biosafety Level',       placeholder: 'BSL-1, BSL-2…' },
+    { key: 'preservation', label: 'Preservation Method',   placeholder: 'e.g. −80 °C frozen, formalin fixed' },
+  ],
+  'Aggregate': [
+    { key: 'sieve', label: 'Sieve Sizes', placeholder: '' },
+    { key: 'condition', label: 'Condition', placeholder: 'e.g. Raw, RAP, Crushed' },
+  ],
+  'Soil / Rock': [
+    { key: 'formation', label: 'Formation / Origin', placeholder: 'e.g. Loess, Champaign Co.' },
+    { key: 'depth',     label: 'Sample Depth',        placeholder: 'e.g. 0.5–1.0 m' },
+  ],
+  'Metal': [
+    { key: 'alloy',    label: 'Alloy / Grade', placeholder: 'e.g. AISI 1018, 6061-T6' },
+    { key: 'standard', label: 'Standard',      placeholder: 'e.g. ASTM A36' },
+  ],
+  'Polymer / Plastic': [
+    { key: 'polymer_type', label: 'Polymer Type', placeholder: 'e.g. HDPE, Nylon 6/6, PET' },
+    { key: 'grade',        label: 'Grade',        placeholder: 'e.g. Injection molding grade' },
+  ],
+  'Ceramic / Composite': [
+    { key: 'composition', label: 'Composition',     placeholder: 'e.g. Al₂O₃, Carbon fiber/epoxy' },
+    { key: 'standard',    label: 'Standard / Spec', placeholder: 'e.g. ASTM C773' },
+  ],
+  'Liquid': [
+    { key: 'concentration', label: 'Concentration', placeholder: 'e.g. 1 M, 5% v/v' },
+    { key: 'solvent',       label: 'Solvent / Base', placeholder: 'e.g. DI water, ethanol' },
+  ],
+  'Powder': [
+    { key: 'particle_size', label: 'Particle Size', placeholder: 'e.g. <100 µm, D50 = 50 µm' },
+    { key: 'purity',        label: 'Purity',        placeholder: 'e.g. 99.5%' },
+  ],
+  'Fiber / Textile': [
+    { key: 'fiber_type', label: 'Fiber Type',    placeholder: 'e.g. Carbon, Glass, Kevlar' },
+    { key: 'spec',       label: 'Specification', placeholder: 'e.g. 3K, 300 g/m²' },
+  ],
+  'Electronic Component': [
+    { key: 'part_number', label: 'Part Number',   placeholder: 'e.g. STM32F407VGT6' },
+    { key: 'spec',        label: 'Specification', placeholder: 'e.g. 32-bit MCU, 168 MHz' },
+  ],
+}
+const SOLO_UNITS = ['g','kg','mg','µg','mL','L','µL','m³','cm³','items','pieces','m','cm','sheets','rolls','vials','other']
+const SOLO_CONTAINERS = ['Vial','Bottle','Bag','Box','Jar','Drum','Cylinder','Envelope','Tray','Other']
+
+// parse solo sub-fields stored as JSON in other_info
+function parseSoloSubfields(other_info) {
+  if (!other_info) return {}
+  try { const p = JSON.parse(other_info); return p._solo || {} } catch { return {} }
+}
+function serializeSoloSubfields(subfields, notes) {
+  const obj = { _solo: subfields }
+  if (notes) obj.notes = notes
+  return JSON.stringify(obj)
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 function Section({ title, children }) {
   return (
@@ -422,6 +490,113 @@ function PhotosForm({ form, setForm, materialId }) {
   )
 }
 
+// ── Solo material forms ────────────────────────────────────────
+function SoloMaterialTypeForm({ form, setForm }) {
+  const isCustom = form.material_type && !SOLO_MATERIAL_TYPES.includes(form.material_type)
+
+  function handleTypeSelect(val) {
+    if (val === '__custom__') {
+      setForm(f => ({ ...f, material_type: '', soloSubfields: {} }))
+    } else {
+      setForm(f => ({ ...f, material_type: val, soloSubfields: {} }))
+    }
+  }
+
+  const subfields = SOLO_SUBFIELDS[form.material_type] || []
+
+  return (
+    <Section title="1 · Material Type">
+      <div className="field">
+        <label>Type <span style={{ color: 'var(--accent2)' }}>*</span></label>
+        <select value={isCustom ? '__custom__' : (form.material_type || '')} onChange={e => handleTypeSelect(e.target.value)}>
+          <option value="">— Select material type —</option>
+          {SOLO_MATERIAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          <option value="__custom__">Other (custom)…</option>
+        </select>
+        {isCustom && (
+          <input style={{ marginTop: 8 }} value={form.material_type} onChange={e => setForm(f => ({ ...f, material_type: e.target.value }))} placeholder="Describe material type…" />
+        )}
+      </div>
+
+      {subfields.length > 0 && subfields.map(sf => {
+        if (sf.key === 'sieve') {
+          const selected = (form.soloSubfields?.sieve || '').split(',').filter(Boolean)
+          return (
+            <div key={sf.key} className="field">
+              <label>{sf.label}</label>
+              <CheckList options={SIEVE_SIZES} selected={selected} onChange={v => setForm(f => ({ ...f, soloSubfields: { ...f.soloSubfields, sieve: v.join(',') } }))} />
+            </div>
+          )
+        }
+        return (
+          <div key={sf.key} className="field">
+            <label>{sf.label}</label>
+            <input value={form.soloSubfields?.[sf.key] || ''} onChange={e => setForm(f => ({ ...f, soloSubfields: { ...f.soloSubfields, [sf.key]: e.target.value } }))} placeholder={sf.placeholder} />
+          </div>
+        )
+      })}
+    </Section>
+  )
+}
+
+function SoloSourceForm({ form, setForm }) {
+  return (
+    <Section title="2 · Material Source">
+      <div className="grid-2">
+        <div className="field">
+          <label>Supplier / Provider</label>
+          <input value={form.source_name || ''} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} placeholder="e.g. Sigma-Aldrich, Fisher Scientific" />
+        </div>
+        <div className="field">
+          <label>Catalog / Ref. Number</label>
+          <input value={form.source_type || ''} onChange={e => setForm(f => ({ ...f, source_type: e.target.value }))} placeholder="e.g. S7653, Lot #2024-07" />
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+function SoloQtyForm({ form, setForm }) {
+  return (
+    <Section title="3 · Material Quantity">
+      <div className="grid-2">
+        <div className="field">
+          <label>Amount</label>
+          <input type="number" value={form.qty_total || ''} onChange={e => setForm(f => ({ ...f, qty_total: e.target.value }))} placeholder="e.g. 250" min="0" />
+        </div>
+        <div className="field">
+          <label>Unit</label>
+          <select value={form.qty_unit || ''} onChange={e => setForm(f => ({ ...f, qty_unit: e.target.value }))}>
+            <option value="">— Select unit —</option>
+            {SOLO_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="field">
+        <label>Container</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {SOLO_CONTAINERS.map(opt => {
+            const on = form.container_type === opt
+            return (
+              <button key={opt} type="button" onClick={() => setForm(f => ({ ...f, container_type: opt, container_other: '' }))}
+                style={{ padding: '5px 14px', borderRadius: 99, border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`, background: on ? 'var(--accent-light)' : 'var(--surface)', color: on ? 'var(--accent)' : 'var(--text2)', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.12s' }}>
+                {opt}
+              </button>
+            )
+          })}
+        </div>
+        {form.container_type === 'Other' && (
+          <input style={{ marginTop: 8 }} value={form.container_other || ''} onChange={e => setForm(f => ({ ...f, container_other: e.target.value }))} placeholder="Describe container…" />
+        )}
+      </div>
+      <div className="field" style={{ maxWidth: 160 }}>
+        <label>Number of Containers</label>
+        <input type="number" value={form.container_count || ''} onChange={e => setForm(f => ({ ...f, container_count: e.target.value }))} placeholder="e.g. 3" min="1" />
+      </div>
+    </Section>
+  )
+}
+
 // ── Material type label helper ────────────────────────────────
 function typeLabel(type) {
   return { aggregate: 'Aggregate', asphalt_binder: 'Asphalt Binder', plant_mix: 'Plant Mix', cores: 'Cores', other: 'Other' }[type] || type
@@ -443,6 +618,7 @@ function blankForm() {
     ab_binder_pg: '', ab_mix_design: '', ab_has_polymer: false, ab_polymer_info: '', ab_other_additives: '',
     pm_mix_design: '', pm_binder_pg: '',
     other_info: '',
+    soloSubfields: {},
     source_type: '', source_name: '', source_location: '',
     qty_total: '', qty_unit: '', container_type: '', container_color: '', container_count: '', container_other: '',
     locations: [],
@@ -452,8 +628,9 @@ function blankForm() {
 }
 
 // ── Validate form ─────────────────────────────────────────────
-function validate(form, toast) {
-  if (!form.material_type) { toast('Please select a material type.'); return false }
+function validate(form, toast, isSolo) {
+  if (!form.material_type?.trim()) { toast('Please select a material type.'); return false }
+  if (isSolo) return true
   if (form.material_type === 'aggregate') {
     if (!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) { toast('At least one sieve size is required for aggregate.'); return false }
   }
@@ -482,6 +659,7 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
     pm_mix_design: material.pm_mix_design || '',
     pm_binder_pg: material.pm_binder_pg || '',
     other_info: material.other_info || '',
+    soloSubfields: parseSoloSubfields(material.other_info),
     source_type: material.source_type || '',
     source_name: material.source_name || '',
     source_location: material.source_location || '',
@@ -498,22 +676,22 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
 
   async function save() {
-    if (!validate(form, toast)) return
+    if (!validate(form, toast, isSolo)) return
     setSaving(true)
     const payload = {
       project_id: projectId,
       name: form.name.trim() || null,
       material_type: form.material_type,
-      agg_sieve_sizes: form.agg_sieve_sizes,
-      agg_raw_or_rap: form.agg_raw_or_rap || null,
-      ab_binder_pg: form.ab_binder_pg || null,
-      ab_mix_design: form.ab_mix_design || null,
-      ab_has_polymer: form.ab_has_polymer,
-      ab_polymer_info: form.ab_polymer_info || null,
-      ab_other_additives: form.ab_other_additives || null,
-      pm_mix_design: form.pm_mix_design || null,
-      pm_binder_pg: form.pm_binder_pg || null,
-      other_info: form.other_info || null,
+      agg_sieve_sizes: isSolo ? [] : form.agg_sieve_sizes,
+      agg_raw_or_rap: isSolo ? null : (form.agg_raw_or_rap || null),
+      ab_binder_pg: isSolo ? null : (form.ab_binder_pg || null),
+      ab_mix_design: isSolo ? null : (form.ab_mix_design || null),
+      ab_has_polymer: isSolo ? false : form.ab_has_polymer,
+      ab_polymer_info: isSolo ? null : (form.ab_polymer_info || null),
+      ab_other_additives: isSolo ? null : (form.ab_other_additives || null),
+      pm_mix_design: isSolo ? null : (form.pm_mix_design || null),
+      pm_binder_pg: isSolo ? null : (form.pm_binder_pg || null),
+      other_info: isSolo ? serializeSoloSubfields(form.soloSubfields) : (form.other_info || null),
       source_type: form.source_type || null,
       source_name: form.source_name || null,
       source_location: form.source_location || null,
@@ -523,7 +701,7 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
       container_color: form.container_color || null,
       container_count: form.container_count ? parseInt(form.container_count) : null,
       container_other: form.container_other || null,
-      locations: form.locations,
+      locations: isSolo ? [] : form.locations,
       sampling_date: form.sampling_date || null,
       photos: form.photos,
     }
@@ -550,14 +728,26 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
 
         <div className="field">
           <label>Material Name / Label (optional)</label>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Base course aggregate, Surface binder…" />
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
         </div>
 
-        <MaterialTypeForm form={form} setForm={setForm} />
-        <SourceForm form={form} setForm={setForm} />
-        <QtyForm form={form} setForm={setForm} />
-        <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
-        <SamplingDateForm form={form} setForm={setForm} />
+        {isSolo ? (
+          <>
+            <SoloMaterialTypeForm form={form} setForm={setForm} />
+            <SoloSourceForm form={form} setForm={setForm} />
+            <SoloQtyForm form={form} setForm={setForm} />
+            <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
+            <SamplingDateForm form={form} setForm={setForm} />
+          </>
+        ) : (
+          <>
+            <MaterialTypeForm form={form} setForm={setForm} />
+            <SourceForm form={form} setForm={setForm} />
+            <QtyForm form={form} setForm={setForm} />
+            <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
+            <SamplingDateForm form={form} setForm={setForm} />
+          </>
+        )}
         <PhotosForm form={form} setForm={setForm} materialId={material?.id} />
 
         <div style={{ display: 'flex', gap: 10, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
@@ -572,8 +762,11 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN EXPORT
 // ══════════════════════════════════════════════════════════════
+const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other']
+
 export default function ProjectMaterials({ project }) {
-  const { toast } = useAppStore()
+  const { toast, session } = useAppStore()
+  const isSoloUser = session?.loginMode === 'solo'
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -652,30 +845,59 @@ export default function ProjectMaterials({ project }) {
               </div>
 
               {/* Expanded detail */}
-              {isOpen && (
+              {isOpen && (() => {
+                const isSoloMat = !TEAM_TYPES.includes(m.material_type)
+                const soloSub = parseSoloSubfields(m.other_info)
+                const soloSubEntries = Object.entries(soloSub).filter(([, v]) => v)
+                const subDefs = SOLO_SUBFIELDS[m.material_type] || []
+                return (
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 18px', background: 'var(--surface2)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: m.photos?.length ? 16 : 0 }}>
-                    {/* Type-specific details */}
-                    {m.material_type === 'aggregate' && <>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
-                      <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
+                    {isSoloMat ? <>
+                      {/* Solo sub-fields */}
+                      {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
+                        const def = subDefs.find(s => s.key === key)
+                        const label = def?.label || key
+                        if (key === 'sieve') {
+                          const sieves = val.split(',').filter(Boolean)
+                          return (
+                            <div key={key} style={{ gridColumn: '1/-1' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{sieves.map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div>
+                            </div>
+                          )
+                        }
+                        return <div key={key}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div><div style={{ fontWeight: 500 }}>{val}</div></div>
+                      })}
+                      {/* Source */}
+                      {(m.source_name || m.source_type) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
+                      {/* Location */}
+                      {m.source_location && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
+                      {/* QTY */}
+                      {m.qty_total && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Quantity</div><div style={{ fontWeight: 500 }}>{m.qty_total} {m.qty_unit}{m.container_type ? ` · ${m.container_count || ''} ${m.container_type}` : ''}</div></div>}
+                    </> : <>
+                      {/* Team-specific details */}
+                      {m.material_type === 'aggregate' && <>
+                        <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
+                        <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
+                      </>}
+                      {m.material_type === 'asphalt_binder' && <>
+                        <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
+                        <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
+                        {m.ab_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
+                        {m.ab_other_additives && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
+                      </>}
+                      {m.material_type === 'plant_mix' && <>
+                        <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
+                        {m.pm_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
+                      </>}
+                      {/* Source */}
+                      {m.source_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
+                      {/* QTY */}
+                      {m.qty_total && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Quantity</div><div style={{ fontWeight: 500 }}>{m.qty_total} {m.qty_unit} · {m.container_count} {m.container_type}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
+                      {/* Locations */}
+                      {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px', fontSize: 12 }}>{l.location}{l.detail ? ` · ${l.detail}` : ''}</span>)}</div></div>}
                     </>}
-                    {m.material_type === 'asphalt_binder' && <>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
-                      {m.ab_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
-                      {m.ab_other_additives && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
-                    </>}
-                    {m.material_type === 'plant_mix' && <>
-                      <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
-                      {m.pm_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
-                    </>}
-                    {/* Source */}
-                    {m.source_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
-                    {/* QTY */}
-                    {m.qty_total && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Quantity</div><div style={{ fontWeight: 500 }}>{m.qty_total} {m.qty_unit} · {m.container_count} {m.container_type}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
-                    {/* Locations */}
-                    {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px', fontSize: 12 }}>{l.location}{l.detail ? ` · ${l.detail}` : ''}</span>)}</div></div>}
                   </div>
 
                   {/* Photo strip */}
@@ -690,7 +912,8 @@ export default function ProjectMaterials({ project }) {
                     </div>
                   )}
                 </div>
-              )}
+              )
+              })()}
             </div>
           )
         })

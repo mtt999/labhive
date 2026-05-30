@@ -1177,13 +1177,31 @@ export default function Admin() {
   const [orgModulesModal, setOrgModulesModal]   = useState(null)
   const [appModulesOpen, setAppModulesOpen]     = useState(false)
   const [soloModulesOpen, setSoloModulesOpen]   = useState(false)
+  const [soloUsers, setSoloUsers]               = useState([])
+  const [soloSearch, setSoloSearch]             = useState('')
+  const [soloLoading, setSoloLoading]           = useState(false)
 
   // Super admin: images tab is accessed standalone (no tab bar), so exclude it from the tab list
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: 'Organizations' }]
     : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
 
-  useEffect(() => { loadOrgs() }, [])
+  useEffect(() => { loadOrgs(); if (isSuperAdmin) loadSoloUsers() }, [])
+
+  async function loadSoloUsers() {
+    setSoloLoading(true)
+    const { data } = await sb.from('solo_users').select('id, name, email, created_at, active_modules').order('created_at', { ascending: false })
+    setSoloUsers(data || [])
+    setSoloLoading(false)
+  }
+
+  async function deleteSoloUser(u) {
+    if (!confirm(`Delete solo account "${u.name}" (${u.email}) permanently?`)) return
+    const { error } = await sb.from('solo_users').delete().eq('id', u.id)
+    if (error) { toast('Delete failed: ' + error.message); return }
+    setSoloUsers(prev => prev.filter(s => s.id !== u.id))
+    toast('Solo account deleted.')
+  }
   useEffect(() => {
     if (tab === 'users' || tab === 'students') loadUsers()
     setSelectedIds(new Set())
@@ -1450,6 +1468,45 @@ export default function Admin() {
               </div>
               <button onClick={() => setSoloModulesOpen(true)} style={{ padding: '5px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Icons</button>
             </div>
+          </div>
+
+          {/* ── Solo Accounts ── */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>👤 Solo Accounts</div>
+              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: '#EEEDFE', color: '#534AB7' }}>{soloUsers.length}</span>
+            </div>
+            <input
+              value={soloSearch} onChange={e => setSoloSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              style={{ width: '100%', marginBottom: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
+            />
+            {soloLoading ? (
+              <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+            ) : (() => {
+              const filtered = soloUsers.filter(u =>
+                !soloSearch || u.name?.toLowerCase().includes(soloSearch.toLowerCase()) || u.email?.toLowerCase().includes(soloSearch.toLowerCase())
+              )
+              if (filtered.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '16px 0', fontSize: 13 }}>No solo accounts found.</div>
+              return filtered.map(u => (
+                <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0, textAlign: 'right' }}>
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  </div>
+                  <button className="btn btn-sm btn-danger" onClick={() => deleteSoloUser(u)}>Delete</button>
+                </div>
+              ))
+            })()}
+          </div>
+
+          {/* ── Organizations ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>🏢 Organizations</div>
           </div>
 
           {orgs.length === 0 ? (
