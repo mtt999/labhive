@@ -1180,10 +1180,13 @@ export default function Admin() {
   const [soloUsers, setSoloUsers]               = useState([])
   const [soloSearch, setSoloSearch]             = useState('')
   const [soloLoading, setSoloLoading]           = useState(false)
+  const [teamUsers, setTeamUsers]               = useState([])
+  const [teamSearch, setTeamSearch]             = useState('')
+  const [teamLoading, setTeamLoading]           = useState(false)
+  const [userSubTab, setUserSubTab]             = useState('solo')
 
-  // Super admin: images tab is accessed standalone (no tab bar), so exclude it from the tab list
   const tabs = isSuperAdmin
-    ? [{ key: 'organizations', label: 'Organizations' }]
+    ? [{ key: 'organizations', label: '🏢 Organizations' }, { key: 'useraccounts', label: '👥 User Accounts' }]
     : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
 
   useEffect(() => { loadOrgs(); if (isSuperAdmin) loadSoloUsers() }, [])
@@ -1202,10 +1205,21 @@ export default function Admin() {
     setSoloUsers(prev => prev.filter(s => s.id !== u.id))
     toast('Solo account deleted.')
   }
+
+  async function loadTeamUsers() {
+    setTeamLoading(true)
+    const { data } = await sb.from('users').select('id, name, email, role, is_active, organization_id, created_at').order('organization_id').order('name')
+    setTeamUsers(data || [])
+    setTeamLoading(false)
+  }
   useEffect(() => {
     if (tab === 'users' || tab === 'students') loadUsers()
     setSelectedIds(new Set())
   }, [tab, orgFilter])
+
+  useEffect(() => {
+    if (isSuperAdmin && tab === 'useraccounts' && userSubTab === 'team') loadTeamUsers()
+  }, [tab, userSubTab])
 
   async function loadOrgs() {
     const [{ data: orgData }, { data: countData }, { data: adminData }] = await Promise.all([
@@ -1336,17 +1350,15 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Tabs — only shown for org admins, not super admin */}
-      {!isSuperAdmin && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              style={{ padding: '7px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: tab === t.key ? 'var(--accent)' : 'var(--surface2)', color: tab === t.key ? '#fff' : 'var(--text2)' }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ padding: '7px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: tab === t.key ? 'var(--accent)' : 'var(--surface2)', color: tab === t.key ? '#fff' : 'var(--text2)' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
 
 
@@ -1433,8 +1445,8 @@ export default function Admin() {
       {/* ── ORG SETTINGS (org admin only) ── */}
       {!isSuperAdmin && tab === 'orgsettings' && <OrgSettingsPanel session={session} />}
 
-      {/* ── ORGANIZATIONS (super admin only) ── */}
-      {isSuperAdmin && (
+      {/* ── ORGANIZATIONS TAB (super admin) ── */}
+      {isSuperAdmin && tab === 'organizations' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
             <button className="btn btn-primary btn-sm" onClick={() => setOrgModal('add')}>+ New organization</button>
@@ -1456,7 +1468,7 @@ export default function Admin() {
           </div>
 
           {/* Global solo users icon restriction */}
-          <div className="card" style={{ padding: '14px 18px', marginBottom: 16, border: '1.5px solid #534AB7', background: '#EEEDFE' }}>
+          <div className="card" style={{ padding: '14px 18px', marginBottom: 20, border: '1.5px solid #534AB7', background: '#EEEDFE' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <button onClick={() => setSoloModulesOpen(true)} style={{ fontWeight: 700, fontSize: 15, background: 'none', border: 'none', cursor: 'pointer', color: '#534AB7', padding: 0, textAlign: 'left', textDecoration: 'underline dotted' }}>
@@ -1468,45 +1480,6 @@ export default function Admin() {
               </div>
               <button onClick={() => setSoloModulesOpen(true)} style={{ padding: '5px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Icons</button>
             </div>
-          </div>
-
-          {/* ── Solo Accounts ── */}
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>👤 Solo Accounts</div>
-              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: '#EEEDFE', color: '#534AB7' }}>{soloUsers.length}</span>
-            </div>
-            <input
-              value={soloSearch} onChange={e => setSoloSearch(e.target.value)}
-              placeholder="Search by name or email…"
-              style={{ width: '100%', marginBottom: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
-            />
-            {soloLoading ? (
-              <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-            ) : (() => {
-              const filtered = soloUsers.filter(u =>
-                !soloSearch || u.name?.toLowerCase().includes(soloSearch.toLowerCase()) || u.email?.toLowerCase().includes(soloSearch.toLowerCase())
-              )
-              if (filtered.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '16px 0', fontSize: 13 }}>No solo accounts found.</div>
-              return filtered.map(u => (
-                <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0, textAlign: 'right' }}>
-                    {u.created_at ? new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                  </div>
-                  <button className="btn btn-sm btn-danger" onClick={() => deleteSoloUser(u)}>Delete</button>
-                </div>
-              ))
-            })()}
-          </div>
-
-          {/* ── Organizations ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>🏢 Organizations</div>
           </div>
 
           {orgs.length === 0 ? (
@@ -1563,6 +1536,116 @@ export default function Admin() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── USER ACCOUNTS TAB (super admin) ── */}
+      {isSuperAdmin && tab === 'useraccounts' && (
+        <div>
+          {/* Sub-tab bar */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {[{ key: 'solo', label: '👤 Solo Users' }, { key: 'team', label: '🏢 Team Users' }].map(st => (
+              <button key={st.key} onClick={() => setUserSubTab(st.key)}
+                style={{ padding: '6px 18px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: `2px solid ${userSubTab === st.key ? 'var(--accent)' : 'var(--border)'}`, cursor: 'pointer', background: userSubTab === st.key ? 'var(--accent-light)' : 'var(--surface)', color: userSubTab === st.key ? 'var(--accent)' : 'var(--text2)' }}>
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Solo Users sub-tab */}
+          {userSubTab === 'solo' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>All solo accounts</div>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: '#EEEDFE', color: '#534AB7' }}>{soloUsers.length}</span>
+              </div>
+              <input
+                value={soloSearch} onChange={e => setSoloSearch(e.target.value)}
+                placeholder="Search by name or email…"
+                style={{ width: '100%', marginBottom: 12, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
+              />
+              {soloLoading ? (
+                <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+              ) : (() => {
+                const filtered = soloUsers.filter(u =>
+                  !soloSearch || u.name?.toLowerCase().includes(soloSearch.toLowerCase()) || u.email?.toLowerCase().includes(soloSearch.toLowerCase())
+                )
+                if (filtered.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '24px 0', fontSize: 13 }}>No solo accounts found.</div>
+                return filtered.map(u => (
+                  <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0, textAlign: 'right' }}>
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </div>
+                    <button className="btn btn-sm btn-danger" onClick={() => deleteSoloUser(u)}>Delete</button>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+
+          {/* Team Users sub-tab */}
+          {userSubTab === 'team' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>All team accounts</div>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)' }}>{teamUsers.length}</span>
+              </div>
+              {/* Per-org count summary */}
+              {orgs.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                  {orgs.map(o => {
+                    const cnt = teamUsers.filter(u => u.organization_id === o.id).length
+                    if (!cnt) return null
+                    return (
+                      <span key={o.id} style={{ fontSize: 12, fontWeight: 600, padding: '3px 12px', borderRadius: 99, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)' }}>
+                        {o.name} · {cnt}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+              <input
+                value={teamSearch} onChange={e => setTeamSearch(e.target.value)}
+                placeholder="Search by name, email or organisation…"
+                style={{ width: '100%', marginBottom: 12, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
+              />
+              {teamLoading ? (
+                <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+              ) : (() => {
+                const q = teamSearch.toLowerCase()
+                const filtered = teamUsers.filter(u => {
+                  if (!q) return true
+                  const orgN = orgs.find(o => o.id === u.organization_id)?.name || ''
+                  return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || orgN.toLowerCase().includes(q)
+                })
+                if (filtered.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '24px 0', fontSize: 13 }}>No team users found.</div>
+                return filtered.map(u => {
+                  const orgN = orgs.find(o => o.id === u.organization_id)?.name || '—'
+                  const roleLabel = u.role === 'admin' ? 'Org Admin' : u.role === 'student' ? 'Lab User' : 'Lab Manager'
+                  const roleBg = u.role === 'admin' ? '#FEF3C7' : u.role === 'student' ? '#EDE9FE' : '#E1F5EE'
+                  const roleColor = u.role === 'admin' ? '#92400E' : u.role === 'student' ? '#5B21B6' : '#065F46'
+                  return (
+                    <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, opacity: u.is_active ? 1 : 0.55 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: roleBg, color: roleColor }}>{roleLabel}</span>
+                          {!u.is_active && <span style={{ fontSize: 11, color: 'var(--accent2)', fontWeight: 500 }}>Inactive</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{u.email}</div>
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', flexShrink: 0, textAlign: 'right' }}>{orgN}</div>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          )}
         </div>
       )}
 
