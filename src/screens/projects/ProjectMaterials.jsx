@@ -260,7 +260,7 @@ function QtyForm({ form, setForm }) {
 }
 
 // ── Location form ─────────────────────────────────────────────
-function LocationForm({ form, setForm, projectId, projectName, materialId, materialType }) {
+function LocationForm({ form, setForm, projectId, projectName, materialId, materialType, isSolo }) {
   const [showPicker, setShowPicker] = useState(false)
   const locations = form.locations || []
 
@@ -270,6 +270,22 @@ function LocationForm({ form, setForm, projectId, projectName, materialId, mater
 
   function removeLocation(id) {
     setForm(f => ({ ...f, locations: f.locations.filter(l => l.location_id !== id) }))
+  }
+
+  // Solo users: plain text box
+  if (isSolo) {
+    return (
+      <Section title="4 · Material Location">
+        <div className="field">
+          <label>Location</label>
+          <input
+            value={form.source_location || ''}
+            onChange={e => setForm(f => ({ ...f, source_location: e.target.value }))}
+            placeholder="e.g. Lab shelf B3, Room 204, Site A…"
+          />
+        </div>
+      </Section>
+    )
   }
 
   return (
@@ -451,7 +467,8 @@ function validate(form, toast) {
 
 // ── Material form modal ───────────────────────────────────────
 function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
-  const { toast } = useAppStore()
+  const { toast, session } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const [form, setForm] = useState(material ? {
     name: material.name || '',
     material_type: material.material_type || '',
@@ -539,7 +556,7 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
         <MaterialTypeForm form={form} setForm={setForm} />
         <SourceForm form={form} setForm={setForm} />
         <QtyForm form={form} setForm={setForm} />
-        <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} />
+        <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
         <SamplingDateForm form={form} setForm={setForm} />
         <PhotosForm form={form} setForm={setForm} materialId={material?.id} />
 
