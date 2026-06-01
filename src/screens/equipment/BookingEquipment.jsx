@@ -403,6 +403,24 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
   )
 }
 
+// ── Booking Draft Bar (mobile: stays at bottom so calendar stays draggable) ──
+function BookingDraftBar({ draft, equipmentName, onBook, onDismiss }) {
+  if (!draft) return null
+  return (
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200, background: 'var(--surface)', borderTop: '3px solid var(--accent)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 -4px 16px rgba(0,0,0,0.18)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{equipmentName || 'Equipment selected'}</div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>
+          {fmtDateTime(draft.start)} → {fmtDateTime(draft.end)}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>Drag calendar to adjust ↑</div>
+      </div>
+      <button className="btn btn-primary" onClick={onBook} style={{ flexShrink: 0, fontSize: 14, padding: '10px 18px' }}>Book</button>
+      <button className="btn" onClick={onDismiss} style={{ flexShrink: 0 }}>✕</button>
+    </div>
+  )
+}
+
 // ── Week View Calendar ────────────────────────────────────────
 // Each slot = 30 min, height = 24px. Total grid height = 48 * 24 = 1152px
 const SLOT_H = 24 // px per 30-min slot
@@ -622,7 +640,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
               const endMins   = Math.min(1440, segEnd.getHours() * 60 + segEnd.getMinutes())
               const top    = (startMins / 30) * SLOT_H
               const height = Math.max(SLOT_H, ((endMins - startMins) / 30) * SLOT_H)
-              return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.22)', border: '2px solid rgba(29,158,117,0.75)', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
+              return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.30)', border: '2px solid #1D9E75', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
             })()}
 
             {/* Bookings — overlap-aware lane layout for this day */}
@@ -2026,8 +2044,13 @@ function BookingCalendar({ session }) {
       setMultiSlot(slot); setShowMultiModal(true)
     } else {
       setBookingDraft(slot)
-      // If form panel is already open for a new booking, just update draft — form syncs via useEffect
-      if (!showBookingModal || editBooking) { setEditBooking(null); setShowBookingModal(true) }
+      if (isMobile) {
+        // Mobile: show the draft bar at bottom so calendar stays usable for re-drag
+        setShowBookingModal(false)
+      } else {
+        // Desktop: open the side panel (or keep it open — key remount updates times)
+        if (!showBookingModal || editBooking) { setEditBooking(null); setShowBookingModal(true) }
+      }
     }
   }
 
@@ -2317,11 +2340,11 @@ function BookingCalendar({ session }) {
                   💡 Select equipment on the left to enable drag-to-book
                 </div>
               )}
-              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={showBookingModal && !editBooking ? bookingDraft : null} />
+              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} />
             </div>
-            {/* Booking form side panel — only for new bookings on desktop */}
-            {showBookingModal && !editBooking && !isMobile && (
-              <div style={{ width: 340, flexShrink: 0 }}>
+            {/* Booking form side panel — only wide desktops (≥1050px) so calendar has room */}
+            {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && (
+              <div style={{ width: 320, flexShrink: 0 }}>
                 <BookingModal
                   key={bookingDraft ? `${bookingDraft.start}_${bookingDraft.end}` : 'new'}
                   booking={null}
@@ -2359,8 +2382,17 @@ function BookingCalendar({ session }) {
           onClose={() => { setShowMultiModal(false); setMultiSlot(null) }}
         />
       )}
-      {/* Full overlay: edit mode, mobile, or month view (panel only exists in week view flex layout) */}
-      {showBookingModal && (editBooking || isMobile || calView !== 'week') && (
+      {/* Mobile draft bar — stays at bottom so calendar is always draggable */}
+      {isMobile && bookingDraft && !showBookingModal && !editBooking && (
+        <BookingDraftBar
+          draft={bookingDraft}
+          equipmentName={selectedEq.length === 1 ? (equipment.find(e => e.id === selectedEq[0])?.nickname || equipment.find(e => e.id === selectedEq[0])?.equipment_name) : selectedEq.length > 1 ? `${selectedEq.length} equipment` : null}
+          onBook={() => { setShowBookingModal(true) }}
+          onDismiss={() => { setBookingDraft(null); setShowBookingModal(false) }}
+        />
+      )}
+      {/* Full overlay: edit mode, month view, narrow desktop (< 1050px), or mobile after "Book" tapped */}
+      {showBookingModal && (editBooking || (isMobile) || calView !== 'week' || window.innerWidth < 1050) && (
         <BookingModal
           booking={editBooking}
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
