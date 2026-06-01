@@ -145,7 +145,7 @@ const statusColor = { confirmed: '#1e4d39', pending: '#92400e', denied: '#a32d2d
 const statusBg = { confirmed: '#e8f2ee', pending: '#fef3c7', denied: '#fcebeb', cancelled: '#f1efe8' }
 
 // ── Booking Form Modal ────────────────────────────────────────
-function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, initialSlot, photoRequired }) {
+function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, initialSlot, photoRequired, panel }) {
   const { toast } = useAppStore()
 
   // Parse existing booking title to restore purpose type on edit
@@ -188,6 +188,12 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
       q.then(({ data }) => setProjects(data || []))
     }
   }, [])
+
+  // When user re-drags on calendar while panel is open, sync the new time into the form
+  useEffect(() => {
+    if (!initialSlot) return
+    setForm(f => ({ ...f, start_time: initialSlot.start, end_time: initialSlot.end }))
+  }, [initialSlot?.start, initialSlot?.end])
 
   useEffect(() => { if (form.equipment_id && form.start_time && form.end_time) checkConflict() }, [form.equipment_id, form.start_time, form.end_time])
 
@@ -278,10 +284,12 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
 
   const eq = equipmentList.find(e => e.id === form.equipment_id)
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 480, width: '100%', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 20 }}>{booking ? 'Edit booking' : 'New booking'}</div>
+  const formContent = (
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: panel ? 20 : 28, width: '100%', border: '1px solid var(--border)', maxHeight: panel ? 'calc(100vh - 260px)' : '90vh', overflowY: 'auto', ...(panel ? {} : { maxWidth: 480 }) }}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: panel ? 12 : 20 }}>
+          {booking ? 'Edit booking' : 'New booking'}
+          {panel && <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400, marginTop: 3 }}>Drag on the calendar to adjust time</div>}
+        </div>
 
         <div className="field"><label>Equipment *</label>
           <select value={form.equipment_id} onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))}>
@@ -384,6 +392,12 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           <button className="btn" onClick={() => { setConflict(null); onClose() }}>Cancel</button>
         </div>
       </div>
+  )
+
+  if (panel) return formContent
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      {formContent}
     </div>
   )
 }
@@ -1993,7 +2007,9 @@ function BookingCalendar({ session }) {
     if (selectedEq.length > 1) {
       setMultiSlot(slot); setShowMultiModal(true)
     } else {
-      setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
+      setBookingDraft(slot)
+      // If form panel is already open for a new booking, just update draft — form syncs via useEffect
+      if (!showBookingModal || editBooking) { setEditBooking(null); setShowBookingModal(true) }
     }
   }
 
@@ -2276,13 +2292,31 @@ function BookingCalendar({ session }) {
         </div>
 
         {calView === 'week' ? (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-            {selectedEq.length === 0 && (
-              <div style={{ padding: '8px 14px', background: '#fef3c7', borderBottom: '1px solid #f0d070', fontSize: 12, color: '#92400e' }}>
-                💡 Select equipment on the left to enable drag-to-book
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+              {selectedEq.length === 0 && (
+                <div style={{ padding: '8px 14px', background: '#fef3c7', borderBottom: '1px solid #f0d070', fontSize: 12, color: '#92400e' }}>
+                  💡 Select equipment on the left to enable drag-to-book
+                </div>
+              )}
+              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} />
+            </div>
+            {/* Booking form side panel — only for new bookings on desktop */}
+            {showBookingModal && !editBooking && !isMobile && (
+              <div style={{ width: 340, flexShrink: 0 }}>
+                <BookingModal
+                  booking={null}
+                  equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
+                  selectedEquipment={selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null}
+                  session={session}
+                  onSave={() => { loadBookings(); loadNotifications() }}
+                  onClose={() => { setShowBookingModal(false); setBookingDraft(null); setEditBooking(null) }}
+                  initialSlot={bookingDraft}
+                  photoRequired={photoRequired}
+                  panel
+                />
               </div>
             )}
-            <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} />
           </div>
         ) : (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -2306,7 +2340,8 @@ function BookingCalendar({ session }) {
           onClose={() => { setShowMultiModal(false); setMultiSlot(null) }}
         />
       )}
-      {showBookingModal && (
+      {/* Full overlay: edit mode OR mobile (panel not usable on small screens) */}
+      {showBookingModal && (editBooking || isMobile) && (
         <BookingModal
           booking={editBooking}
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
