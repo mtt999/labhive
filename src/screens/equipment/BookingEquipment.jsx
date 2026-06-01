@@ -189,11 +189,14 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     }
   }, [])
 
-  // When user re-drags on calendar while panel is open, sync the new time into the form
+  // Sync form times whenever the parent updates the booking draft (re-drag while panel is open)
   useEffect(() => {
-    if (!initialSlot) return
-    setForm(f => ({ ...f, start_time: initialSlot.start, end_time: initialSlot.end }))
-  }, [initialSlot?.start, initialSlot?.end])
+    if (!initialSlot?.start || !initialSlot?.end) return
+    setForm(f => {
+      if (f.start_time === initialSlot.start && f.end_time === initialSlot.end) return f
+      return { ...f, start_time: initialSlot.start, end_time: initialSlot.end }
+    })
+  }, [initialSlot])
 
   useEffect(() => { if (form.equipment_id && form.start_time && form.end_time) checkConflict() }, [form.equipment_id, form.start_time, form.end_time])
 
@@ -307,15 +310,13 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           </div>
         )}
 
-        <div className="grid-2">
-          <div className="field">
-            <label>Start time *</label>
-            <input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
-          </div>
-          <div className="field">
-            <label>End time *</label>
-            <input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
-          </div>
+        <div className="field">
+          <label>Start time *</label>
+          <input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+        </div>
+        <div className="field">
+          <label>End time *</label>
+          <input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
         </div>
 
         <div className="field">
@@ -417,7 +418,7 @@ function localFmt(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook }) {
+function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, selectedSlot }) {
   const [drag, setDrag] = useState(null)
   const colRefs = useRef([])
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -592,6 +593,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
             ))}
 
             {/* Drag highlight */}
+            {/* Active drag highlight (while dragging) */}
             {drag && (() => {
               const startAbs = drag.startDayIdx * 48 + drag.startSlot
               const endAbs = drag.endDayIdx * 48 + drag.endSlot
@@ -605,6 +607,22 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
               const top = visStart * SLOT_H
               const height = (visEnd - visStart + 1) * SLOT_H
               return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(26,93,56,0.15)', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
+            })()}
+
+            {/* Persistent selected slot indicator (booking draft) */}
+            {!drag && selectedSlot?.start && selectedSlot?.end && (() => {
+              const slotStart = new Date(selectedSlot.start)
+              const slotEnd   = new Date(selectedSlot.end)
+              const dayStart  = new Date(days[di]); dayStart.setHours(0, 0, 0, 0)
+              const dayEnd    = new Date(days[di]); dayEnd.setHours(24, 0, 0, 0)
+              if (slotEnd <= dayStart || slotStart >= dayEnd) return null
+              const segStart = slotStart < dayStart ? dayStart : slotStart
+              const segEnd   = slotEnd   > dayEnd   ? dayEnd   : slotEnd
+              const startMins = segStart.getHours() * 60 + segStart.getMinutes()
+              const endMins   = Math.min(1440, segEnd.getHours() * 60 + segEnd.getMinutes())
+              const top    = (startMins / 30) * SLOT_H
+              const height = Math.max(SLOT_H, ((endMins - startMins) / 30) * SLOT_H)
+              return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.18)', border: '2px solid rgba(29,158,117,0.55)', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
             })()}
 
             {/* Bookings — overlap-aware lane layout for this day */}
@@ -2299,7 +2317,7 @@ function BookingCalendar({ session }) {
                   💡 Select equipment on the left to enable drag-to-book
                 </div>
               )}
-              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} />
+              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={showBookingModal && !editBooking ? bookingDraft : null} />
             </div>
             {/* Booking form side panel — only for new bookings on desktop */}
             {showBookingModal && !editBooking && !isMobile && (
