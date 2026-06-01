@@ -1,4 +1,4 @@
-// Migration: pro-ilab → original-ilab (ilab)
+// Migration: pro-ilab → ilab
 // Transfers rooms + supplies + photos for the ICT organization
 import { createClient } from '@supabase/supabase-js'
 

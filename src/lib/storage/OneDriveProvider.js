@@ -5,7 +5,7 @@
 
 import { ONEDRIVE_CLIENT_ID } from './config'
 
-const REDIRECT_URI = 'https://ilabapp.org/ilab/oauth-callback'
+const REDIRECT_URI = 'https://labhive.app/oauth-callback'
 const SCOPE = 'Files.ReadWrite.AppFolder offline_access'
 const TOKEN_KEY = 'ilab_onedrive_token'
 const VERIFIER_KEY = 'ilab_onedrive_verifier'

@@ -27,7 +27,7 @@ async function sendNotification(userId, type, title, body) {
         const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', recipient.organization_id).maybeSingle()
         orgContact = org
       }
-      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Invite in iLab →', ctaUrl: 'https://ilabapp.org/ilab/?screen=profile&tab=team', prefsUrl: 'https://ilabapp.org/ilab/?screen=profile', orgContact })
+      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Invite in iLab →', ctaUrl: 'https://labhive.app/?screen=profile&tab=team', prefsUrl: 'https://labhive.app/?screen=profile', orgContact })
       await sb.from('email_notifications_queue').insert({ to_email: recipientEmail, subject: title, body, html_body: htmlBody, user_id: userId, type })
         .then(({ error: emailErr }) => { if (emailErr) console.warn('Email queue insert failed:', emailErr.message) })
     }

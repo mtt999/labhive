@@ -1,5 +1,5 @@
-const LOGO_URL = 'https://ilabapp.org/ilab/logo.svg'
-const APP_URL  = 'https://ilabapp.org/ilab/'
+const LOGO_URL = 'https://labhive.app/logo.svg'
+const APP_URL  = 'https://labhive.app/'
 
 export function buildEmailHtml({ title, body, ctaLabel = 'View in iLab →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null }) {
   const contactBlock = orgContact?.contact_email ? `

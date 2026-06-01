@@ -22,7 +22,7 @@ writeFileSync('docs/oauth-callback.html', `<!DOCTYPE html>
     window.location.href = 'ilab://oauth-callback' + search;
     // Web fallback: redirect to SPA (handles both success ?code= and error ?error=)
     setTimeout(function() {
-      window.location.href = 'https://ilabapp.org/ilab/' + search;
+      window.location.href = 'https://labhive.app/' + search;
     }, 600);
   }
 </script>
@@ -31,7 +31,7 @@ writeFileSync('docs/oauth-callback.html', `<!DOCTYPE html>
 console.log('✓ docs/oauth-callback.html recreated')
 
 // CNAME — custom domain for GitHub Pages
-writeFileSync('docs/CNAME', 'ilabapp.org')
+writeFileSync('docs/CNAME', 'labhive.app')
 console.log('✓ docs/CNAME recreated')
 
 // .nojekyll — prevents GitHub Pages from running Jekyll (which can strip/ignore files)

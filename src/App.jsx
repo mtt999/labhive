@@ -59,7 +59,7 @@ function ComingSoonScreen() {
       <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>
         We're making some improvements. The app will be back shortly.
       </div>
-      <a href="/ilab/admin" style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', textDecoration: 'none', marginTop: 16, fontFamily: 'monospace' }}>
+      <a href="/admin" style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', textDecoration: 'none', marginTop: 16, fontFamily: 'monospace' }}>
         admin
       </a>
     </div>
