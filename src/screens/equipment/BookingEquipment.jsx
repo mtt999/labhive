@@ -208,6 +208,12 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     if (!form.equipment_id) { toast('Select equipment.'); return }
     if (!form.start_time || !form.end_time) { toast('Please drag on the calendar to select a time slot.'); return }
     if (conflict) { toast('This time slot conflicts with an existing booking.'); return }
+    const isSolo = session?.loginMode === 'solo' || session?.role === 'solo'
+    if (isSolo) {
+      if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
+      if (form.purposeType === 'project' && !form.purposeProjectId && projects.length > 0) { toast('Select a project.'); return }
+      if (form.purposeType === 'other' && !form.purposeOther.trim()) { toast('Describe the reason for the booking.'); return }
+    }
     setSaving(true)
     // Check if equipment requires approval for this user
     let requiresApproval = false
