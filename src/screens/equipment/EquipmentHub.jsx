@@ -26,6 +26,16 @@ async function compressImage(file, maxPx = 800) {
   })
 }
 
+// ── Solo category helpers (stored in settings table) ──────────
+async function loadSoloCats(userId) {
+  if (!userId) return []
+  const { data } = await sb.from('settings').select('value').eq('key', `solo_eq_cats_${userId}`).maybeSingle()
+  try { return JSON.parse(data?.value || '[]') } catch { return [] }
+}
+async function saveSoloCats(userId, cats) {
+  await sb.from('settings').upsert({ key: `solo_eq_cats_${userId}`, value: JSON.stringify(cats) }, { onConflict: 'key' })
+}
+
 function EquipmentInfo({ equipment, session }) {
   const { toast } = useAppStore()
   const [details, setDetails] = useState(null)
@@ -453,18 +463,51 @@ function TemporaryAccessPanel({ equipment, session }) {
   )
 }
 
-const STD_TYPES = ['AASHTO', 'IDOT', 'ASTM', 'Other']
+const STD_BASE_TYPES = ['AASHTO', 'DOT', 'ASTM']
 
 function StandardsTab({ equipment, session }) {
   const { toast } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
+  const canAdd = canEdit(session) || isSolo
   const [standards, setStandards] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeType, setActiveType] = useState('AASHTO')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ standard_type: 'AASHTO', standard_number: '', standard_name: '', file_url: '', link_url: '' })
   const [uploading, setUploading] = useState(false)
+  const [customTypes, setCustomTypes] = useState([]) // solo only — extra tab names
+  const [showAddType, setShowAddType] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
   const fileRef = useRef(null)
+
   useEffect(() => { load() }, [equipment.id])
+
+  useEffect(() => {
+    if (!isSolo || !session?.userId) return
+    sb.from('settings').select('value').eq('key', `solo_std_types_${session.userId}`).maybeSingle()
+      .then(({ data }) => { try { setCustomTypes(JSON.parse(data?.value || '[]')) } catch { setCustomTypes([]) } })
+  }, [])
+
+  async function saveCustomTypes(types) {
+    await sb.from('settings').upsert({ key: `solo_std_types_${session.userId}`, value: JSON.stringify(types) }, { onConflict: 'key' })
+    setCustomTypes(types)
+  }
+
+  async function addCustomType() {
+    const name = newTypeName.trim()
+    if (!name) return
+    if (allTypes.includes(name)) { toast('Tab already exists.'); return }
+    const updated = [...customTypes, name]
+    await saveCustomTypes(updated)
+    setNewTypeName(''); setShowAddType(false); setActiveType(name)
+  }
+
+  async function removeCustomType(type) {
+    const updated = customTypes.filter(t => t !== type)
+    await saveCustomTypes(updated)
+    if (activeType === type) setActiveType('AASHTO')
+  }
+
   async function load() {
     setLoading(true)
     const { data } = await sb.from('equipment_standards').select('*').eq('equipment_id', equipment.id).order('standard_type').order('standard_number')
@@ -479,74 +522,270 @@ function StandardsTab({ equipment, session }) {
     setUploading(false)
   }
   async function saveStandard() {
-    if (!form.standard_number.trim()) { toast('Standard number required.'); return }
-    await sb.from('equipment_standards').insert({ equipment_id: equipment.id, ...form })
+    if (!form.standard_number.trim() && !form.standard_name.trim()) { toast('Standard number or name required.'); return }
+    let linkUrl = form.link_url.trim()
+    if (linkUrl && !/^https?:\/\//i.test(linkUrl)) linkUrl = 'https://' + linkUrl
+    await sb.from('equipment_standards').insert({ equipment_id: equipment.id, ...form, link_url: linkUrl || null, standard_number: form.standard_number.trim() || form.standard_name.trim() })
     toast('Standard added ✓'); setShowForm(false); setForm({ standard_type: activeType, standard_number: '', standard_name: '', file_url: '', link_url: '' }); load()
   }
   async function deleteStandard(id) {
     if (!confirm('Remove this standard?')) return
     await sb.from('equipment_standards').delete().eq('id', id); load(); toast('Standard removed.')
   }
+
+  const allTypes = isSolo ? [...STD_BASE_TYPES, ...customTypes] : [...STD_BASE_TYPES, 'Other']
   const filtered = standards.filter(s => s.standard_type === activeType)
+  const stdPlaceholder = activeType === 'AASHTO' ? 'T 27' : activeType === 'ASTM' ? 'C 136' : activeType === 'DOT' ? 'DOT-101' : `${activeType}-001`
+  const ensureProtocol = url => url && !/^https?:\/\//i.test(url) ? 'https://' + url : url
+
   return (
     <div>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-        {STD_TYPES.map(t => (
-          <button key={t} onClick={() => { setActiveType(t); setShowForm(false) }}
-            style={{ padding: '8px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: activeType === t ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${activeType === t ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s' }}>
-            {t}{standards.filter(s => s.standard_type === t).length > 0 && <span style={{ marginLeft: 6, fontSize: 11, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '1px 7px' }}>{standards.filter(s => s.standard_type === t).length}</span>}
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20, flexWrap: 'wrap', alignItems: 'flex-end', gap: '0 2px' }}>
+        {allTypes.map(t => {
+          const cnt = standards.filter(s => s.standard_type === t).length
+          const isCustom = isSolo && !STD_BASE_TYPES.includes(t)
+          return (
+            <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => { setActiveType(t); setShowForm(false) }}
+                style={{ padding: '8px 14px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: activeType === t ? (isSolo ? '#534AB7' : 'var(--accent)') : 'var(--text2)', borderBottom: `2px solid ${activeType === t ? (isSolo ? '#534AB7' : 'var(--accent)') : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                {t}{cnt > 0 && <span style={{ marginLeft: 5, fontSize: 11, background: isSolo ? '#ede9fe' : 'var(--accent-light)', color: isSolo ? '#534AB7' : 'var(--accent)', borderRadius: 99, padding: '1px 6px' }}>{cnt}</span>}
+              </button>
+              {isCustom && (
+                <button onClick={() => removeCustomType(t)}
+                  title={`Remove "${t}" tab`}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 13, padding: '0 4px 2px', lineHeight: 1 }}>×</button>
+              )}
+            </div>
+          )
+        })}
+        {/* Solo: add custom tab button */}
+        {isSolo && !showAddType && (
+          <button onClick={() => setShowAddType(true)}
+            style={{ padding: '6px 12px', border: '1px dashed var(--border)', background: 'transparent', borderRadius: 6, fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 500, cursor: 'pointer', color: 'var(--text3)', marginBottom: 2, transition: 'all 0.15s' }}>
+            ＋ New tab
           </button>
-        ))}
+        )}
+        {isSolo && showAddType && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '2px 4px', marginBottom: 2 }}>
+            <input value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addCustomType(); if (e.key === 'Escape') { setShowAddType(false); setNewTypeName('') } }}
+              placeholder="e.g. ISO, BS, EN…" style={{ fontSize: 13, width: 130 }} autoFocus />
+            <button className="btn btn-sm" style={{ background: '#534AB7', color: '#fff', border: 'none', padding: '3px 10px', fontWeight: 600 }} onClick={addCustomType}>Add</button>
+            <button className="btn btn-sm" onClick={() => { setShowAddType(false); setNewTypeName('') }}>✕</button>
+          </div>
+        )}
       </div>
-      {canEdit(session) && <div style={{ marginBottom: 16 }}><button className="btn btn-sm btn-primary" onClick={() => { setForm(f => ({ ...f, standard_type: activeType })); setShowForm(true) }}>+ Add {activeType} standard</button></div>}
+
+      {/* Add standard button */}
+      {canAdd && !showForm && (
+        <div style={{ marginBottom: 16 }}>
+          <button className="btn btn-sm" style={isSolo ? { background: '#534AB7', color: '#fff', border: 'none', fontWeight: 600 } : { background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600 }}
+            onClick={() => { setForm(f => ({ ...f, standard_type: activeType })); setShowForm(true) }}>
+            + Add {activeType} standard
+          </button>
+        </div>
+      )}
+
+      {/* Add standard form */}
       {showForm && (
         <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 16 }}>
           <div className="grid-2">
-            <div className="field"><label>Standard Number *</label><input value={form.standard_number} onChange={e => setForm(f => ({ ...f, standard_number: e.target.value }))} placeholder={`e.g. ${activeType === 'AASHTO' ? 'T 27' : activeType === 'ASTM' ? 'C 136' : activeType === 'IDOT' ? 'IDOT-101' : 'ISO 9001'}`} autoFocus /></div>
-            <div className="field"><label>Standard Name / Title</label><input value={form.standard_name} onChange={e => setForm(f => ({ ...f, standard_name: e.target.value }))} placeholder="e.g. Sieve Analysis of Fine and Coarse Aggregates" /></div>
+            <div className="field"><label>Standard Number</label><input value={form.standard_number} onChange={e => setForm(f => ({ ...f, standard_number: e.target.value }))} placeholder={`e.g. ${stdPlaceholder}`} autoFocus /></div>
+            <div className="field"><label>Standard Name / Title</label><input value={form.standard_name} onChange={e => setForm(f => ({ ...f, standard_name: e.target.value }))} placeholder="e.g. Sieve Analysis of Aggregates" /></div>
           </div>
           <div className="grid-2">
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>Upload file (PDF)</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳' : '⬆️ Upload'}</button>
-                {form.file_url && <span style={{ fontSize: 12, color: 'var(--accent)' }}>✓ File uploaded</span>}
-                <input ref={fileRef} type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => uploadStdFile(e.target.files[0])} />
+            {!isSolo && (
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Upload file (PDF)</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳' : '⬆️ Upload'}</button>
+                  {form.file_url && <span style={{ fontSize: 12, color: 'var(--accent)' }}>✓ File uploaded</span>}
+                  <input ref={fileRef} type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => uploadStdFile(e.target.files[0])} />
+                </div>
               </div>
-            </div>
-            <div className="field" style={{ marginBottom: 0 }}><label>Or enter URL</label><input value={form.link_url} onChange={e => setForm(f => ({ ...f, link_url: e.target.value }))} placeholder="https://…" /></div>
+            )}
+            <div className="field" style={{ marginBottom: 0 }}><label>Link URL</label><input value={form.link_url} onChange={e => setForm(f => ({ ...f, link_url: e.target.value }))} placeholder="https://…" /></div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button className="btn btn-primary btn-sm" onClick={saveStandard}>Save</button>
+            <button className="btn btn-sm" style={isSolo ? { background: '#534AB7', color: '#fff', border: 'none', fontWeight: 600 } : {}} onClick={saveStandard}>Save</button>
             <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
           </div>
         </div>
       )}
+
+      {/* Standards list */}
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        : filtered.length === 0 ? <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📑</div>No {activeType} standards added yet.</div>
-        : (
-          <div style={{ overflowX: 'auto' }}>
-            <table>
-              <thead><tr><th>Standard #</th><th>Name / Title</th><th>File / Link</th>{canEdit(session) && <th></th>}</tr></thead>
-              <tbody>
-                {filtered.map(std => (
-                  <tr key={std.id}>
-                    <td>{std.file_url || std.link_url ? <a href={std.file_url || std.link_url} target="_blank" rel="noopener" style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none', fontFamily: 'var(--mono)', fontSize: 14 }}>{std.standard_number}</a> : <span style={{ fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 14 }}>{std.standard_number}</span>}</td>
-                    <td style={{ fontSize: 13, color: 'var(--text2)' }}>{std.standard_name || '—'}</td>
-                    <td><div style={{ display: 'flex', gap: 8 }}>{std.file_url && <a href={std.file_url} target="_blank" rel="noopener" className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }}>📄 Download</a>}{std.link_url && <a href={std.link_url} target="_blank" rel="noopener" className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }}>🔗 Link</a>}{!std.file_url && !std.link_url && <span style={{ fontSize: 12, color: 'var(--text3)' }}>—</span>}</div></td>
-                    {canEdit(session) && <td><button className="btn btn-sm btn-danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => deleteStandard(std.id)}>✕</button></td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        : filtered.length === 0
+          ? <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📑</div>No {activeType} standards added yet.</div>
+          : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr><th>Standard #</th><th>Name / Title</th><th>Link</th>{canAdd && <th></th>}</tr></thead>
+                <tbody>
+                  {filtered.map(std => (
+                    <tr key={std.id}>
+                      <td>{std.file_url || std.link_url
+                        ? <a href={ensureProtocol(std.file_url || std.link_url)} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700, color: isSolo ? '#534AB7' : 'var(--accent)', textDecoration: 'none', fontFamily: 'var(--mono)', fontSize: 14 }}>{std.standard_number}</a>
+                        : <span style={{ fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 14 }}>{std.standard_number}</span>}
+                      </td>
+                      <td style={{ fontSize: 13, color: 'var(--text2)' }}>{std.standard_name || '—'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {std.file_url && <a href={ensureProtocol(std.file_url)} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }}>📄 File</a>}
+                          {std.link_url && <a href={ensureProtocol(std.link_url)} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }}>🔗 Link</a>}
+                          {!std.file_url && !std.link_url && <span style={{ fontSize: 12, color: 'var(--text3)' }}>—</span>}
+                        </div>
+                      </td>
+                      {canAdd && <td><button className="btn btn-sm" style={{ padding: '3px 8px', fontSize: 11, color: '#c84b2f', border: '1px solid #c84b2f', background: 'transparent' }} onClick={() => deleteStandard(std.id)}>✕</button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+      }
+    </div>
+  )
+}
+
+// ── Solo Categories Tab ───────────────────────────────────────
+function SoloCategoriesTab({ session, onChanged }) {
+  const { toast } = useAppStore()
+  const [cats, setCats] = useState([])
+  const [newCat, setNewCat] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadSoloCats(session?.userId).then(data => { setCats(data); setLoading(false) })
+  }, [])
+
+  async function add() {
+    const name = newCat.trim()
+    if (!name) return
+    if (cats.includes(name)) { toast('Category already exists.'); return }
+    const updated = [...cats, name].sort()
+    await saveSoloCats(session?.userId, updated)
+    setCats(updated); setNewCat(''); toast('Category added.')
+    onChanged?.()
+  }
+
+  async function remove(cat) {
+    if (!confirm(`Delete "${cat}"?`)) return
+    const updated = cats.filter(c => c !== cat)
+    await saveSoloCats(session?.userId, updated)
+    setCats(updated); toast('Category removed.')
+    onChanged?.()
+  }
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <div className="card">
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>My Equipment Categories</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Create categories to organise your equipment. You must have at least one before adding equipment.</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <input value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="New category name…" style={{ flex: 1 }} autoFocus />
+          <button className="btn btn-sm" style={{ background: '#534AB7', color: '#fff', border: 'none', fontWeight: 600 }} onClick={add}>Add</button>
+        </div>
+        {loading
+          ? <div className="spinner" style={{ margin: '0 auto' }} />
+          : cats.length === 0
+            ? <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '16px 0' }}>No categories yet — add your first one above.</div>
+            : cats.map(c => (
+                <div key={c} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface2)', fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#534AB7', display: 'inline-block', flexShrink: 0 }} />
+                    {c}
+                  </div>
+                  <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11, color: '#c84b2f', border: '1px solid #c84b2f', background: 'transparent' }} onClick={() => remove(c)}>✕</button>
+                </div>
+              ))
+        }
+      </div>
+    </div>
+  )
+}
+
+// ── Solo Add Equipment Modal ───────────────────────────────────
+function SoloAddEquipmentModal({ categories, session, onClose, onSaved, onGoToCategories }) {
+  const { toast } = useAppStore()
+  const [form, setForm] = useState({ equipment_name: '', nickname: '', category: '', location: '', condition: 'Good', notes: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!form.equipment_name.trim()) { toast('Equipment name is required.'); return }
+    if (!form.category) { toast('Select a category.'); return }
+    setSaving(true)
+    const { error } = await sb.from('equipment_inventory').insert({
+      equipment_name: form.equipment_name.trim(),
+      nickname: form.nickname.trim() || null,
+      category: form.category,
+      location: form.location.trim() || null,
+      condition: form.condition,
+      notes: form.notes.trim() || null,
+      login_mode: 'solo',
+      organization_id: null,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) { toast('Save failed: ' + error.message); setSaving(false); return }
+    toast('Equipment added.')
+    setSaving(false)
+    onSaved()
+    onClose()
+  }
+
+  const noCats = categories.length === 0
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 520, border: '1px solid var(--border)', marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Add equipment</div>
+          <button className="btn btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: 20 }}>
+          {noCats && (
+            <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '14px 16px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>No categories yet</div>
+              <div style={{ marginBottom: 10 }}>You need at least one category before adding equipment.</div>
+              <button className="btn btn-sm" style={{ background: '#534AB7', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => { onClose(); onGoToCategories() }}>→ Go to Categories tab</button>
+            </div>
+          )}
+          <div className="grid-2">
+            <div className="field"><label>Equipment Name *</label><input value={form.equipment_name} onChange={e => setForm(f => ({ ...f, equipment_name: e.target.value }))} placeholder="e.g. Digital Caliper" autoFocus /></div>
+            <div className="field"><label>Nickname / ID</label><input value={form.nickname} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} placeholder="e.g. CAL-01" /></div>
           </div>
-        )}
+          <div className="grid-2">
+            <div className="field">
+              <label>Category *</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} disabled={noCats}>
+                <option value="">{noCats ? '— Create a category first —' : '— Select —'}</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Bench A, Storage…" /></div>
+          </div>
+          <div className="field">
+            <label>Condition</label>
+            <select value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}>
+              {['Good', 'Fair', 'Poor', 'Out of Service'].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="field"><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} /></div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button className="btn btn-sm" style={{ background: noCats ? 'var(--border)' : '#534AB7', color: '#fff', border: 'none', fontWeight: 600, cursor: noCats ? 'not-allowed' : 'pointer' }} onClick={save} disabled={saving || noCats}>{saving ? 'Saving…' : 'Save Equipment'}</button>
+            <button className="btn btn-sm" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
 export default function EquipmentHub() {
   const { session } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -554,6 +793,9 @@ export default function EquipmentHub() {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [mobile, setMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+  const [hubTab, setHubTab] = useState('equipment') // solo only
+  const [soloCats, setSoloCats] = useState([])
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     const fn = () => setMobile(window.innerWidth < 768)
@@ -561,11 +803,13 @@ export default function EquipmentHub() {
     return () => window.removeEventListener('resize', fn)
   }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    if (isSolo && session?.userId) loadSoloCats(session.userId).then(setSoloCats)
+  }, [])
 
   async function load() {
     setLoading(true)
-    const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
@@ -581,9 +825,20 @@ export default function EquipmentHub() {
     return (!q || [e.equipment_name, e.nickname, e.category, e.location].some(f => f?.toLowerCase().includes(q))) && (!filterCat || e.category === filterCat)
   })
 
-  return (
+  const equipmentPanel = (
     <div style={{ display: 'flex', flexDirection: mobile ? 'column' : 'row', gap: 20, alignItems: 'flex-start', minHeight: 500 }}>
+      {/* Left panel */}
       <div style={{ width: mobile ? '100%' : 260, flexShrink: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+        {isSolo && (
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+            <button
+              className="btn btn-sm"
+              style={{ width: '100%', background: soloCats.length === 0 ? 'var(--surface2)' : '#534AB7', color: soloCats.length === 0 ? 'var(--text3)' : '#fff', border: 'none', fontWeight: 600, fontSize: 13 }}
+              onClick={() => soloCats.length === 0 ? setHubTab('categories') : setShowAddModal(true)}>
+              {soloCats.length === 0 ? '⚠️ Create categories first →' : '＋ Add equipment'}
+            </button>
+          </div>
+        )}
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search…" style={{ width: '100%', marginBottom: 8 }} />
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
@@ -597,8 +852,11 @@ export default function EquipmentHub() {
               equipment.length === 0
                 ? <div style={{ padding: '20px 14px', fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
                     <div style={{ fontSize: 22, marginBottom: 8 }}>🔧</div>
-                    <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment available yet.</div>
-                    <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment Inventory</strong> icon by your administrator.</div>
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment yet.</div>
+                    {isSolo
+                      ? <div style={{ fontSize: 12 }}>{soloCats.length === 0 ? 'Start by creating categories in the Categories tab, then add your equipment.' : 'Click "+ Add equipment" above to get started.'}</div>
+                      : <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment Inventory</strong> icon by your administrator.</div>
+                    }
                   </div>
                 : <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
             )
@@ -621,6 +879,7 @@ export default function EquipmentHub() {
         </div>
       </div>
 
+      {/* Right panel */}
       <div style={{ flex: 1, minWidth: 0 }}>
         {!selected ? (
           <div className="empty-state" style={{ marginTop: 60 }}><div className="empty-icon">🔧</div><div>Select equipment from the list to view details</div></div>
@@ -648,6 +907,45 @@ export default function EquipmentHub() {
           </div>
         )}
       </div>
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <HelpPanel screen="equipmenthub" />
+      </div>
+
+      {/* Solo top-level tabs */}
+      {isSolo && (
+        <ScrollTabs style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
+          {[{ key: 'equipment', label: '🔧 My Equipment' }, { key: 'categories', label: '🏷️ Categories' }].map(t => (
+            <button key={t.key} onClick={() => setHubTab(t.key)}
+              style={{ padding: '12px 22px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: hubTab === t.key ? '#534AB7' : 'var(--text2)', borderBottom: `3px solid ${hubTab === t.key ? '#534AB7' : 'transparent'}`, marginBottom: -2, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
+              {t.label}
+            </button>
+          ))}
+        </ScrollTabs>
+      )}
+
+      {(!isSolo || hubTab === 'equipment') && equipmentPanel}
+
+      {isSolo && hubTab === 'categories' && (
+        <SoloCategoriesTab
+          session={session}
+          onChanged={() => loadSoloCats(session?.userId).then(setSoloCats)}
+        />
+      )}
+
+      {showAddModal && (
+        <SoloAddEquipmentModal
+          categories={soloCats}
+          session={session}
+          onClose={() => setShowAddModal(false)}
+          onSaved={() => load()}
+          onGoToCategories={() => setHubTab('categories')}
+        />
+      )}
     </div>
   )
 }

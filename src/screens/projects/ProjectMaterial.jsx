@@ -426,6 +426,7 @@ function formatResultValue(type, value) {
 // ── Project Test Results Tab ───────────────────────────────────
 function ResultsTab({ projects, session, allowedNames }) {
   const { toast } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const [results,   setResults]   = useState([])
   const [equipment, setEquipment] = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -445,9 +446,9 @@ function ResultsTab({ projects, session, allowedNames }) {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    const isSolo = session?.loginMode === 'solo'
+    if (isSolo) return  // Solo users don't use lab equipment
     let q = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     q.then(({ data }) => setEquipment(data || []))
   }, [])
 
@@ -493,7 +494,7 @@ function ResultsTab({ projects, session, allowedNames }) {
   async function save() {
     if (!form.test_name.trim()) { toast('Test name is required.'); return }
     if (!form.project_id)       { toast('Select a project.'); return }
-    if (!form.equipment_id)     { toast('Select equipment.'); return }
+    if (!form.equipment_id && !isSolo) { toast('Select equipment.'); return }
     setSaving(true)
     const payload = {
       test_name: form.test_name.trim(),
@@ -600,8 +601,8 @@ function ResultsTab({ projects, session, allowedNames }) {
             </div>
           </div>
 
-          {/* Row 3: Equipment picker */}
-          <div className="field">
+          {/* Row 3: Equipment picker (team only) */}
+          {!isSolo && <div className="field">
             <label>Equipment *</label>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
@@ -634,7 +635,7 @@ function ResultsTab({ projects, session, allowedNames }) {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Row 4: Result Type + Value */}
           <div className="grid-2">
@@ -702,7 +703,9 @@ function ResultsTab({ projects, session, allowedNames }) {
 
         // ── Level 3: test list for a specific project + equipment ──
         if (drillProject && drillEquip) {
-          const rows = (byProject[drillProject]?.[drillEquip] || []).slice().sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1)
+          const rows = isSolo
+            ? Object.values(byProject[drillProject] || {}).flat().slice().sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1)
+            : (byProject[drillProject]?.[drillEquip] || []).slice().sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1)
           const nums = rows.map(r => parseFloat(r.result_value)).filter(v => !isNaN(v))
           const pfRows = rows.filter(r => r.result_type === 'pass_fail')
           const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null
@@ -714,9 +717,15 @@ function ResultsTab({ projects, session, allowedNames }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 16, flexWrap: 'wrap' }}>
                 <button onClick={() => { setDrillProject(null); setDrillEquip(null) }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, padding: 0, fontSize: 13 }}>All Projects</button>
                 <span style={{ color: 'var(--text3)' }}>›</span>
-                <button onClick={() => setDrillEquip(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, padding: 0, fontSize: 13 }}>{projectMap[drillProject] || 'Project'}</button>
-                <span style={{ color: 'var(--text3)' }}>›</span>
-                <span style={{ fontWeight: 700, color: 'var(--text)' }}>{equipMap[drillEquip] || 'Equipment'}</span>
+                {isSolo ? (
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>{projectMap[drillProject] || 'Project'}</span>
+                ) : (
+                  <>
+                    <button onClick={() => setDrillEquip(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, padding: 0, fontSize: 13 }}>{projectMap[drillProject] || 'Project'}</button>
+                    <span style={{ color: 'var(--text3)' }}>›</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>{equipMap[drillEquip] || 'Equipment'}</span>
+                  </>
+                )}
               </div>
               {/* Summary stats */}
               {(avg !== null || passRate !== null) && (
@@ -817,14 +826,14 @@ function ResultsTab({ projects, session, allowedNames }) {
               const pr       = pf.length ? Math.round(pf.filter(r => r.result_value === 'Pass').length / pf.length * 100) : null
               const latest   = allRows.map(r => r.date).filter(Boolean).sort().reverse()[0]
               return (
-                <div key={pid} onClick={() => setDrillProject(pid)}
+                <div key={pid} onClick={() => { setDrillProject(pid); if (isSolo) setDrillEquip('__none__') }}
                   style={{ background: 'var(--surface)', border: '2px solid var(--border)', borderRadius: 16, padding: '22px 18px', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = '#1a56db'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(26,86,219,0.12)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}>
                   <div style={{ fontSize: 38, marginBottom: 10 }}>📁</div>
                   <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3, marginBottom: 10, color: 'var(--text)' }}>{projectMap[pid] || 'No Project'}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{equipCnt} equipment · {allRows.length} tests</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{isSolo ? `${allRows.length} test${allRows.length !== 1 ? 's' : ''}` : `${equipCnt} equipment · ${allRows.length} tests`}</div>
                     {pr !== null && <div style={{ fontSize: 12, fontWeight: 600, color: pr >= 80 ? '#2a6049' : '#c84b2f' }}>{pr}% pass rate</div>}
                     {latest && <div style={{ fontSize: 11, color: 'var(--text3)' }}>Latest: {latest}</div>}
                   </div>
@@ -1097,8 +1106,9 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
 
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
+    if (isSolo) { setLoadingEq(false); return }
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
-    if (!isSolo) eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
     if (session?.organizationId) {
       sb.from('projects').select('id, name, project_id, pi_user_id, student_ids, project_group').eq('status', 'active').eq('organization_id', session.organizationId).order('project_id')
@@ -1491,8 +1501,9 @@ function RecordsPanel({ projects, allowedNames, session }) {
 
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
+    if (isSolo) return
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name')
-    if (!isSolo) eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => setEquipment(data || []))
   }, [])
 
@@ -1656,7 +1667,7 @@ function WorkspaceTab({ session, projects, isSolo, readOnly, allowedNames, userP
   const wsTabs = [
     { key: 'members',  label: '👥 Project Members' },
     ...(hasProjectAccess ? [
-      { key: 'analysis', label: '📊 Data Analysis' },
+      ...(!isSolo ? [{ key: 'analysis', label: '📊 Data Analysis' }] : []),
       { key: 'records',  label: '📂 Records' },
       { key: 'links',    label: '🔗 Links' },
     ] : []),

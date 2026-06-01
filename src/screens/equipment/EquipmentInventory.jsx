@@ -24,8 +24,9 @@ const LOCATIONS = [
 function canEdit(session) { return session?.role === 'admin' || session?.role === 'user' }
 function isAdmin(session) { return session?.role === 'admin' }
 
-function EquipmentModal({ item, onClose, onSaved, session }) {
+function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
   const { toast } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const blank = {
     equipment_name: '', nickname: '', location: '', category: '',
     ref_id: '', model_number: '', serial_number: '', manufacturer: '',
@@ -97,16 +98,29 @@ function EquipmentModal({ item, onClose, onSaved, session }) {
           </div>
           <div className="grid-2">
             <div className="field"><label>Category</label>
-              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                <option value="">— Select —</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              {isSolo
+                ? soloCats.length === 0
+                  ? <div style={{ fontSize: 13, color: '#92400e', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '8px 12px' }}>
+                      No categories yet — open the <strong>Equipment Info</strong> icon and go to the <strong>Categories</strong> tab to create them first.
+                    </div>
+                  : <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      {soloCats.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                : <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+              }
             </div>
             <div className="field"><label>Location</label>
-              <select value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}>
-                <option value="">— Select —</option>
-                {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
+              {isSolo
+                ? <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Bench A, Storage Room…" />
+                : <select value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+              }
             </div>
           </div>
           <div className="grid-2">
@@ -171,6 +185,7 @@ function EquipmentModal({ item, onClose, onSaved, session }) {
 
 function EquipmentList({ session }) {
   const { toast } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -181,9 +196,16 @@ function EquipmentList({ session }) {
   const [editItem, setEditItem] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(null)
+  const [soloCats, setSoloCats] = useState([])
   const fileRef = useRef(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    if (isSolo && session?.userId) {
+      sb.from('settings').select('value').eq('key', `solo_eq_cats_${session.userId}`).maybeSingle()
+        .then(({ data }) => { try { setSoloCats(JSON.parse(data?.value || '[]')) } catch { setSoloCats([]) } })
+    }
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -321,7 +343,10 @@ function EquipmentList({ session }) {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search equipment…" style={{ flex: 1, minWidth: 180 }} />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: 'auto' }}>
           <option value="">All categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {(isSolo
+            ? [...new Set(items.map(i => i.category).filter(Boolean))].sort()
+            : CATEGORIES
+          ).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filterLoc} onChange={e => setFilterLoc(e.target.value)} style={{ width: 'auto' }}>
           <option value="">All locations</option>
@@ -436,6 +461,7 @@ function EquipmentList({ session }) {
         <EquipmentModal
           item={editItem}
           session={session}
+          soloCats={soloCats}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={load}
         />
@@ -674,7 +700,7 @@ function EquipmentSettings({ session }) {
           <button className="btn btn-sm btn-primary" onClick={applyDefaultInterval} disabled={saving}>Apply to equipment without interval</button>
         </div>
       </div>
-      <CategoriesManager toast={toast} session={session} />
+      {session?.loginMode !== 'solo' && <CategoriesManager toast={toast} session={session} />}
       {session?.role === 'admin' && (
         <div className="card" style={{ borderColor: 'var(--accent2)' }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, color: 'var(--accent2)' }}>Danger zone</div>
