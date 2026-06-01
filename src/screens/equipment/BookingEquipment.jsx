@@ -206,7 +206,8 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
 
   async function save() {
     if (!form.equipment_id) { toast('Select equipment.'); return }
-    if (!form.start_time || !form.end_time) { toast('Please drag on the calendar to select a time slot.'); return }
+    if (!form.start_time || !form.end_time) { toast('Please select a start and end time.'); return }
+    if (new Date(form.end_time) <= new Date(form.start_time)) { toast('End time must be after start time.'); return }
     if (conflict) { toast('This time slot conflicts with an existing booking.'); return }
     const isSolo = session?.loginMode === 'solo' || session?.role === 'solo'
     if (isSolo) {
@@ -298,17 +299,16 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           </div>
         )}
 
-        {/* Read-only time info from drag selection */}
-        {form.start_time && form.end_time && (
-          <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
-            <div style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>📅 Selected time</div>
-            <div style={{ color: 'var(--text2)' }}>
-              <span style={{ fontFamily: 'var(--mono)' }}>{fmtDateTime(form.start_time)}</span>
-              <span style={{ margin: '0 8px', color: 'var(--text3)' }}>→</span>
-              <span style={{ fontFamily: 'var(--mono)' }}>{fmtDateTime(form.end_time)}</span>
-            </div>
+        <div className="grid-2">
+          <div className="field">
+            <label>Start time *</label>
+            <input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
           </div>
-        )}
+          <div className="field">
+            <label>End time *</label>
+            <input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+          </div>
+        </div>
 
         <div className="field">
           <label>Purpose of use</label>
@@ -413,13 +413,13 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
     return Math.max(0, Math.min(47, Math.floor(y / SLOT_H)))
   }
 
-  function getDayAndSlotFromMouse(e) {
+  function getDayAndSlotFromXY(clientX, clientY) {
     for (let di = 0; di < 7; di++) {
       const col = colRefs.current[di]
       if (!col) continue
       const rect = col.getBoundingClientRect()
-      if (e.clientX >= rect.left && e.clientX <= rect.right) {
-        const y = e.clientY - rect.top
+      if (clientX >= rect.left && clientX <= rect.right) {
+        const y = clientY - rect.top
         const slot = yToSlot(y)
         return { di, slot }
       }
@@ -427,50 +427,80 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
     return null
   }
 
-  function handleMouseDown(e, di) {
-    if (!canBook) return
+  function startDrag(clientX, clientY, di) {
+    if (!canBook) return false
     const col = colRefs.current[di]
-    if (!col) return
+    if (!col) return false
     const rect = col.getBoundingClientRect()
-    const slot = yToSlot(e.clientY - rect.top)
+    const slot = yToSlot(clientY - rect.top)
     setDrag({ startDayIdx: di, startSlot: slot, endDayIdx: di, endSlot: slot })
-    e.preventDefault()
+    return true
   }
 
-  // Use global mousemove so drag works across columns
+  function handleMouseDown(e, di) {
+    if (startDrag(e.clientX, e.clientY, di)) e.preventDefault()
+  }
+
+  function handleTouchStart(e, di) {
+    if (!canBook) return
+    const t = e.touches[0]
+    if (startDrag(t.clientX, t.clientY, di)) e.preventDefault()
+  }
+
+  function commitDrag(drag) {
+    let { startDayIdx, startSlot, endDayIdx, endSlot } = drag
+    const startAbs = startDayIdx * 48 + startSlot
+    const endAbs = endDayIdx * 48 + endSlot
+    if (startAbs > endAbs) {
+      [startDayIdx, startSlot, endDayIdx, endSlot] = [endDayIdx, endSlot, startDayIdx, startSlot]
+    }
+    const start = new Date(days[startDayIdx])
+    start.setHours(Math.floor(startSlot / 2), (startSlot % 2) * 30, 0, 0)
+    const end = new Date(days[endDayIdx])
+    const endSlotFinal = endSlot + 1
+    if (endSlotFinal >= 48) {
+      end.setDate(end.getDate() + 1)
+      end.setHours(0, 0, 0, 0)
+    } else {
+      end.setHours(Math.floor(endSlotFinal / 2), (endSlotFinal % 2) * 30, 0, 0)
+    }
+    setDrag(null)
+    onSlotClick({ start: localFmt(start), end: localFmt(end) })
+  }
+
+  // Global mouse + touch listeners for drag tracking
   useEffect(() => {
     function onMouseMove(e) {
       if (!drag) return
-      const result = getDayAndSlotFromMouse(e)
+      const result = getDayAndSlotFromXY(e.clientX, e.clientY)
       if (!result) return
       setDrag(d => ({ ...d, endDayIdx: result.di, endSlot: result.slot }))
     }
     function onMouseUp(e) {
       if (!drag) return
-      let { startDayIdx, startSlot, endDayIdx, endSlot } = drag
-      const startAbs = startDayIdx * 48 + startSlot
-      const endAbs = endDayIdx * 48 + endSlot
-      if (startAbs > endAbs) {
-        [startDayIdx, startSlot, endDayIdx, endSlot] = [endDayIdx, endSlot, startDayIdx, startSlot]
-      }
-      const start = new Date(days[startDayIdx])
-      start.setHours(Math.floor(startSlot / 2), (startSlot % 2) * 30, 0, 0)
-      const end = new Date(days[endDayIdx])
-      const endSlotFinal = endSlot + 1
-      if (endSlotFinal >= 48) {
-        end.setDate(end.getDate() + 1)
-        end.setHours(0, 0, 0, 0)
-      } else {
-        end.setHours(Math.floor(endSlotFinal / 2), (endSlotFinal % 2) * 30, 0, 0)
-      }
-      setDrag(null)
-      onSlotClick({ start: localFmt(start), end: localFmt(end) })
+      commitDrag(drag)
+    }
+    function onTouchMove(e) {
+      if (!drag) return
+      const t = e.touches[0]
+      const result = getDayAndSlotFromXY(t.clientX, t.clientY)
+      if (!result) return
+      e.preventDefault()
+      setDrag(d => ({ ...d, endDayIdx: result.di, endSlot: result.slot }))
+    }
+    function onTouchEnd(e) {
+      if (!drag) return
+      commitDrag(drag)
     }
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd)
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
     }
   }, [drag])
 
@@ -536,7 +566,8 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook })
         {days.map((day, di) => (
           <div key={di} ref={el => colRefs.current[di] = el}
             style={{ position: 'relative', height: TOTAL_H, borderLeft: '1px solid var(--border)', cursor: canBook ? 'crosshair' : 'default' }}
-            onMouseDown={e => handleMouseDown(e, di)}>
+            onMouseDown={e => handleMouseDown(e, di)}
+            onTouchStart={e => handleTouchStart(e, di)}>
 
             {/* Hour lines */}
             {HOURS.map(h => (
