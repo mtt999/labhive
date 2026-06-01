@@ -622,7 +622,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
               const endMins   = Math.min(1440, segEnd.getHours() * 60 + segEnd.getMinutes())
               const top    = (startMins / 30) * SLOT_H
               const height = Math.max(SLOT_H, ((endMins - startMins) / 30) * SLOT_H)
-              return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.18)', border: '2px solid rgba(29,158,117,0.55)', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
+              return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.22)', border: '2px solid rgba(29,158,117,0.75)', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
             })()}
 
             {/* Bookings — overlap-aware lane layout for this day */}
@@ -2323,6 +2323,7 @@ function BookingCalendar({ session }) {
             {showBookingModal && !editBooking && !isMobile && (
               <div style={{ width: 340, flexShrink: 0 }}>
                 <BookingModal
+                  key={bookingDraft ? `${bookingDraft.start}_${bookingDraft.end}` : 'new'}
                   booking={null}
                   equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
                   selectedEquipment={selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null}
@@ -2358,8 +2359,8 @@ function BookingCalendar({ session }) {
           onClose={() => { setShowMultiModal(false); setMultiSlot(null) }}
         />
       )}
-      {/* Full overlay: edit mode OR mobile (panel not usable on small screens) */}
-      {showBookingModal && (editBooking || isMobile) && (
+      {/* Full overlay: edit mode, mobile, or month view (panel only exists in week view flex layout) */}
+      {showBookingModal && (editBooking || isMobile || calView !== 'week') && (
         <BookingModal
           booking={editBooking}
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
