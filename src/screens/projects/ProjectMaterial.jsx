@@ -1106,7 +1106,15 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
 
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
-    if (isSolo) { setLoadingEq(false); return }
+    if (isSolo) {
+      sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).eq('login_mode', 'solo').order('category').order('equipment_name')
+        .then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
+      if (session?.userId) {
+        sb.from('projects').select('id, name, project_id').eq('solo_owner_id', session.userId).order('name')
+          .then(({ data }) => setAllProjects(data || []))
+      }
+      return
+    }
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).order('category').order('equipment_name')
     eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
@@ -1234,7 +1242,9 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
         </div>
         {loadingEq
           ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-          : categories.map(cat => {
+          : !categories.length && session?.loginMode === 'solo'
+            ? <div style={{ padding: '16px 12px', fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>No equipment yet.<br />Add equipment under the Equipment Info icon.</div>
+            : categories.map(cat => {
               const items = filteredEq.filter(e => e.category === cat)
               if (!items.length) return null
               return (
@@ -1501,7 +1511,11 @@ function RecordsPanel({ projects, allowedNames, session }) {
 
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
-    if (isSolo) return
+    if (isSolo) {
+      sb.from('equipment_inventory').select('id, equipment_name').eq('is_active', true).eq('login_mode', 'solo')
+        .then(({ data }) => setEquipment(data || []))
+      return
+    }
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name')
     eqQ = eqQ.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     eqQ.then(({ data }) => setEquipment(data || []))
@@ -1667,7 +1681,7 @@ function WorkspaceTab({ session, projects, isSolo, readOnly, allowedNames, userP
   const wsTabs = [
     { key: 'members',  label: '👥 Project Members' },
     ...(hasProjectAccess ? [
-      ...(!isSolo ? [{ key: 'analysis', label: '📊 Data Analysis' }] : []),
+      { key: 'analysis', label: '📊 Data Analysis' },
       { key: 'records',  label: '📂 Records' },
       { key: 'links',    label: '🔗 Links' },
     ] : []),
