@@ -105,8 +105,10 @@ export default function Layout({ children }) {
         maxWidth: screen === 'booking' ? '100%' : 960,
         margin: '0 auto',
         width: '100%',
-        padding: screen === 'booking' ? '16px 10px' : '24px 16px',
-        paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : '24px',
+        paddingTop: screen === 'booking' ? '16px' : '24px',
+        paddingLeft: screen === 'booking' ? '10px' : '16px',
+        paddingRight: screen === 'booking' ? '10px' : '16px',
+        paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : (screen === 'booking' ? '16px' : '24px'),
       }}>
         {children}
         {!isMobile && (

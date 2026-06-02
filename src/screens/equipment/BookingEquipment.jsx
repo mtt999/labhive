@@ -145,7 +145,7 @@ const statusColor = { confirmed: '#1e4d39', pending: '#92400e', denied: '#a32d2d
 const statusBg = { confirmed: '#e8f2ee', pending: '#fef3c7', denied: '#fcebeb', cancelled: '#f1efe8' }
 
 // ── Booking Form Modal ────────────────────────────────────────
-function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, initialSlot, photoRequired, panel }) {
+function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, onAdjustTime, initialSlot, photoRequired, panel }) {
   const { toast } = useAppStore()
 
   // Parse existing booking title to restore purpose type on edit
@@ -290,6 +290,9 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
   const formContent = (
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: panel ? 20 : 28, width: '100%', border: '1px solid var(--border)', maxHeight: panel ? 'calc(100vh - 260px)' : '90vh', overflowY: 'auto', ...(panel ? {} : { maxWidth: 480 }) }}>
         <div style={{ fontWeight: 700, fontSize: 16, marginBottom: panel ? 12 : 20 }}>
+          {onAdjustTime && (
+            <button onClick={onAdjustTime} style={{ display: 'block', background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12, cursor: 'pointer', padding: '0 0 8px 0', fontWeight: 600 }}>← Drag to adjust time</button>
+          )}
           {booking ? 'Edit booking' : 'New booking'}
           {panel && <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400, marginTop: 3 }}>Drag on the calendar to adjust time</div>}
         </div>
@@ -436,8 +439,10 @@ function localFmt(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, selectedSlot }) {
+function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, selectedSlot, onBookingReschedule, canReschedule }) {
   const [drag, setDrag] = useState(null)
+  const [bookingDrag, setBookingDrag] = useState(null)
+  const bookingDragRef = useRef(null)
   const colRefs = useRef([])
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const today = new Date()
@@ -500,6 +505,96 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
     setDrag(null)
     onSlotClick({ start: localFmt(start), end: localFmt(end) })
   }
+
+  // ── Booking reschedule drag ──────────────────────────────────
+  function dateToAbsSlot(date) {
+    const di = Math.max(0, Math.min(6, Math.floor((date - days[0]) / 86400000)))
+    return di * 48 + Math.floor((date.getHours() * 60 + date.getMinutes()) / 30)
+  }
+  function absSlotToDate(abs) {
+    const clamped = Math.max(0, Math.min(6 * 48 + 47, abs))
+    const d = new Date(days[Math.floor(clamped / 48)])
+    const s = clamped % 48
+    d.setHours(Math.floor(s / 2), (s % 2) * 30, 0, 0)
+    return d
+  }
+
+  function handleBookingMouseDown(e, booking, type, di) {
+    e.stopPropagation(); e.preventDefault()
+    const col = colRefs.current[di]
+    if (!col) return
+    const slot = yToSlot(e.clientY - col.getBoundingClientRect().top)
+    const curAbs = di * 48 + slot
+    const startAbs = dateToAbsSlot(new Date(booking.start_time))
+    const endAbs   = dateToAbsSlot(new Date(booking.end_time))
+    const bd = {
+      booking, type,
+      pointerOffset: type === 'move' ? curAbs - startAbs : 0,
+      originalStart: new Date(booking.start_time),
+      originalEnd:   new Date(booking.end_time),
+      startAbs, endAbs,
+      duration: endAbs - startAbs,
+      previewStart: new Date(booking.start_time),
+      previewEnd:   new Date(booking.end_time),
+      hasMoved: false,
+      startX: e.clientX, startY: e.clientY,
+    }
+    bookingDragRef.current = bd
+    setBookingDrag(bd)
+  }
+
+  useEffect(() => { bookingDragRef.current = bookingDrag }, [bookingDrag])
+
+  useEffect(() => {
+    function onMouseMove(e) {
+      const bd = bookingDragRef.current
+      if (!bd) return
+      const dx = e.clientX - bd.startX, dy = e.clientY - bd.startY
+      if (!bd.hasMoved && Math.sqrt(dx*dx + dy*dy) < 4) return
+      const result = getDayAndSlotFromXY(e.clientX, e.clientY)
+      if (!result) return
+      const cur = result.di * 48 + result.slot
+      let ps, pe
+      if (bd.type === 'move') {
+        const ns = Math.max(0, Math.min(6 * 48 + 47 - bd.duration + 1, cur - bd.pointerOffset))
+        ps = absSlotToDate(ns); pe = absSlotToDate(ns + bd.duration)
+      } else if (bd.type === 'resize-end') {
+        ps = bd.originalStart; pe = absSlotToDate(Math.max(bd.startAbs + 1, Math.min(6 * 48 + 47, cur + 1)))
+      } else {
+        ps = absSlotToDate(Math.max(0, Math.min(bd.endAbs - 1, cur))); pe = bd.originalEnd
+      }
+      const updated = { ...bd, hasMoved: true, previewStart: ps, previewEnd: pe }
+      bookingDragRef.current = updated
+      setBookingDrag(updated)
+    }
+    function onMouseUp() {
+      const bd = bookingDragRef.current
+      if (!bd) return
+      bookingDragRef.current = null
+      setBookingDrag(null)
+      if (!bd.hasMoved) {
+        onBookingClick(bd.booking)
+      } else if (bd.previewStart.getTime() !== bd.originalStart.getTime() || bd.previewEnd.getTime() !== bd.originalEnd.getTime()) {
+        onBookingReschedule?.(bd.booking, bd.previewStart, bd.previewEnd)
+      }
+    }
+    function onTouchMove(e) {
+      if (!bookingDragRef.current) return
+      e.preventDefault()
+      const t = e.touches[0]
+      onMouseMove({ clientX: t.clientX, clientY: t.clientY, ...bookingDragRef.current })
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onMouseUp)
+    }
+  }, [bookingDrag])
 
   // Global mouse + touch listeners for drag tracking
   useEffect(() => {
@@ -643,6 +738,13 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
               return <div style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(29,158,117,0.30)', border: '2px solid #1D9E75', borderRadius: 4, pointerEvents: 'none', zIndex: 1 }} />
             })()}
 
+            {/* Booking reschedule preview */}
+            {bookingDrag?.hasMoved && (() => {
+              const seg = getBookingSegment({ start_time: bookingDrag.previewStart.toISOString(), end_time: bookingDrag.previewEnd.toISOString() }, di)
+              if (!seg) return null
+              return <div style={{ position: 'absolute', top: seg.top, left: 4, right: 4, height: seg.height, background: 'rgba(29,158,117,0.22)', border: '2px dashed #1D9E75', borderRadius: 4, pointerEvents: 'none', zIndex: 5 }} />
+            })()}
+
             {/* Bookings — overlap-aware lane layout for this day */}
             {(() => {
               const dayStart = new Date(days[di]); dayStart.setHours(0, 0, 0, 0)
@@ -688,11 +790,30 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
                 ].join(' ')
                 const leftVal  = total > 1 ? `calc(2px + ${lane} * (100% - 4px) / ${total})` : 2
                 const rightVal = total > 1 ? `calc(2px + ${total - lane - 1} * (100% - 4px) / ${total})` : 2
+                const reschedule = canReschedule?.(b)
+                const isDragging = bookingDrag?.booking.id === b.id
                 return (
                   <div key={`${b.id}-${di}`}
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={e => { e.stopPropagation(); onBookingClick(b) }}
-                    style={{ position: 'absolute', top: seg.top + 1, left: leftVal, right: rightVal, height: seg.height, background: statusBg[b.status], border: `1px solid ${statusColor[b.status]}50`, borderLeft: `3px solid ${statusColor[b.status]}`, borderRadius: br, padding: '2px 5px', fontSize: 10, overflow: 'hidden', zIndex: 2, cursor: 'pointer' }}>
+                    onMouseDown={e => {
+                      e.stopPropagation()
+                      if (reschedule && !bookingDrag) { e.preventDefault(); handleBookingMouseDown(e, b, 'move', di) }
+                    }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (!reschedule) onBookingClick(b)
+                      // reschedule click handled by onMouseUp (hasMoved=false)
+                    }}
+                    style={{ position: 'absolute', top: seg.top + 1, left: leftVal, right: rightVal, height: seg.height, background: statusBg[b.status], border: `1px solid ${statusColor[b.status]}50`, borderLeft: `3px solid ${statusColor[b.status]}`, borderRadius: br, padding: '2px 5px', fontSize: 10, overflow: 'hidden', zIndex: isDragging ? 1 : 2, cursor: reschedule ? 'grab' : 'pointer', opacity: isDragging ? 0.35 : 1 }}>
+                    {/* Resize top handle */}
+                    {reschedule && seg.isStart && (
+                      <div onMouseDown={e => { e.stopPropagation(); e.preventDefault(); if (!bookingDrag) handleBookingMouseDown(e, b, 'resize-start', di) }}
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 8, cursor: 'n-resize', zIndex: 3 }} />
+                    )}
+                    {/* Resize bottom handle */}
+                    {reschedule && seg.isEnd && (
+                      <div onMouseDown={e => { e.stopPropagation(); e.preventDefault(); if (!bookingDrag) handleBookingMouseDown(e, b, 'resize-end', di) }}
+                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, cursor: 's-resize', zIndex: 3 }} />
+                    )}
                     {seg.isStart && (
                       <>
                         <div style={{ fontWeight: 600, color: statusColor[b.status], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2044,14 +2165,35 @@ function BookingCalendar({ session }) {
       setMultiSlot(slot); setShowMultiModal(true)
     } else {
       setBookingDraft(slot)
-      if (isMobile) {
-        // Mobile: show the draft bar at bottom so calendar stays usable for re-drag
+      const usePanel = !isMobile && window.innerWidth >= 1050 && calView === 'week'
+      if (!usePanel) {
+        // Mobile + narrow desktop: show draft bar so calendar stays draggable
         setShowBookingModal(false)
+        setEditBooking(null)
       } else {
-        // Desktop: open the side panel (or keep it open — key remount updates times)
+        // Wide desktop week view: open/keep side panel (key remount updates times)
         if (!showBookingModal || editBooking) { setEditBooking(null); setShowBookingModal(true) }
       }
     }
+  }
+
+  function canRescheduleBooking(booking) {
+    if (!booking) return false
+    if (['cancelled', 'denied'].includes(booking.status)) return false
+    if (canEdit(session)) return true
+    return booking.user_id === session?.userId
+  }
+
+  async function handleBookingReschedule(booking, newStart, newEnd) {
+    if (!newStart || !newEnd || newStart >= newEnd) { toast('Invalid time range.'); return }
+    const { error } = await sb.from('equipment_bookings').update({
+      start_time: newStart.toISOString(),
+      end_time: newEnd.toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', booking.id)
+    if (error) toast('Failed to update booking time.')
+    else toast('Booking time updated ✓')
+    loadBookings()
   }
 
   function handleDayClick(day) {
@@ -2267,12 +2409,28 @@ function BookingCalendar({ session }) {
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        {selectedEq.length > 0 && (
-          <div style={{ padding: '6px 12px', background: 'var(--accent-light)', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{selectedEq.length} selected</span>
-            <button onClick={() => setSelectedEq([])} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 12, padding: 0 }}>Clear</button>
-          </div>
-        )}
+        {(() => {
+          const allIds = filteredEq.map(e => e.id)
+          const allSelected = allIds.length > 0 && allIds.every(id => selectedEq.includes(id))
+          const someSelected = !allSelected && allIds.some(id => selectedEq.includes(id))
+          return (
+            <div
+              onClick={() => allSelected ? setSelectedEq([]) : setSelectedEq(prev => [...new Set([...prev, ...allIds])])}
+              style={{ padding: '7px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: allSelected ? 'var(--accent-light)' : 'var(--surface2)' }}
+            >
+              <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${allSelected || someSelected ? 'var(--accent)' : 'var(--border)'}`, background: allSelected ? 'var(--accent)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {allSelected && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                {someSelected && <span style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>—</span>}
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: allSelected ? 'var(--accent)' : 'var(--text2)' }}>
+                {allSelected ? `All selected (${allIds.length})` : someSelected ? `${selectedEq.filter(id => allIds.includes(id)).length} selected` : 'Select all'}
+              </span>
+              {selectedEq.length > 0 && (
+                <button onClick={e => { e.stopPropagation(); setSelectedEq([]) }} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 11, padding: 0 }}>Clear</button>
+              )}
+            </div>
+          )
+        })()}
         <div style={{ maxHeight: isMobile ? 200 : 500, overflowY: 'auto' }}>
           {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
             : filteredEq.map(e => (
@@ -2340,7 +2498,7 @@ function BookingCalendar({ session }) {
                   💡 Select equipment on the left to enable drag-to-book
                 </div>
               )}
-              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} />
+              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
             </div>
             {/* Booking form side panel — only wide desktops (≥1050px) so calendar has room */}
             {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && (
@@ -2382,8 +2540,8 @@ function BookingCalendar({ session }) {
           onClose={() => { setShowMultiModal(false); setMultiSlot(null) }}
         />
       )}
-      {/* Mobile draft bar — stays at bottom so calendar is always draggable */}
-      {isMobile && bookingDraft && !showBookingModal && !editBooking && (
+      {/* Draft bar — stays at bottom so calendar is always draggable (mobile + narrow desktop) */}
+      {(isMobile || window.innerWidth < 1050) && bookingDraft && !showBookingModal && !editBooking && (
         <BookingDraftBar
           draft={bookingDraft}
           equipmentName={selectedEq.length === 1 ? (equipment.find(e => e.id === selectedEq[0])?.nickname || equipment.find(e => e.id === selectedEq[0])?.equipment_name) : selectedEq.length > 1 ? `${selectedEq.length} equipment` : null}
@@ -2398,8 +2556,14 @@ function BookingCalendar({ session }) {
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
           selectedEquipment={selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null}
           session={session}
-          onSave={() => { loadBookings(); loadNotifications() }}
-          onClose={() => { setShowBookingModal(false); setBookingDraft(null); setEditBooking(null) }}
+          onSave={() => { loadBookings(); loadNotifications(); setBookingDraft(null); setEditBooking(null) }}
+          onClose={() => {
+            setShowBookingModal(false)
+            setEditBooking(null)
+            // For edit mode clear draft too; for new booking keep draft so user can re-drag
+            if (editBooking) setBookingDraft(null)
+          }}
+          onAdjustTime={!editBooking ? () => { setShowBookingModal(false); setEditBooking(null) } : undefined}
           initialSlot={bookingDraft}
           photoRequired={photoRequired}
         />
