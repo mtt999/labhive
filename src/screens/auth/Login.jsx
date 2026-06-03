@@ -498,9 +498,9 @@ export default function Login() {
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>App developed by Mohsen Motlagh</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
           <div style={{ marginTop: 8 }}>
-            <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
+            <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
             <span style={{ margin: '0 6px' }}>·</span>
-            <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
+            <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
           </div>
         </div>
 
