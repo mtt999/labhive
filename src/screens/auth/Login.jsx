@@ -331,11 +331,11 @@ export default function Login() {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '40px 20px' }}>
+    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '32px 20px 40px' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
-        <div style={{ textAlign: 'center', marginBottom: 0, transform: 'translateY(54px)' }}>
-          <LabHiveLogo size={297} />
+        <div style={{ textAlign: 'center', marginBottom: -52 }}>
+          <LabHiveLogo size={240} />
         </div>
 
         <div className="card" style={{ padding: '28px 28px 24px' }}>
@@ -498,9 +498,9 @@ export default function Login() {
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>App developed by Mohsen Motlagh</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
           <div style={{ marginTop: 8 }}>
-            <a href="/labhive/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
+            <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
             <span style={{ margin: '0 6px' }}>·</span>
-            <a href="/labhive/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
+            <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
           </div>
         </div>
 
