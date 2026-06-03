@@ -1366,6 +1366,12 @@ export default function Admin() {
             <div style={{ fontSize: 12, color: 'var(--text3)' }}>Managing: {orgName(myOrgId)}</div>
           )}
         </div>
+        {isSuperAdmin && (
+          <a href="https://analytics.google.com/analytics/web/" target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, background: '#f97316', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+            📊 View Analytics
+          </a>
+        )}
       </div>
 
       {/* Maintenance mode toggle — super admin only */}

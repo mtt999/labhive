@@ -84,6 +84,17 @@ export default function App() {
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
 
+  // Track screen changes as GA4 page views
+  useEffect(() => {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_title: screen,
+        page_location: window.location.href,
+        page_path: '/' + screen,
+      })
+    }
+  }, [screen])
+
   // Store the equipment ID from the QR code URL param so Login can redirect after auth
   useEffect(() => {
     if (SCAN_EQ_ID) setScanEquipmentId(SCAN_EQ_ID)
