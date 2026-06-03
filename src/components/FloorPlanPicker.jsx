@@ -391,6 +391,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const canEdit = !!session
+  const isSolo = session?.loginMode === 'solo'
 
   useEffect(() => { loadAll() }, [])
 
@@ -571,15 +572,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         <div style={{ padding: 16, overflowX: 'auto' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-          ) : facility && facility.startsWith('custom_') ? (
-            <CustomPlanTab
-              plan={customPlans.find(p => `custom_${p.id}` === facility)}
-              selected={selected}
-              onToggle={toggleLocation}
-              occupancy={occupancy}
-              canEdit={canEdit}
-            />
-          ) : facility === 'ICT' ? (
+          ) : facility && facility.startsWith('custom_') ? (() => {
+            const plan = customPlans.find(p => `custom_${p.id}` === facility)
+            return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={canEdit} /> : null
+          })() : facility === 'ICT' ? (
             <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={canEdit} />
           ) : (
             <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={canEdit} />
