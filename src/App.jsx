@@ -62,7 +62,7 @@ const DEEP_LINK_TAB    = new URLSearchParams(window.location.search).get('tab')
 function ComingSoonScreen() {
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0F1B35', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-      <img src="/labhive/labhive-icon.png" alt="iLab" onError={e => { e.target.style.display='none' }}
+      <img src={`${import.meta.env.BASE_URL}labhive-icon.png`} alt="LabHive" onError={e => { e.target.style.display='none' }}
         style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }} />
       <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>Coming Soon</div>
       <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>

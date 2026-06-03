@@ -6,6 +6,7 @@ const isMobile = process.env.BUILD_TARGET === 'mobile'
 const isProd = process.env.NODE_ENV === 'production'
 
 export default defineConfig({
+  server: { port: 5174, strictPort: true, base: '/labhive/' },
   plugins: [
     react(),
     isProd && obfuscatorPlugin({
@@ -27,7 +28,7 @@ export default defineConfig({
       },
     },
   ].filter(Boolean),
-  base: isMobile ? '/' : '/',
+  base: '/',
   build: {
     outDir: isMobile ? 'dist' : 'docs',
     sourcemap: false,
