@@ -62,7 +62,7 @@ const StorageService = {
       localStorage.setItem('ilab_storage_hint_shown', '1')
       setTimeout(() => {
         import('../../store/useAppStore').then(({ useAppStore }) => {
-          useAppStore.getState().toast('File saved to iLab Cloud. Go to Profile → Storage to use your local folder, Google Drive, or OneDrive instead.')
+          useAppStore.getState().toast('File saved to LabHive Cloud. Go to Profile → Storage to use your local folder, Google Drive, or OneDrive instead.')
         }).catch(() => {})
       }, 900)
     }

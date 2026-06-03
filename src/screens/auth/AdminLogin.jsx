@@ -79,7 +79,7 @@ export default function AdminLogin() {
           </form>
         </div>
         <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'var(--text3)' }}>
-          <a href="../" style={{ color: 'var(--accent)', textDecoration: 'none' }}>← Back to iLab</a>
+          <a href="../" style={{ color: 'var(--accent)', textDecoration: 'none' }}>← Back to LabHive</a>
         </div>
       </div>
     </div>

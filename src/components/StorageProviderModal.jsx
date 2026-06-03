@@ -7,8 +7,8 @@ const OPTIONS = [
   {
     key: 'supabase',
     icon: '☁️',
-    label: 'iLab Cloud',
-    sub: 'Default. Your files are uploaded to iLab\'s secure servers. Works on any device, any browser, anywhere.',
+    label: 'LabHive Cloud',
+    sub: 'Default. Your files are uploaded to LabHive\'s secure servers. Works on any device, any browser, anywhere.',
     color: '#1D9E75',
     bg: '#e8f2ee',
     personal: false,
@@ -27,7 +27,7 @@ const OPTIONS = [
     key: 'gdrive',
     icon: '🟢',
     label: 'Google Drive',
-    sub: 'Files go to a private "iLab Files" folder in your own Google Drive. Access them from any device through Google Drive.',
+    sub: 'Files go to a private "LabHive Files" folder in your own Google Drive. Access them from any device through Google Drive.',
     color: '#1a73e8',
     bg: '#e8f0fe',
     personal: true,
@@ -63,14 +63,14 @@ function ExplainerModal({ option, onAccept, onCancel }) {
         <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>How {option.label} works</div>
 
         <div style={{ background: '#fff3e0', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-          <strong>Hybrid mode:</strong> Shared files visible to your team (equipment SOPs, supply photos, module images) always stay in iLab Cloud. Only <em>your personal files</em> (training certificates, project records, your uploads) go to {option.label}.
+          <strong>Hybrid mode:</strong> Shared files visible to your team (equipment SOPs, supply photos, module images) always stay in LabHive Cloud. Only <em>your personal files</em> (training certificates, project records, your uploads) go to {option.label}.
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
           <div style={{ marginBottom: 8 }}>✅ <strong>Your files stay private</strong> — only you can see them. The app never accesses anything outside the folder/location it creates.</div>
           <div style={{ marginBottom: 8 }}>✅ <strong>You own your data</strong> — open {option.label} at any time to see, download, or delete your files directly.</div>
           <div style={{ marginBottom: 8 }}>⚠️ <strong>Sharing with teammates</strong> — personal files are private. To share one, re-upload it through the app.</div>
-          <div>⚠️ <strong>Existing files stay in iLab Cloud</strong> — only new uploads go to {option.label}. Old files are not moved.</div>
+          <div>⚠️ <strong>Existing files stay in LabHive Cloud</strong> — only new uploads go to {option.label}. Old files are not moved.</div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -155,7 +155,7 @@ export default function StorageProviderModal({ onClose, toast }) {
     setStatuses(s => ({ ...s, [option.key]: false }))
     if (current === option.key) {
       useAppStore.getState().setStorageProviderKey('supabase')
-      toast(`Disconnected from ${option.label}. Switched back to iLab Cloud.`)
+      toast(`Disconnected from ${option.label}. Switched back to LabHive Cloud.`)
     } else {
       toast(`${option.label} disconnected.`)
     }
@@ -169,7 +169,7 @@ export default function StorageProviderModal({ onClose, toast }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
-          Choose where your personal files are stored. Shared team files always stay in iLab Cloud.
+          Choose where your personal files are stored. Shared team files always stay in LabHive Cloud.
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -202,7 +202,7 @@ export default function StorageProviderModal({ onClose, toast }) {
         </div>
 
         <div style={{ marginTop: 20, padding: '12px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text2)' }}>
-          <strong>What stays in iLab Cloud regardless of your choice:</strong> equipment SOPs, supply photos, module images, floor plans, org-wide content. These are shared with your team and cannot be moved to personal storage.
+          <strong>What stays in LabHive Cloud regardless of your choice:</strong> equipment SOPs, supply photos, module images, floor plans, org-wide content. These are shared with your team and cannot be moved to personal storage.
         </div>
       </div>
 

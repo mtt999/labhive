@@ -7,7 +7,7 @@ const HELP_CONTENT = {
     title: 'Dashboard',
     description: 'Your home screen. All modules you have access to are shown as cards. Click any card to navigate to that section.',
     tips: [
-      'Click the iLab logo anytime to return to the dashboard',
+      'Click the LabHive logo anytime to return to the dashboard',
       'Your profile picture or avatar is in the top right — click it to go to your profile',
       'Use Cards view for a quick overview, or Dashboard view for a detailed layout',
       'Org admins can customize background images for each module card',
@@ -129,7 +129,7 @@ const HELP_CONTENT = {
     title: 'Barcode Scanner',
     description: 'Scan QR codes and barcodes to quickly look up equipment, supplies, or project materials.',
     tips: [
-      'Point the camera at any iLab QR code to pull up the linked item',
+      'Point the camera at any LabHive QR code to pull up the linked item',
       'Equipment QR codes open the full equipment detail page',
       'Use the Barcode Manager (admin) to generate and print QR labels',
     ],

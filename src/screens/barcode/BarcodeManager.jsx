@@ -46,7 +46,7 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
 </svg>`
 
 function getScanUrl(equipmentId) {
-  const base = isNative() ? 'https://labhive.app/' : `${window.location.origin}/ilab/`
+  const base = isNative() ? 'https://labhive.app/' : `${window.location.origin}/labhive/`
   return `${base}?eq=${equipmentId}`
 }
 
@@ -123,7 +123,7 @@ function printLabels(equipmentList, size) {
 </div>`
   }
 
-  const html = `<!DOCTYPE html><html><head><title>QR Labels — iLab</title>
+  const html = `<!DOCTYPE html><html><head><title>QR Labels — LabHive</title>
 <style>
   @page { size: ${inchSize} ${inchSize}; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -526,7 +526,7 @@ export default function BarcodeManager() {
           </div>
         </div>
         <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
-          When scanned with a phone camera, the QR code opens the iLab login page. After logging in, users get quick access to equipment info, booking, maintenance history, and more.
+          When scanned with a phone camera, the QR code opens the LabHive login page. After logging in, users get quick access to equipment info, booking, maintenance history, and more.
         </div>
       </div>
 

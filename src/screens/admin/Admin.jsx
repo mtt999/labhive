@@ -555,7 +555,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
   function copyCredentials() {
     const orgName = orgs.find(o => o.id === orgId)?.name || ''
-    const text = `iLab Login Credentials\nOrganization: ${orgName}\nEmail: ${savedCreds.email}\nPassword: ${savedCreds.password}\n\nPlease log in and change your password on first sign-in.`
+    const text = `LabHive Login Credentials\nOrganization: ${orgName}\nEmail: ${savedCreds.email}\nPassword: ${savedCreds.password}\n\nPlease log in and change your password on first sign-in.`
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)

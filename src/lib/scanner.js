@@ -19,7 +19,7 @@ export async function scanBarcode() {
     // Check/request camera permission
     const { camera } = await BarcodeScanner.checkPermissions()
     if (camera === 'denied') {
-      throw new Error('Camera permission denied. Enable it in Settings → iLab.')
+      throw new Error('Camera permission denied. Enable it in Settings → LabHive.')
     }
     if (camera !== 'granted') {
       const { camera: granted } = await BarcodeScanner.requestPermissions()

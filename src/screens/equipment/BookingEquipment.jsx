@@ -18,7 +18,7 @@ async function sendBookingEmail(userId, type, subject, title, body) {
     const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
     orgContact = org
   }
-  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Booking in iLab →', ctaUrl: 'https://labhive.app/?screen=booking', prefsUrl: 'https://labhive.app/?screen=profile', orgContact })
+  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Booking in LabHive →', ctaUrl: 'https://labhive.app/?screen=booking', prefsUrl: 'https://labhive.app/?screen=profile', orgContact })
   const { error } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject, body, html_body: htmlBody, user_id: userId, type })
   if (error) console.warn('Booking email queue failed:', error.message)
 }
@@ -1237,7 +1237,7 @@ function CleanlinessSection({ booking, session, eqName, onUpdated }) {
       {isOwn && !isMobile && !beforeUrl && !waived && (
         <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#0369a1', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 18, flexShrink: 0 }}>📱</span>
-          <span><strong>On a desktop?</strong> Open iLab on your phone for easier photo capture — or upload an image file below.</span>
+          <span><strong>On a desktop?</strong> Open LabHive on your phone for easier photo capture — or upload an image file below.</span>
         </div>
       )}
 

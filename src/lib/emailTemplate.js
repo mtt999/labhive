@@ -1,7 +1,7 @@
 const LOGO_URL = 'https://labhive.app/logo.svg'
 const APP_URL  = 'https://labhive.app/'
 
-export function buildEmailHtml({ title, body, ctaLabel = 'View in iLab →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null }) {
+export function buildEmailHtml({ title, body, ctaLabel = 'View in LabHive →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null }) {
   const contactBlock = orgContact?.contact_email ? `
         <tr>
           <td style="padding:0 36px 24px;">
@@ -28,8 +28,8 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in iLab →', cta
         <!-- Header -->
         <tr>
           <td style="background:#0d47a1;padding:28px 32px 24px;text-align:center;">
-            <img src="${LOGO_URL}" width="72" height="72" alt="iLab logo" style="display:block;margin:0 auto 12px;border:0;">
-            <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;line-height:1;">iLab</div>
+            <img src="${LOGO_URL}" width="72" height="72" alt="LabHive logo" style="display:block;margin:0 auto 12px;border:0;">
+            <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;line-height:1;">LabHive</div>
             <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;margin-top:5px;">intelligent laboratory</div>
           </td>
         </tr>
@@ -63,7 +63,7 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in iLab →', cta
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 32px;text-align:center;">
             <p style="margin:0;font-size:11px;color:#9CA3AF;line-height:1.6;">
-              You received this notification because you are a member of an iLab organization.
+              You received this notification because you are a member of a LabHive organization.
             </p>
           </td>
         </tr>

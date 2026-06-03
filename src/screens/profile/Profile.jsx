@@ -596,7 +596,7 @@ function NotificationPrefsPanel({ userId, role }) {
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Choose how you want to be notified. <strong>In-app</strong> shows a 🔔 inside iLab. <strong>Email</strong> sends to your registered address.</div>
+      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Choose how you want to be notified. <strong>In-app</strong> shows a 🔔 inside LabHive. <strong>Email</strong> sends to your registered address.</div>
       {SECTIONS.map(sec => (
         <div key={sec.title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
           <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1697,7 +1697,7 @@ function UserProfile({ session }) {
 // MAIN EXPORT — routes by role
 // ══════════════════════════════════════════════════════════════
 const PROVIDER_LABELS = {
-  supabase:     { icon: '☁️', label: 'iLab Cloud' },
+  supabase:     { icon: '☁️', label: 'LabHive Cloud' },
   localfolder:  { icon: '🗂️', label: 'Local Folder' },
   gdrive:       { icon: '🟢', label: 'Google Drive' },
   onedrive:     { icon: '🔵', label: 'OneDrive' },
@@ -1714,7 +1714,7 @@ function StorageTab({ toast }) {
     <div className="card">
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🗄️ File Storage</div>
       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
-        Choose where your personal files (training certificates, project records) are stored. Shared team files always stay in iLab Cloud.
+        Choose where your personal files (training certificates, project records) are stored. Shared team files always stay in LabHive Cloud.
       </div>
       {oauthError && (
         <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -1727,13 +1727,13 @@ function StorageTab({ toast }) {
           <span style={{ fontSize: 28 }}>{info.icon}</span>
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{info.label}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{current === 'supabase' ? 'Default — iLab managed storage' : 'Personal storage active'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{current === 'supabase' ? 'Default — LabHive managed storage' : 'Personal storage active'}</div>
           </div>
         </div>
         <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}>Change</button>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
-        Shared files (SOPs, equipment photos, org content) always stay in iLab Cloud regardless of this setting.
+        Shared files (SOPs, equipment photos, org content) always stay in LabHive Cloud regardless of this setting.
       </div>
       {showModal && <StorageProviderModal toast={toast} onClose={() => setShowModal(false)} />}
     </div>

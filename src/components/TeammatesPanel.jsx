@@ -152,7 +152,7 @@ export default function TeammatesPanel({ session }) {
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Invite a teammate</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6 }}>
-          Enter their iLab Solo email. They can accept from Profile → Teammates, then view your Projects and Materials tabs.
+          Enter their LabHive Solo email. They can accept from Profile → Teammates, then view your Projects and Materials tabs.
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <input
