@@ -392,6 +392,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [saving, setSaving] = useState(false)
   const canEdit = !!session
   const isSolo = session?.loginMode === 'solo'
+  const isICTOrg = session?.organizationId === '5bab5b33-fff9-4a4a-b617-3dac179f9678'
 
   useEffect(() => { loadAll() }, [])
 
@@ -432,7 +433,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
 
     // Default tab: first custom plan if any, else ICT
     if (plans.length > 0) setFacility(`custom_${plans[0].id}`)
-    else setFacility('ICT')
+    else if (session?.organizationId === '5bab5b33-fff9-4a4a-b617-3dac179f9678') setFacility('ICT')
+    else setFacility(null)
 
     setLoading(false)
   }
@@ -550,7 +552,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               🗺️ {plan.name}
             </button>
           ))}
-          {!isSolo && ['ICT', 'MPF'].map(f => (
+          {isICTOrg && ['ICT', 'MPF'].map(f => (
             <button key={f} onClick={() => setFacility(f)}
               style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === f ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === f ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
               {f === 'ICT' ? 'ICT Building' : 'MPF'}
@@ -572,7 +574,9 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         <div style={{ padding: 16, overflowX: 'auto' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-          ) : facility && facility.startsWith('custom_') ? (() => {
+          ) : !facility ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)', fontSize: 14 }}>No floor plans available. Ask your admin to add a floor plan.</div>
+          ) : facility.startsWith('custom_') ? (() => {
             const plan = customPlans.find(p => `custom_${p.id}` === facility)
             return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={canEdit} /> : null
           })() : facility === 'ICT' ? (
