@@ -1,55 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>iLab — Privacy Policy</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — LabHive</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 760px; margin: 60px auto; padding: 0 24px; color: #222; line-height: 1.7; }
-    h1 { font-size: 28px; color: #1D9E75; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 720px; margin: 48px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.7; }
+    h1 { font-size: 28px; margin-bottom: 4px; }
     h2 { font-size: 18px; margin-top: 36px; }
-    p, li { font-size: 15px; color: #444; }
+    p, li { font-size: 15px; color: #333; }
     a { color: #1D9E75; }
-    .updated { font-size: 13px; color: #888; margin-top: -8px; margin-bottom: 32px; }
+    .updated { color: #888; font-size: 13px; margin-bottom: 32px; }
   </style>
 </head>
 <body>
-  <h1>iLab Privacy Policy</h1>
-  <p class="updated">Last updated: May 2026</p>
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: June 2026</div>
+  <p>LabHive ("the platform", "we", "us") is an all-in-one research lab management platform available at <strong>labhive.app</strong>. This policy explains what information we collect, how we use it, and your rights.</p>
 
-  <p>iLab ("the app") is a laboratory management platform. This policy explains what data we collect, how we use it, and your rights.</p>
-
-  <h2>1. Data We Collect</h2>
+  <h2>1. Information We Collect</h2>
   <ul>
-    <li><strong>Account information:</strong> name and email address provided at sign-up.</li>
-    <li><strong>Lab content:</strong> inspection records, equipment data, training certificates, project records, and files you upload.</li>
-    <li><strong>Usage data:</strong> actions taken within the app (e.g. inspections completed, bookings made).</li>
+    <li><strong>Account information:</strong> your name and email address, provided at sign-up (Solo accounts) or created by your lab administrator (Team accounts).</li>
+    <li><strong>Profile data:</strong> optional avatar, photo, and display preferences you set in your profile.</li>
+    <li><strong>Lab activity data:</strong> equipment bookings, inspection results, training certificates, project materials, maintenance records, and barcode/QR records you create within the platform.</li>
+    <li><strong>Equipment photos:</strong> before/after condition photos uploaded as part of the booking process.</li>
+    <li><strong>Files and documents:</strong> training certificates, project records, SOPs, floor plans, and other documents you upload, stored in your chosen storage provider.</li>
+    <li><strong>Messages:</strong> messages sent between lab staff and users through the LabHive messaging feature.</li>
+    <li><strong>Support requests:</strong> subject, message, and contact email you provide when submitting a customer service request.</li>
+    <li><strong>Usage and error data:</strong> anonymous technical error reports used to improve platform stability. These do not contain personal information.</li>
   </ul>
 
-  <h2>2. Google Drive Integration (optional)</h2>
-  <p>If you choose to connect Google Drive as your personal file storage, iLab requests the <code>drive.file</code> scope. This scope allows iLab to:</p>
+  <h2>2. How We Use Your Information</h2>
   <ul>
-    <li>Create and store files <strong>only in folders created by iLab</strong> (an "iLab Files" folder in your Drive).</li>
-    <li>Read and delete those same files when you request it.</li>
-  </ul>
-  <p>iLab <strong>cannot</strong> access any other files in your Google Drive. We do not share your Drive files with third parties. Your Google OAuth token is stored only in your browser's local storage and never sent to iLab servers.</p>
-
-  <h2>3. How We Use Your Data</h2>
-  <ul>
-    <li>To provide the lab management features of the app.</li>
-    <li>To allow your organization's administrators to review lab records.</li>
-    <li>We do not sell your data or use it for advertising.</li>
+    <li>To operate all lab management features: equipment booking &amp; approval, inspections, training records, projects, preventive maintenance, and messaging</li>
+    <li>To send booking confirmations, reminders, and status notifications</li>
+    <li>To allow lab managers and administrators to review and manage lab activity within their organisation</li>
+    <li>To respond to customer service and support requests</li>
+    <li>To detect and fix technical errors in the platform</li>
+    <li>To notify the platform administrator of new user registrations and system alerts</li>
   </ul>
 
-  <h2>4. Data Storage</h2>
-  <p>Lab content is stored in a Supabase-hosted database. Personal files may optionally be stored in your own Google Drive, OneDrive, or iCloud based on your storage preference. We do not transfer your data outside the service providers you choose.</p>
+  <h2>3. Solo Workspace Sharing</h2>
+  <p>LabHive Solo users may invite other users to view or collaborate on their personal workspace. When you accept an invitation, the workspace owner can see your name. You can leave a shared workspace at any time from your Profile settings.</p>
 
-  <h2>5. Security</h2>
-  <p>Passwords are hashed using bcrypt. All data in transit is encrypted via HTTPS. Access to organizational data is restricted by role-based permissions.</p>
+  <h2>4. Cloud Storage Integrations</h2>
+  <p>LabHive supports optional personal cloud storage providers for file uploads. When you connect a provider, the following applies:</p>
+  <ul>
+    <li><strong>Google Drive:</strong> LabHive uses the Google Drive API to store and retrieve your files in a dedicated "LabHive Files" folder. We request only the permissions needed to manage files in that folder and do not read, modify, or delete any other content. You can revoke access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account permissions page</a>.</li>
+    <li><strong>Microsoft OneDrive:</strong> Files are stored in the app's designated AppFolder. We access only LabHive-created files. You can revoke access from your Microsoft account settings.</li>
+    <li><strong>WebDAV:</strong> Files are stored on the server you configure. LabHive does not store your WebDAV credentials beyond your device's local storage.</li>
+  </ul>
+  <p>Organisational files (SOPs, equipment photos, module images, floor plans) are always stored in LabHive's Supabase Storage regardless of your personal storage choice.</p>
 
-  <h2>6. Contact</h2>
-  <p>For questions about this policy, please use our <a href="/ilab/contact.html">contact form</a>. We aim to respond within 2 business days.</p>
+  <h2>5. Data Storage</h2>
+  <p>Platform data is stored in a Supabase database hosted in the United States. File uploads are stored either in Supabase Storage or in your chosen personal storage provider.</p>
 
-  <p style="margin-top:40px"><a href="/ilab/terms.html">Terms of Service</a> · <a href="/ilab/contact.html">Contact</a> · <a href="/ilab/">Back to iLab</a></p>
+  <h2>6. Data Sharing</h2>
+  <p>We do not sell or share your personal data with third parties. Within the platform, data is accessible only to members of your organisation and authorised administrators. Support request content is accessible to the platform administrator for the purpose of responding to your request.</p>
+
+  <h2>7. Data Retention &amp; Deletion</h2>
+  <p>Your data is retained for as long as your account is active. To request deletion of your account and all associated data, contact your lab administrator or reach us at the address below.</p>
+
+  <h2>8. Cookies &amp; Local Storage</h2>
+  <p>LabHive uses browser local storage to maintain your login session, storage provider preferences, and dashboard settings. No third-party tracking cookies are used.</p>
+
+  <h2>9. Contact</h2>
+  <p>For privacy questions or data requests: <a href="mailto:motlagh999@gmail.com">motlagh999@gmail.com</a></p>
+  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 LabHive. <a href="/" style="color:#aaa;">Back to app</a></p>
 </body>
 </html>
