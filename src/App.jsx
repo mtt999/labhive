@@ -30,6 +30,7 @@ import LabManagement from './screens/labmanagement/LabManagement'
 import { isNative } from './lib/scanner.js'
 import { providers as storageProviders } from './lib/storage/StorageService'
 import { logAdminError } from './lib/logAdminError'
+import CustomerServiceModal from './components/CustomerServiceModal'
 
 window.addEventListener('error', (e) => {
   logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
@@ -81,6 +82,7 @@ export default function App() {
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
 
   // Store the equipment ID from the QR code URL param so Login can redirect after auth
   useEffect(() => {
@@ -369,6 +371,7 @@ export default function App() {
       <Layout>{screens[screen] || <Dashboard />}</Layout>
       <Toast />
       {session?.mustChangePassword && <ForcePasswordChange />}
+      {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
       {showIconPicker === true && (
         <DashboardIconPicker
           session={session}
