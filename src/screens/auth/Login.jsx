@@ -2,35 +2,8 @@ import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
 
-function ILabLogo({ size = 120 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="256,4 468,126 468,378 256,500 44,378 44,126" fill="#ffb380"/>
-      <polygon points="256,14 458,132 458,372 256,490 54,372 54,132" fill="#ff7f2a"/>
-      <polygon points="256,30 450,140 450,362 256,472 62,362 62,140" fill="#000080"/>
-      <polygon points="256,58 422,152 422,350 256,444 90,350 90,152" fill="none" stroke="#ff6b00" strokeWidth="1.2" opacity="0.25"/>
-      <circle cx="256" cy="30"  r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="140" r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="256" cy="472" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="140" r="9" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff6b00" strokeWidth="3.5" opacity="0.95"/>
-      <circle cx="394" cy="224" r="16" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff9a3c" strokeWidth="3" opacity="0.85" transform="rotate(60 256 224)"/>
-      <circle cx="179.16718" cy="294.86069" r="15" fill="#ff9a3c"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ffba6e" strokeWidth="2.5" opacity="0.75" transform="rotate(-60 256 224)"/>
-      <circle cx="325" cy="105" r="14" fill="#ffba6e"/>
-      <circle cx="256" cy="224" r="38" fill="#ff6b00" opacity="0.10"/>
-      <circle cx="256" cy="224" r="26" fill="#ff6b00" opacity="0.22"/>
-      <circle cx="256" cy="224" r="16" fill="#ff8c00" opacity="0.80"/>
-      <circle cx="256" cy="224" r="9"  fill="#ffb347"/>
-      <text x="258.37772" y="415" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="92" fontWeight="700">
-        <tspan fontStyle="italic" fill="#ff6b00">i</tspan>
-        <tspan fill="#ffffff" dx="-5">Lab</tspan>
-      </text>
-    </svg>
-  )
+function LabHiveLogo({ size = 120 }) {
+  return <img src={import.meta.env.BASE_URL + 'labhive_logo.svg'} width={size} height={size} style={{ display: 'block', objectFit: 'contain', margin: '0 auto' }} alt="LabHive" />
 }
 
 function SelectorCard({ mode, selected, onSelect }) {
@@ -39,10 +12,10 @@ function SelectorCard({ mode, selected, onSelect }) {
   const activeBg    = isTeam ? '#E1F5EE' : '#EEEDFE'
   const badgeBg     = isTeam ? '#9FE1CB' : '#CECBF6'
   const badgeColor  = isTeam ? '#085041' : '#3C3489'
-  const label       = isTeam ? 'iLab Team' : 'iLab Solo'
+  const label       = isTeam ? 'LabHive Team' : 'LabHive Solo'
   const title       = isTeam ? 'Organization member' : 'Individual researcher'
   const desc        = isTeam
-    ? 'My organization uses iLab — I have an invite or org credentials'
+    ? 'My organization uses LabHive — I have an invite or org credentials'
     : 'Organize my own research, projects & lab resources independently'
 
   const teamIcon = (
@@ -150,7 +123,7 @@ function SignUpForm({ onSuccess, onCancel }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 0, lineHeight: 1 }}>←</button>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Create iLab Solo account</div>
+          <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Create LabHive Solo account</div>
           <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Free — organize your research independently</div>
         </div>
       </div>
@@ -161,7 +134,7 @@ function SignUpForm({ onSuccess, onCancel }) {
             <circle cx="16" cy="11" r="5" stroke="#534AB7" strokeWidth="2"/>
             <path d="M6 28c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="#534AB7" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7' }}>iLab Solo</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7' }}>LabHive Solo</span>
         </div>
       </div>
 
@@ -269,7 +242,7 @@ export default function Login() {
       setError(`Too many failed attempts. Please wait ${remaining} second${remaining !== 1 ? 's' : ''}.`)
       return
     }
-    if (!mode) { setError('Please select how you are using iLab first.'); return }
+    if (!mode) { setError('Please select how you are using LabHive first.'); return }
     if (!identifier.trim() || !password.trim()) { setError('Please enter your email and password.'); return }
     setLoading(true); setError('')
     const emailLower = identifier.trim().toLowerCase()
@@ -361,8 +334,8 @@ export default function Login() {
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '40px 20px' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <ILabLogo size={120} />
+        <div style={{ textAlign: 'center', marginBottom: 0, transform: 'translateY(54px)' }}>
+          <LabHiveLogo size={297} />
         </div>
 
         <div className="card" style={{ padding: '28px 28px 24px' }}>
@@ -379,14 +352,14 @@ export default function Login() {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#e65100', marginBottom: 3 }}>Equipment QR Code Scanned</div>
                     <div style={{ fontSize: 12, color: '#7c4d00', lineHeight: 1.5 }}>
-                      Log in or create a free <strong>iLab Solo</strong> account to view equipment info, book a session, and more.
+                      Log in or create a free <strong>LabHive Solo</strong> account to view equipment info, book a session, and more.
                     </div>
                   </div>
                 </div>
               )}
 
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, textAlign: 'center' }}>
-                How are you using iLab?
+                How are you using LabHive?
               </div>
               <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
                 <SelectorCard mode="team" selected={mode === 'team'} onSelect={handleModeSelect} />
@@ -409,7 +382,7 @@ export default function Login() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                   <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-                    {mode === 'team' ? 'Sign in to iLab Team' : 'Sign in to iLab Solo'}
+                    {mode === 'team' ? 'Sign in to LabHive Team' : 'Sign in to LabHive Solo'}
                   </span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -444,7 +417,7 @@ export default function Login() {
                 <button type="submit"
                   style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px', background: (mode && lockUntil <= Date.now()) ? accentColor : 'var(--border)', color: (mode && lockUntil <= Date.now()) ? '#fff' : 'var(--text3)', border: 'none', borderRadius: 8, cursor: (mode && lockUntil <= Date.now()) ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.2s' }}
                   disabled={loading || !mode || lockUntil > Date.now()}>
-                  {loading ? 'Signing in…' : mode === 'team' ? 'Sign in to iLab Team' : mode === 'solo' ? 'Sign in to iLab Solo' : 'Select a login type above'}
+                  {loading ? 'Signing in…' : mode === 'team' ? 'Sign in to LabHive Team' : mode === 'solo' ? 'Sign in to LabHive Solo' : 'Select a login type above'}
                 </button>
               </form>
 
@@ -498,7 +471,7 @@ export default function Login() {
 
               {mode === 'solo' && !QR_SCAN_EQ && (
                 <div style={{ textAlign: 'center', marginTop: 14, fontSize: 12, color: 'var(--text3)' }}>
-                  New to iLab Solo?{' '}
+                  New to LabHive Solo?{' '}
                   <span style={{ color: '#534AB7', fontWeight: 600, cursor: 'pointer' }}
                     onClick={() => { setShowSignUp(true); setError('') }}>Create a free account</span>
                 </div>
@@ -511,7 +484,7 @@ export default function Login() {
                   onMouseEnter={e => { e.currentTarget.style.background = '#EEEDFE' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  ✨ New here? Create a free iLab Solo account
+                  ✨ New here? Create a free LabHive Solo account
                 </button>
               )}
 
@@ -520,14 +493,14 @@ export default function Login() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>iLab</div>
-          <div>Intelligent Laboratory Platform</div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>LabHive</div>
+          <div>The All-in-One Research Lab Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>App developed by Mohsen Motlagh</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
           <div style={{ marginTop: 8 }}>
-            <a href="/ilab/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
+            <a href="/labhive/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Privacy Policy</a>
             <span style={{ margin: '0 6px' }}>·</span>
-            <a href="/ilab/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
+            <a href="/labhive/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'none' }}>Terms of Service</a>
           </div>
         </div>
 
