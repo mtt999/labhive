@@ -342,7 +342,12 @@ export default function App() {
     if (!session || session.role !== 'admin') return <AdminLogin />
   }
 
-  if (!session) return <Login />
+  if (!session) return (
+    <>
+      <Login />
+      {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
+    </>
+  )
 
   const screens = {
     dashboard: <Dashboard />,
