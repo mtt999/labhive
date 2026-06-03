@@ -89,15 +89,25 @@ export default function CustomerServiceModal({ onClose }) {
         Have a question, issue, or feedback? We'll reply to your email.
       </div>
 
-      <div className="field">
-        <label>Your email address *</label>
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="your@email.com"
-        />
-      </div>
+      {session?.email ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 10, marginBottom: 16, border: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 18 }}>✉️</span>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500 }}>Reply will be sent to</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{session.email}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label>Your email address *</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="your@email.com"
+          />
+        </div>
+      )}
 
       <div className="field">
         <label>Subject *</label>
