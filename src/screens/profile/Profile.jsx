@@ -690,12 +690,12 @@ function AdminProfile() {
   const isOrgAdmin = !!session?.userId   // false = super admin (userId null)
   const [adminTab, setAdminTab] = useState('admin')
 
-  // Super admin: only show password change — no user/org data
+  // Super admin: password change + notification email
   if (!isOrgAdmin) {
     return (
       <div>
         <div className="section-title" style={{ marginBottom: 24 }}>Profile</div>
-        <AdminSettings session={session} toast={toast} />
+        <AdminSettings session={session} toast={toast} isSuperAdmin />
       </div>
     )
   }
@@ -730,12 +730,29 @@ function AdminProfile() {
   )
 }
 
-function AdminSettings({ session: sessionProp, toast }) {
+function AdminSettings({ session: sessionProp, toast, isSuperAdmin = false }) {
   const { session: storeSession } = useAppStore()
   const session = sessionProp ?? storeSession
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [notifEmail, setNotifEmail] = useState('')
+  const [emailSaving, setEmailSaving] = useState(false)
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    sb.from('settings').select('value').eq('key', 'admin_notif_email').maybeSingle()
+      .then(({ data }) => { if (data?.value) setNotifEmail(data.value) })
+  }, [isSuperAdmin])
+
+  async function saveEmail() {
+    if (!notifEmail.trim()) { toast('Enter an email address.'); return }
+    setEmailSaving(true)
+    await sb.from('settings').upsert({ key: 'admin_notif_email', value: notifEmail.trim().toLowerCase() })
+    toast('Notification email saved ✓')
+    setEmailSaving(false)
+  }
+
   async function savePassword() {
     setError('')
     if (!form.currentPassword) { setError('Enter your current password.'); return }
@@ -753,16 +770,30 @@ function AdminSettings({ session: sessionProp, toast }) {
     setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     setSaving(false)
   }
+
   return (
-    <div className="card" style={{ maxWidth: 440 }}>
-      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🔑 Account Settings</div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>Update the admin password.</div>
-      <div className="field"><label>Current password</label><input type="password" value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="••••••••" /></div>
-      <div className="field"><label>New password</label><input type="password" value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 8 characters" /></div>
-      <PasswordStrengthHint password={form.newPassword} />
-      <div className="field"><label>Confirm new password</label><input type="password" value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} placeholder="••••••••" /></div>
-      {error && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {error}</div>}
-      <button className="btn btn-primary" onClick={savePassword} disabled={saving}>{saving ? 'Saving…' : 'Update password'}</button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 440 }}>
+      {isSuperAdmin && (
+        <div className="card">
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>📧 Notification Email</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Email address used for notification alerts from the bell (when email notifications are enabled).</div>
+          <div className="field">
+            <label>Email address</label>
+            <input type="email" value={notifEmail} onChange={e => setNotifEmail(e.target.value)} placeholder="admin@example.com" />
+          </div>
+          <button className="btn btn-primary" onClick={saveEmail} disabled={emailSaving}>{emailSaving ? 'Saving…' : 'Save email'}</button>
+        </div>
+      )}
+      <div className="card">
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🔑 Account Settings</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>Update the admin password.</div>
+        <div className="field"><label>Current password</label><input type="password" value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="••••••••" /></div>
+        <div className="field"><label>New password</label><input type="password" value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 8 characters" /></div>
+        <PasswordStrengthHint password={form.newPassword} />
+        <div className="field"><label>Confirm new password</label><input type="password" value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} placeholder="••••••••" /></div>
+        {error && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {error}</div>}
+        <button className="btn btn-primary" onClick={savePassword} disabled={saving}>{saving ? 'Saving…' : 'Update password'}</button>
+      </div>
     </div>
   )
 }

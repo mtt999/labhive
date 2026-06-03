@@ -29,6 +29,15 @@ import Admin from './screens/admin/Admin'
 import LabManagement from './screens/labmanagement/LabManagement'
 import { isNative } from './lib/scanner.js'
 import { providers as storageProviders } from './lib/storage/StorageService'
+import { logAdminError } from './lib/logAdminError'
+
+window.addEventListener('error', (e) => {
+  logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
+})
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason) || 'Unhandled promise rejection'
+  logAdminError(`Promise Error: ${msg}`, e.reason?.stack?.split('\n')[1]?.trim() || '')
+})
 
 if (isNative()) {
   import('@basecom-gmbh/capacitor-jailbreak-root-detection').then(({ JailbreakRootDetection }) => {
@@ -53,7 +62,7 @@ const DEEP_LINK_TAB    = new URLSearchParams(window.location.search).get('tab')
 function ComingSoonScreen() {
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0F1B35', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-      <img src="/ilab/ilab-icon.png" alt="iLab" onError={e => { e.target.style.display='none' }}
+      <img src="/labhive/labhive-icon.png" alt="iLab" onError={e => { e.target.style.display='none' }}
         style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }} />
       <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>Coming Soon</div>
       <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>
