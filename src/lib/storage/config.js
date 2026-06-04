@@ -4,8 +4,8 @@
 
 // Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID
 // Enable: Google Drive API | Redirect URI: ilab://oauth-callback
-export const GOOGLE_CLIENT_ID = '600708618603-n5676no3iu5e8qrl235ukj0auvm49rj0.apps.googleusercontent.com'
-export const GOOGLE_CLIENT_SECRET = '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'
+export const GOOGLE_CLIENT_ID = '1064001328708-s4663d9m93b2q1vjd8rdp6ee3l9nvb01.apps.googleusercontent.com'
+export const GOOGLE_CLIENT_SECRET = ''
 
 // Azure Portal → App registrations → your app → Application (client) ID
 // Permission: Microsoft Graph → Files.ReadWrite.AppFolder | Redirect URI: ilab://oauth-callback
