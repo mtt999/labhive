@@ -31,6 +31,7 @@ import { isNative } from './lib/scanner.js'
 import { providers as storageProviders } from './lib/storage/StorageService'
 import { logAdminError } from './lib/logAdminError'
 import CustomerServiceModal from './components/CustomerServiceModal'
+import TermsAcceptance from './components/TermsAcceptance'
 
 window.addEventListener('error', (e) => {
   logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
@@ -83,6 +84,14 @@ export default function App() {
   const [showIconPicker, setShowIconPicker] = useState(null)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
+  const [termsAccepted, setTermsAccepted] = useState(true)
+
+  // Check if user has accepted terms (skip for super admin)
+  useEffect(() => {
+    if (!session || session.userId === null) { setTermsAccepted(true); return }
+    const key = `labhive_terms_v1_${session.userId || session.email}`
+    setTermsAccepted(!!localStorage.getItem(key))
+  }, [session?.userId, session?.email])
 
   // Track screen changes as GA4 page views
   useEffect(() => {
@@ -387,6 +396,7 @@ export default function App() {
       <Layout>{screens[screen] || <Dashboard />}</Layout>
       <Toast />
       {session?.mustChangePassword && <ForcePasswordChange />}
+      {!termsAccepted && !session?.mustChangePassword && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
       {showIconPicker === true && (
         <DashboardIconPicker

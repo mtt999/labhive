@@ -63,6 +63,7 @@ function SelectorCard({ mode, selected, onSelect }) {
 // ── iLab Solo Sign-Up Form ─────────────────────────────────────────────────
 function SignUpForm({ onSuccess, onCancel }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -73,6 +74,7 @@ function SignUpForm({ onSuccess, onCancel }) {
     if (!form.email.trim())              { setError('Please enter your email address.'); return }
     if (form.password.length < 6)       { setError('Password must be at least 6 characters.'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
+    if (!termsAccepted)                 { setError('Please read and accept the Privacy Policy and Terms of Service to continue.'); return }
     setLoading(true)
 
     const emailLC = form.email.trim().toLowerCase()
@@ -156,11 +158,24 @@ function SignUpForm({ onSuccess, onCancel }) {
           <input type="password" value={form.confirm} onChange={e => { setForm(f => ({...f, confirm: e.target.value})); setError('') }} placeholder="••••••••" autoComplete="new-password" />
         </div>
 
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, margin: '16px 0', cursor: 'pointer' }}>
+          <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setError('') }}
+            style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0, accentColor: '#534AB7', cursor: 'pointer' }} />
+          <span style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+            I have read and agree to the{' '}
+            <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: '#534AB7', fontWeight: 600, textDecoration: 'underline' }}>Privacy Policy</a>
+            {' '}and{' '}
+            <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: '#534AB7', fontWeight: 600, textDecoration: 'underline' }}>Terms of Service</a>.
+            I understand how my data will be used.
+          </span>
+        </label>
+
         {error && (
           <div style={{ fontSize: 13, color: 'var(--accent2)', background: 'var(--accent2-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>⚠️ {error}</div>
         )}
 
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: '12px', background: loading ? 'var(--border)' : '#534AB7', color: loading ? 'var(--text3)' : '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>
+        <button type="submit" disabled={loading || !termsAccepted}
+          style={{ width: '100%', padding: '12px', background: loading || !termsAccepted ? 'var(--border)' : '#534AB7', color: loading || !termsAccepted ? 'var(--text3)' : '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: loading || !termsAccepted ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>
           {loading ? 'Creating account…' : 'Create free account'}
         </button>
       </form>

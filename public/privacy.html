@@ -1,71 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Privacy Policy — LabHive</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 720px; margin: 48px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.7; }
-    h1 { font-size: 28px; margin-bottom: 4px; }
-    h2 { font-size: 18px; margin-top: 36px; }
-    p, li { font-size: 15px; color: #333; }
-    a { color: #1D9E75; }
-    .updated { color: #888; font-size: 13px; margin-bottom: 32px; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px; line-height: 1.7; color: #1a1a2e;
+      background: #f8f9fc; padding: 0;
+    }
+    header {
+      background: #0C1140; color: #fff;
+      padding: 32px 24px 28px;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 6px; }
+    header p  { color: #FF9A4A; font-size: 0.92rem; }
+    .container { max-width: 860px; margin: 40px auto; padding: 0 24px 60px; }
+    .card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      padding: 40px 48px; margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 1.15rem; font-weight: 700; color: #0C1140;
+      border-left: 4px solid #FF6B1A; padding-left: 12px;
+      margin: 32px 0 12px;
+    }
+    h2:first-child { margin-top: 0; }
+    p  { margin-bottom: 14px; color: #333; }
+    ul { margin: 8px 0 14px 20px; color: #333; }
+    li { margin-bottom: 6px; }
+    a  { color: #FF6B1A; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .highlight {
+      background: #fff8f0; border-left: 4px solid #FF6B1A;
+      border-radius: 0 8px 8px 0; padding: 14px 18px;
+      margin: 16px 0; font-size: 0.95rem;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.93rem; }
+    th { background: #0C1140; color: #fff; padding: 10px 14px; text-align: left; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eee; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    footer {
+      text-align: center; color: #888; font-size: 0.85rem;
+      padding: 24px; border-top: 1px solid #eee; margin-top: 40px;
+    }
   </style>
 </head>
 <body>
+
+<header>
   <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: June 2026</div>
-  <p>LabHive ("the platform", "we", "us") is an all-in-one research lab management platform available at <strong>labhive.app</strong>. This policy explains what information we collect, how we use it, and your rights.</p>
+  <p>LabHive · labhive.app · Last updated: June 2026</p>
+</header>
+
+<div class="container">
+<div class="card">
+
+  <h2>Introduction</h2>
+  <p>LabHive ("LabHive", "the Platform", "we", "us", or "our") is an intelligent, all-in-one research lab management platform available at <strong>labhive.app</strong>. We are committed to protecting your personal information and your right to privacy. This Privacy Policy describes what information we collect, how we use it, with whom we share it, and your rights in relation to it.</p>
+  <p>By using LabHive, you agree to the collection and use of information in accordance with this policy. If you do not agree, please discontinue use of the Platform.</p>
+
+  <div class="highlight">
+    <strong>Key point:</strong> We do not sell your personal data. We do not use your data for advertising. Your lab data belongs to you and your organisation.
+  </div>
 
   <h2>1. Information We Collect</h2>
   <ul>
-    <li><strong>Account information:</strong> your name and email address, provided at sign-up (Solo accounts) or created by your lab administrator (Team accounts).</li>
-    <li><strong>Profile data:</strong> optional avatar, photo, and display preferences you set in your profile.</li>
-    <li><strong>Lab activity data:</strong> equipment bookings, inspection results, training certificates, project materials, maintenance records, and barcode/QR records you create within the platform.</li>
-    <li><strong>Equipment photos:</strong> before/after condition photos uploaded as part of the booking process.</li>
-    <li><strong>Files and documents:</strong> training certificates, project records, SOPs, floor plans, and other documents you upload, stored in your chosen storage provider.</li>
-    <li><strong>Messages:</strong> messages sent between lab staff and users through the LabHive messaging feature.</li>
-    <li><strong>Support requests:</strong> subject, message, and contact email you provide when submitting a customer service request.</li>
-    <li><strong>Usage and error data:</strong> anonymous technical error reports used to improve platform stability. These do not contain personal information.</li>
+    <li><strong>Account information:</strong> Name, email address, and role, provided at sign-up or created by your lab administrator.</li>
+    <li><strong>Profile data:</strong> Optional avatar, photo, and display preferences you set in your profile.</li>
+    <li><strong>Lab activity data:</strong> Equipment bookings, inspection results, training certificates, project materials, maintenance records, inventory items, and barcode/QR records.</li>
+    <li><strong>Equipment photos:</strong> Before/after condition photos uploaded as part of the booking process.</li>
+    <li><strong>Files and documents:</strong> Training certificates, SOPs, project records, floor plans, and other documents you upload.</li>
+    <li><strong>Messages:</strong> Messages sent between lab staff and users through the LabHive messaging feature.</li>
+    <li><strong>Support requests:</strong> Subject, message, and contact email you provide when submitting a customer service request.</li>
+    <li><strong>Technical data:</strong> Anonymous error reports and usage diagnostics used to improve platform stability.</li>
+    <li><strong>Device and session data:</strong> Browser type, operating system, and session tokens stored locally to maintain your login session.</li>
   </ul>
 
   <h2>2. How We Use Your Information</h2>
-  <ul>
-    <li>To operate all lab management features: equipment booking &amp; approval, inspections, training records, projects, preventive maintenance, and messaging</li>
-    <li>To send booking confirmations, reminders, and status notifications</li>
-    <li>To allow lab managers and administrators to review and manage lab activity within their organisation</li>
-    <li>To respond to customer service and support requests</li>
-    <li>To detect and fix technical errors in the platform</li>
-    <li>To notify the platform administrator of new user registrations and system alerts</li>
-  </ul>
+  <table>
+    <tr><th>Purpose</th><th>Legal Basis (GDPR)</th></tr>
+    <tr><td>To operate and deliver all Platform features</td><td>Performance of a contract</td></tr>
+    <tr><td>To send booking confirmations, reminders, and alerts</td><td>Performance of a contract</td></tr>
+    <tr><td>To allow administrators to manage lab activity</td><td>Legitimate interests</td></tr>
+    <tr><td>To respond to customer support requests</td><td>Legitimate interests</td></tr>
+    <tr><td>To detect, prevent, and fix technical errors</td><td>Legitimate interests</td></tr>
+    <tr><td>To comply with applicable laws</td><td>Legal obligation</td></tr>
+  </table>
 
-  <h2>3. Solo Workspace Sharing</h2>
-  <p>LabHive Solo users may invite other users to view or collaborate on their personal workspace. When you accept an invitation, the workspace owner can see your name. You can leave a shared workspace at any time from your Profile settings.</p>
+  <h2>3. Data Sharing and Disclosure</h2>
+  <p>We do <strong>not sell, rent, or trade</strong> your personal data. We may share data only in the following limited circumstances:</p>
+  <ul>
+    <li><strong>Within your organisation:</strong> Lab administrators and authorised members can access data within their own organisation's workspace.</li>
+    <li><strong>Service providers:</strong> We use Supabase (database and file storage infrastructure), bound by data processing agreements.</li>
+    <li><strong>Legal requirements:</strong> We may disclose information if required by law or to protect the rights, property, or safety of LabHive, our users, or the public.</li>
+    <li><strong>Business transfers:</strong> In the event of a merger or acquisition, your data may be transferred with prior notice.</li>
+  </ul>
 
   <h2>4. Cloud Storage Integrations</h2>
-  <p>LabHive supports optional personal cloud storage providers for file uploads. When you connect a provider, the following applies:</p>
   <ul>
-    <li><strong>Google Drive:</strong> LabHive uses the Google Drive API to store and retrieve your files in a dedicated "LabHive Files" folder. We request only the permissions needed to manage files in that folder and do not read, modify, or delete any other content. You can revoke access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account permissions page</a>.</li>
-    <li><strong>Microsoft OneDrive:</strong> Files are stored in the app's designated AppFolder. We access only LabHive-created files. You can revoke access from your Microsoft account settings.</li>
-    <li><strong>WebDAV:</strong> Files are stored on the server you configure. LabHive does not store your WebDAV credentials beyond your device's local storage.</li>
+    <li><strong>Google Drive:</strong> LabHive stores files in a dedicated "LabHive Files" folder only. We do not access any other content. Revoke access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account permissions page</a>.</li>
+    <li><strong>Microsoft OneDrive:</strong> Files stored in the app's designated AppFolder only. Revoke access from your Microsoft account settings.</li>
+    <li><strong>WebDAV:</strong> Files stored on your configured server. LabHive does not store your WebDAV credentials on our servers.</li>
   </ul>
-  <p>Organisational files (SOPs, equipment photos, module images, floor plans) are always stored in LabHive's Supabase Storage regardless of your personal storage choice.</p>
+  <p>Organisational files (SOPs, equipment photos, module images, floor plans) are always stored in LabHive's Supabase Storage.</p>
 
-  <h2>5. Data Storage</h2>
-  <p>Platform data is stored in a Supabase database hosted in the United States. File uploads are stored either in Supabase Storage or in your chosen personal storage provider.</p>
+  <h2>5. Data Storage and Security</h2>
+  <p>Platform data is stored in a Supabase-managed database hosted in the United States. We use HTTPS/TLS encryption in transit, encrypted storage at rest, and role-based access controls. Despite these measures, no electronic storage method is 100% secure.</p>
 
-  <h2>6. Data Sharing</h2>
-  <p>We do not sell or share your personal data with third parties. Within the platform, data is accessible only to members of your organisation and authorised administrators. Support request content is accessible to the platform administrator for the purpose of responding to your request.</p>
+  <h2>6. Data Retention and Deletion</h2>
+  <p>Your data is retained for as long as your account is active. Personal account data is deleted within 30 days of a verified deletion request. Backups may retain data for up to 90 days. To request deletion, contact us via <a href="https://labhive.app/?support=1">Customer Service</a>.</p>
 
-  <h2>7. Data Retention &amp; Deletion</h2>
-  <p>Your data is retained for as long as your account is active. To request deletion of your account and all associated data, contact your lab administrator or reach us at the address below.</p>
+  <h2>7. Cookies and Local Storage</h2>
+  <p>LabHive uses browser local storage to maintain your login session and preferences. We do <strong>not</strong> use third-party tracking cookies or advertising cookies.</p>
 
-  <h2>8. Cookies &amp; Local Storage</h2>
-  <p>LabHive uses browser local storage to maintain your login session, storage provider preferences, and dashboard settings. No third-party tracking cookies are used.</p>
+  <h2>8. Your Rights (GDPR / CCPA)</h2>
+  <ul>
+    <li><strong>Access:</strong> Request a copy of your personal data.</li>
+    <li><strong>Rectification:</strong> Request correction of inaccurate data.</li>
+    <li><strong>Erasure:</strong> Request deletion of your data.</li>
+    <li><strong>Restriction:</strong> Request limited processing in certain circumstances.</li>
+    <li><strong>Portability:</strong> Request your data in a machine-readable format.</li>
+    <li><strong>Objection:</strong> Object to processing based on legitimate interests.</li>
+    <li><strong>CCPA opt-out:</strong> We do not sell personal information.</li>
+  </ul>
+  <p>To exercise any right, contact us via <a href="https://labhive.app/?support=1">Customer Service</a>. We respond within 30 days.</p>
 
-  <h2>9. Contact</h2>
-  <p>For privacy questions or data requests, please use our <a href="/?support=1">Customer Service</a> in the app.</p>
-  <p style="margin-top:48px;font-size:13px;color:#aaa;">© 2026 LabHive. <a href="/" style="color:#aaa;">Back to app</a></p>
+  <h2>9. Data Breach Notification</h2>
+  <p>In the event of a data breach affecting your rights and freedoms, we will notify affected users and relevant authorities within 72 hours of becoming aware (as required under GDPR) and in compliance with applicable US state law.</p>
+
+  <h2>10. Children's Privacy</h2>
+  <p>LabHive is not directed to children under 13 (or 16 in the EU/UK). We do not knowingly collect personal information from children under these ages. If you become aware that a child has provided us personal information, please contact us immediately.</p>
+
+  <h2>11. International Data Transfers</h2>
+  <p>Your data may be stored in the United States. If you are located in the EEA, UK, or Switzerland, we ensure transfers comply with applicable data protection laws including Standard Contractual Clauses where required.</p>
+
+  <h2>12. Changes to This Policy</h2>
+  <p>We may update this policy from time to time. Material changes will be noted by an updated "Last updated" date. Continued use after changes constitutes acceptance.</p>
+
+  <h2>13. Contact Us</h2>
+  <p>For privacy questions or to exercise your rights, please use our <a href="https://labhive.app/?support=1">Customer Service</a> in the app.</p>
+
+</div>
+</div>
+
+<footer>
+  &copy; 2026 LabHive. All rights reserved. &nbsp;|&nbsp;
+  <a href="https://labhive.app/terms.html">Terms of Service</a> &nbsp;|&nbsp;
+  <a href="https://labhive.app/">Back to App</a>
+</footer>
+
 </body>
 </html>
