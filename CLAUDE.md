@@ -1,12 +1,12 @@
-# iLab — Claude Code Instructions
+# LabHive — Claude Code Instructions
 
-This file applies to every session working on the `ilab` project. Read it in full before making any changes.
+This file applies to every session working on the `labhive` project. Read it in full before making any changes.
 
 ---
 
 ## Project overview
 
-**iLab** is a React 18 + Vite SPA for lab management — inspections, equipment, training, projects, booking, messaging, and more.
+**LabHive** is a React 18 + Vite SPA for lab management — inspections, equipment, training, projects, booking, messaging, and more.
 
 ### Tech stack
 | Layer | Library / Version |
@@ -19,11 +19,12 @@ This file applies to every session working on the `ilab` project. Read it in ful
 | Security | bcryptjs (password hashing), vite-plugin-javascript-obfuscator (prod builds) |
 
 ### URLs & deployment
-- **Local dev:** `http://localhost:5174/ilab/` | Admin: `http://localhost:5174/ilab/admin`
-- **Production:** `https://mtt999.github.io/ilab/` | Admin: `https://mtt999.github.io/ilab/admin`
+- **Local dev:** `http://localhost:5174/` | Admin: `http://localhost:5174/admin`
+- **Production:** `https://labhive.app` | Admin: `https://labhive.app/admin`
 - **Git repo:** `https://github.com/mtt999/ilab`
-- Vite base: `/ilab/` (web) | `/` (mobile build via `BUILD_TARGET=mobile`)
+- Vite base: `/` (both web and mobile — custom domain serves from root)
 - Build output: `docs/` (web) | `dist/` (mobile)
+- CNAME: `labhive.app` (recreated by post-build script on every build)
 
 **Build & deploy (web):**
 ```bash
@@ -44,7 +45,7 @@ npm run ios            # build + sync + open iOS simulator
 - **Storage buckets:** `project-files` (module images, SOPs, avatars, floor plans) · `project-records` (material record files) · `item-photos` (supply/inventory photos) · `task-files` (maintenance attachments) · `lab-files` (general lab documents)
 
 ### Mobile app config (`capacitor.config.json`)
-- App ID: `com.motlagh.ilab` | Name: `iLab`
+- App ID: `com.motlagh.ilab` | Name: `LabHive`
 - SplashScreen: 1500ms, navy background
 - StatusBar: dark style, teal `#1D9E75`
 - Deep-link scheme: `ilab://?eq=<uuid>` (QR scan)
@@ -113,9 +114,52 @@ npm run ios            # build + sync + open iOS simulator
 ```sql
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules JSONB DEFAULT NULL;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS module_images  JSONB DEFAULT NULL;
+ALTER TABLE users      ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase';
+ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase';
 -- Solo workspace sharing:
 -- Run supabase_solo_workspace.sql in Supabase SQL Editor
+
+-- Super admin notifications:
+CREATE TABLE IF NOT EXISTS admin_notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'app_error',
+  title TEXT NOT NULL,
+  body TEXT,
+  read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
+
+-- RLS: enable on all tables (run the full ALTER TABLE block from session history)
 ```
+
+### Key components added (June 2026)
+| File | Purpose |
+|------|---------|
+| `SuperAdminBell.jsx` | Super admin notification bell — new solo users, support requests, system errors |
+| `logAdminError.js` | Helper to log JS errors to `admin_notifications` table |
+| `favicon.svg` | Square-cropped hexagon icon for browser tab (viewBox cropped from labhive_logo.svg) |
+
+### Google Analytics
+- **Measurement ID:** `G-62P1FB2VDT`
+- Added to `index.html` as official gtag.js snippet
+- Screen changes tracked as `page_view` events in `App.jsx`
+- Super admin panel has **📊 View Analytics** button linking to GA4 dashboard
+
+### ICT/MPF floor maps — ICT org only
+- `FloorPlanPicker.jsx` shows ICT Building + MPF tabs ONLY for org ID `5bab5b33-fff9-4a4a-b617-3dac179f9678`
+- Non-ICT orgs see only their custom floor plans (or an empty state)
+- `isSolo` must be defined at component level (not inside `loadAll()`)
+
+### Login page layout — LOCKED, do not change without explicit user permission
+- Logo size: `240px`, `marginBottom: -52px` (compensates SVG bottom whitespace)
+- Container: `height: 100%`, `overflowY: auto`, `justifyContent: flex-start`, `padding: 32px 20px 40px`
+
+### Customer Service modal — `?support=1` URL param
+- Visiting `https://labhive.app/?support=1` auto-opens `CustomerServiceModal`
+- Works on both login page and when logged in
+- Logged-in users see their email displayed (read-only); guests get an email input field
+- Privacy policy and Terms of Service contact sections link to `/?support=1`
 
 ---
 
@@ -177,16 +221,16 @@ Personal file uploads (training certificates, project records) must go through `
 | File | Purpose |
 |------|---------|
 | `StorageService.js` | Singleton router + `useStorageUrl(stored)` hook |
-| `config.js` | Google + Azure OAuth client IDs (fill before use) |
+| `config.js` | Google + Azure OAuth client IDs |
 | `SupabaseProvider.js` | Default — wraps existing sb.storage calls |
 | `FilesystemProvider.js` | iCloud (iOS) / local Documents (Android) |
-| `GoogleDriveProvider.js` | Google Drive PKCE OAuth — stores in "iLab Files" folder |
+| `GoogleDriveProvider.js` | Google Drive PKCE OAuth — stores in "LabHive Files" folder |
 | `OneDriveProvider.js` | OneDrive PKCE OAuth — stores in app AppFolder |
 | `WebDAVProvider.js` | Personal computer / NAS via WebDAV |
 
 **Mode B rule:** `personal: false` → always Supabase (SOPs, equipment photos, module images, org content). `personal: true` → user's chosen provider.
 
-**OAuth redirect:** Uses `https://mtt999.github.io/ilab/oauth-callback` (bridge page at `docs/oauth-callback.html`) → redirects to `ilab://oauth-callback` deep link → App.jsx handles token exchange.
+**OAuth redirect:** Uses `https://labhive.app/oauth-callback` (bridge page at `docs/oauth-callback.html`) → redirects to `ilab://oauth-callback` deep link → App.jsx handles token exchange.
 
 **Storage tab:** Available in Profile for ALL user types — solo, lab user (student), staff (lab manager), and org admin. Implemented as `<StorageTab toast={toast} />` in each profile variant.
 
@@ -410,6 +454,20 @@ Defined and exported from `src/components/DashboardIconPicker.jsx`. Every module
 ### BookingEquipment QR back button
 - `fromQRScan = useState(() => !!scanEquipmentId)` — captured at mount
 - Shows "← Back to options" button (do NOT rename) → `setScreen('equipmentscan')`
+
+### BookingEquipment drag-to-reschedule
+- Existing confirmed bookings can be dragged to a new time or day by the booking owner (or any admin)
+- Three drag handles per booking block: top 8px = `resize-start` (n-resize cursor), bottom 8px = `resize-end` (s-resize cursor), body = `move` (grab cursor)
+- `canRescheduleBooking(booking)`: admins can reschedule any non-cancelled/denied booking; regular users only their own
+- `bookingDragRef` (ref) mirrors `bookingDrag` state to avoid stale closures in window mousemove/mouseup listeners
+- Click vs drag: `hasMoved` flag set when pointer moves > 4px from start; mouseup with no movement → `onBookingClick` (view modal); with movement → reschedule via Supabase update
+- Preview block: dashed teal overlay rendered at new position while dragging; original block shown at 35% opacity
+- **Select All** checkbox: selects all equipment at once so users can view all their bookings across all equipment on one calendar; uses indeterminate state when partial selection
+
+### LabHive branding assets
+- **Final logo:** `public/labhive_logo.svg` — navy outer hexagon (#0C1140, orange border #FF6B1A), three specialty hexes (purple atom left, lime green flask+DNA right, coral gears top), white PCB chip center hex, "LabHive" wordmark in Georgia serif at bottom
+- viewBox `0 0 680 860`, main group `translate(340,310)`
+- Do NOT add `&` unescaped in SVG `<style>` or `<desc>` — use `&amp;`
 
 ---
 
