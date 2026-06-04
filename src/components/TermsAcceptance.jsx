@@ -74,7 +74,7 @@ export default function TermsAcceptance({ session, onAccept }) {
             <li style={{ marginBottom: 8 }}>We do <strong>not</strong> sell your data or use it for advertising.</li>
             <li style={{ marginBottom: 8 }}>Your data is accessible only to members of your organisation and authorised administrators.</li>
             <li style={{ marginBottom: 8 }}>Files you upload are stored in LabHive Cloud or your chosen personal storage (Google Drive, OneDrive, WebDAV).</li>
-            <li style={{ marginBottom: 8 }}>You may request deletion of your account and data at any time via Customer Service.</li>
+            <li style={{ marginBottom: 8 }}>You may request deletion of your account and data at any time under the Profile tab.</li>
             <li style={{ marginBottom: 8 }}>The platform is provided "as is" — LabHive is not liable for loss of data, missed bookings, or equipment issues.</li>
             <li style={{ marginBottom: 0 }}>Disputes are resolved by binding individual arbitration under the laws of Illinois, USA.</li>
           </ul>
