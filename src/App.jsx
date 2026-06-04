@@ -32,6 +32,7 @@ import { providers as storageProviders } from './lib/storage/StorageService'
 import { logAdminError } from './lib/logAdminError'
 import CustomerServiceModal from './components/CustomerServiceModal'
 import TermsAcceptance from './components/TermsAcceptance'
+import { CURRENT_TERMS_VERSION } from './lib/termsVersion'
 
 window.addEventListener('error', (e) => {
   logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
@@ -84,14 +85,14 @@ export default function App() {
   const [showIconPicker, setShowIconPicker] = useState(null)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
-  const [termsAccepted, setTermsAccepted] = useState(true)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
-  // Check if user has accepted terms (skip for super admin)
+  // Check terms version on every login — super admin is exempt
   useEffect(() => {
-    if (!session || session.userId === null) { setTermsAccepted(true); return }
-    const key = `labhive_terms_v1_${session.userId || session.email}`
-    setTermsAccepted(!!localStorage.getItem(key))
-  }, [session?.userId, session?.email])
+    if (!session) { setTermsAccepted(false); return }
+    if (session.userId === null) { setTermsAccepted(true); return } // super admin
+    setTermsAccepted(session.termsAcceptedVersion === CURRENT_TERMS_VERSION)
+  }, [session?.userId, session?.termsAcceptedVersion])
 
   // Track screen changes as GA4 page views
   useEffect(() => {
@@ -395,8 +396,8 @@ export default function App() {
     <>
       <Layout>{screens[screen] || <Dashboard />}</Layout>
       <Toast />
-      {session?.mustChangePassword && <ForcePasswordChange />}
-      {!termsAccepted && !session?.mustChangePassword && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
+      {!termsAccepted && session && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
+      {termsAccepted && session?.mustChangePassword && <ForcePasswordChange />}
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
       {showIconPicker === true && (
         <DashboardIconPicker

@@ -309,6 +309,7 @@ export default function Login() {
         organizationId: user.organization_id || null,
         projectGroup: user.project_group || null,
         mustChangePassword: user.must_change_password === true,
+        termsAcceptedVersion: user.terms_accepted_version || null,
       }
       setSession(teamSessionObj)
             setLoading(false); return
@@ -331,6 +332,7 @@ export default function Login() {
         role: 'solo', username: soloUser.name, userId: soloUser.id,
         email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar,
         activeModules: soloUser.active_modules || [], loginMode: 'solo',
+        termsAcceptedVersion: soloUser.terms_accepted_version || null,
       }
       setSession(soloSessionObj)
             const { data: memberships } = await sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
