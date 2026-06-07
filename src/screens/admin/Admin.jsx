@@ -50,13 +50,13 @@ function generateTempPassword() {
 
 const MODULE_IMAGE_DEFS = [
   { key: 'supply',         label: 'Supply Inventory',    icon: '📦' },
-  { key: 'projects',       label: 'Project & Material',  icon: '🧪' },
+  { key: 'projects',       label: 'Project Workspace',  icon: '🧪' },
   { key: 'training',       label: 'Training Records',    icon: '🎓' },
-  { key: 'equipment',      label: 'Equipment Inventory', icon: '🔧' },
+  { key: 'equipment',      label: 'Equipment List', icon: '🔧' },
   { key: 'equipmenthub',   label: 'Equipment Hub',       icon: '📚' },
-  { key: 'booking',        label: 'Booking Equipment',   icon: '📅' },
+  { key: 'booking',        label: 'Reserve Equipment',   icon: '📅' },
   { key: 'remessages',     label: 'RE Messages',         icon: '💬' },
-  { key: 'pm',             label: 'Project Management',  icon: '📋' },
+  { key: 'pm',             label: 'Task Board',  icon: '📋' },
   { key: 'mileage',        label: 'Mileage Form',        icon: '🚗' },
   { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺' },
   { key: 'labmanagement',  label: 'Lab Management',      icon: '🏛️' },
@@ -441,12 +441,12 @@ function OrgIconPoolsPanel({ orgId }) {
 }
 
 const STUDENT_ICON_OPTIONS = [
-  { key: 'projects',     label: 'Project & Material',   icon: '🧪' },
+  { key: 'projects',     label: 'Project Workspace',   icon: '🧪' },
   { key: 'training',     label: 'Training Records',      icon: '🎓' },
   { key: 'equipmenthub', label: 'Equipment Hub',         icon: '📚' },
-  { key: 'booking',      label: 'Booking Equipment',     icon: '📅' },
+  { key: 'booking',      label: 'Reserve Equipment',     icon: '📅' },
   { key: 'barcode',      label: 'QR Scan',               icon: '📷' },
-  { key: 'remessages',   label: 'Contact Lab Manager',   icon: '💬' },
+  { key: 'remessages',   label: 'Lab Messages',   icon: '💬' },
   { key: 'mileage',      label: 'Mileage Form',          icon: '🚗' },
   { key: 'labsafety',    label: 'Lab Safety',            icon: '🦺' },
 ]
@@ -668,6 +668,8 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
 // ── Org modules modal (super admin only) ─────────────────────
 const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile')
+// Profile is always-on so excluded from access-control, but included here for image upload
+const ORG_IMAGE_MODULES = ALL_MODULES_META
 
 // ── Shared image grid for global icon images ──────────────────
 function GlobalImageGrid({ modules, imagePrefix, alsoPrefix }) {
@@ -870,7 +872,7 @@ function AppModulesModal({ onClose }) {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
             These images appear as backgrounds on dashboard icon cards for all team users. Best size: landscape ~800×500 px. Org admins can override images for their own organization.
           </div>
-          <GlobalImageGrid modules={ORG_CONFIGURABLE_MODULES} imagePrefix="img_" alsoPrefix="solo_img_" />
+          <GlobalImageGrid modules={ORG_IMAGE_MODULES} imagePrefix="img_" alsoPrefix="solo_img_" />
         </div>
       )}
     </Modal>
@@ -879,6 +881,7 @@ function AppModulesModal({ onClose }) {
 
 // ── Solo users global modules modal (super admin only) ────────
 const SOLO_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked && m.key !== 'profile')
+const SOLO_IMAGE_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked)
 
 function SoloModulesModal({ onClose }) {
   const { toast } = useAppStore()
@@ -968,7 +971,7 @@ function SoloModulesModal({ onClose }) {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
             These images appear as backgrounds on dashboard icon cards for all solo users. Best size: landscape ~800×500 px.
           </div>
-          <GlobalImageGrid modules={SOLO_CONFIGURABLE_MODULES} imagePrefix="solo_img_" />
+          <GlobalImageGrid modules={SOLO_IMAGE_MODULES} imagePrefix="solo_img_" />
         </div>
       )}
     </Modal>
