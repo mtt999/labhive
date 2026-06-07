@@ -481,7 +481,8 @@ function CalibrationTab({ session }) {
   const docRef = useRef()
   const sopRef = useRef()
 
-  const orgId = session?.loginMode !== 'solo' && session?.userId ? session.organizationId : null
+  const isSolo = session?.loginMode === 'solo'
+  const orgId = !isSolo && session?.userId ? session.organizationId : null
   const managerName = session?.username || session?.email || ''
 
   const EMPTY_SETUP = {
@@ -491,17 +492,37 @@ function CalibrationTab({ session }) {
     notes: '', notification_enabled: false,
   }
 
-  useEffect(() => { load() }, [session?.organizationId])
+  useEffect(() => { load() }, [session?.userId])
 
   async function load() {
     setLoading(true)
-    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('category').order('equipment_name')
-    if (orgId) eqQ = eqQ.eq('organization_id', orgId)
-    let calQ = sb.from('equipment_calibration').select('*').order('start_date', { ascending: false })
-    if (orgId) calQ = calQ.eq('organization_id', orgId)
-    const [{ data: eqData }, { data: calData }] = await Promise.all([eqQ, calQ])
+
+    // Equipment — isolated by owner: solo users see only their own equipment,
+    // team users see only their org's equipment.
+    let eqQ = sb.from('equipment_inventory')
+      .select('id, equipment_name, nickname, category, location')
+      .eq('is_active', true).order('category').order('equipment_name')
+    if (isSolo) {
+      eqQ = eqQ.eq('login_mode', 'solo').eq('solo_owner_id', session?.userId)
+    } else {
+      eqQ = eqQ.eq('login_mode', 'team')
+      if (orgId) eqQ = eqQ.eq('organization_id', orgId)
+    }
+    const { data: eqData } = await eqQ
     setEquipment(eqData || [])
-    setRecords(calData || [])
+
+    // Calibration records — filtered strictly by the user's own equipment IDs.
+    // This guarantees isolation with no extra columns needed: solo users only
+    // see records for their equipment, team users only for their org's equipment.
+    const eqIds = (eqData || []).map(e => e.id)
+    if (eqIds.length > 0) {
+      const { data: calData } = await sb.from('equipment_calibration')
+        .select('*').in('equipment_id', eqIds).order('start_date', { ascending: false })
+      setRecords(calData || [])
+    } else {
+      setRecords([])
+    }
+
     setLoading(false)
   }
 
@@ -607,7 +628,8 @@ function CalibrationTab({ session }) {
 
   async function uploadFile(file, type, equipmentId) {
     const ext = file.name.split('.').pop().toLowerCase()
-    const path = `calibration/${orgId || 'solo'}/${equipmentId}/${type}-${Date.now()}.${ext}`
+    const prefix = isSolo ? `calibration/solo/${session?.userId}` : `calibration/org/${orgId}`
+    const path = `${prefix}/${equipmentId}/${type}-${Date.now()}.${ext}`
     const { error } = await sb.storage.from('project-files').upload(path, file, { contentType: file.type })
     if (error) throw new Error(error.message)
     return sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
