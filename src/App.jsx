@@ -187,12 +187,12 @@ export default function App() {
     if (teamUser) {
       const adminLevel = teamUser.admin_level || 0
       const role = teamUser.role === 'admin' || adminLevel >= 1 ? 'admin' : teamUser.role
-      setSession({ role, dbRole: teamUser.role, username: teamUser.name, userId: teamUser.id, email: teamUser.email, adminLevel, photoUrl: teamUser.photo_url, avatar: teamUser.avatar, loginMode: 'team', organizationId: teamUser.organization_id || null, projectGroup: teamUser.project_group || null, mustChangePassword: teamUser.must_change_password === true })
+      setSession({ role, dbRole: teamUser.role, username: teamUser.name, userId: teamUser.id, email: teamUser.email, adminLevel, photoUrl: teamUser.photo_url, avatar: teamUser.avatar, loginMode: 'team', organizationId: teamUser.organization_id || null, projectGroup: teamUser.project_group || null, mustChangePassword: teamUser.must_change_password === true, termsAcceptedVersion: teamUser.terms_accepted_version || null })
       return
     }
     const { data: soloUser } = await sb.from('solo_users').select('*').eq('auth_id', authUser.id).maybeSingle()
     if (soloUser) {
-      setSession({ role: 'solo', username: soloUser.name, userId: soloUser.id, email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar, activeModules: soloUser.active_modules || [], loginMode: 'solo' })
+      setSession({ role: 'solo', username: soloUser.name, userId: soloUser.id, email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar, activeModules: soloUser.active_modules || [], loginMode: 'solo', termsAcceptedVersion: soloUser.terms_accepted_version || null, isPaid: soloUser.is_paid || false })
       sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
         .then(({ data: memberships }) => {
           if (memberships?.length) {

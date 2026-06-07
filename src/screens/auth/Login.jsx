@@ -328,11 +328,13 @@ export default function Login() {
         }
       }
       if (!soloUser) { await sb.auth.signOut(); setError('No Solo account found. Please sign up first.'); setLoading(false); return }
+      if (soloUser.deletion_requested_at) { await sb.auth.signOut(); setError('This account is pending deletion. Your teammates have been notified and have 7 days to respond.'); setLoading(false); return }
       const soloSessionObj = {
         role: 'solo', username: soloUser.name, userId: soloUser.id,
         email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar,
         activeModules: soloUser.active_modules || [], loginMode: 'solo',
         termsAcceptedVersion: soloUser.terms_accepted_version || null,
+        isPaid: soloUser.is_paid || false,
       }
       setSession(soloSessionObj)
             const { data: memberships } = await sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)

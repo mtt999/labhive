@@ -1214,9 +1214,16 @@ export default function Admin() {
 
   async function loadSoloUsers() {
     setSoloLoading(true)
-    const { data } = await sb.from('solo_users').select('id, name, email, created_at, active_modules').order('created_at', { ascending: false })
+    const { data } = await sb.from('solo_users').select('id, name, email, created_at, active_modules, is_paid').order('created_at', { ascending: false })
     setSoloUsers(data || [])
     setSoloLoading(false)
+  }
+
+  async function toggleSoloPaid(u) {
+    const next = !u.is_paid
+    await sb.from('solo_users').update({ is_paid: next }).eq('id', u.id)
+    setSoloUsers(prev => prev.map(s => s.id === u.id ? { ...s, is_paid: next } : s))
+    toast(`${u.name} marked as ${next ? 'paid ✓' : 'free'}`)
   }
 
   async function deleteSoloUser(u) {
@@ -1625,12 +1632,18 @@ export default function Admin() {
                   <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {u.name}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: u.is_paid ? '#eafaf1' : '#f0f0f0', color: u.is_paid ? '#27ae60' : '#888' }}>
+                          {u.is_paid ? 'PAID' : 'FREE'}
+                        </span>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0, textAlign: 'right' }}>
                       {u.created_at ? new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                     </div>
+                    <button className="btn btn-sm" onClick={() => toggleSoloPaid(u)}>{u.is_paid ? 'Revoke Paid' : 'Mark Paid'}</button>
                     <button className="btn btn-sm btn-danger" onClick={() => deleteSoloUser(u)}>Delete</button>
                   </div>
                 ))

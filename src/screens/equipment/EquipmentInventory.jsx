@@ -1224,13 +1224,38 @@ function MaintenanceRecords({ session }) {
   )
 }
 
+function PaidFeatureGate({ featureName = 'This feature' }) {
+  return (
+    <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+      <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 8 }}>{featureName}</div>
+      <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24, lineHeight: 1.6 }}>
+        Calibration tracking is a premium feature for LabHive Solo members. Upgrade to log calibration records, upload certificates, track due dates, and keep a full calibration history for all your equipment.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', marginBottom: 28 }}>
+        {['Calibration schedule & due-date tracking', 'Upload calibration certificates & SOPs', 'Full calibration history per equipment', 'Lab manager + date recorded automatically', 'Filter equipment by overdue / due soon'].map(f => (
+          <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)' }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>✓</span> {f}
+          </div>
+        ))}
+      </div>
+      <a href="/?support=1" style={{ display: 'inline-block', padding: '10px 28px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
+        Contact Us to Upgrade
+      </a>
+    </div>
+  )
+}
+
 export default function EquipmentInventory() {
   const { session } = useAppStore()
   const [tab, setTab] = useState('list')
 
+  const isSolo = session?.loginMode === 'solo'
+  const canAccessCalibration = !isSolo || session?.isPaid
+
   const tabs = [
     { key: 'list', label: '📋 List of Equipment' },
-    ...(canEdit(session) ? [{ key: 'calibration', label: '🧪 Calibration' }] : []),
+    ...(canEdit(session) ? [{ key: 'calibration', label: `🧪 Calibration${isSolo && !session?.isPaid ? ' 🔒' : ''}` }] : []),
     ...(canEdit(session) ? [{ key: 'records', label: '📊 Maintenance Records' }] : []),
     { key: 'settings', label: '⚙️ Settings' },
   ]
@@ -1250,7 +1275,7 @@ export default function EquipmentInventory() {
         ))}
       </ScrollTabs>
       {tab === 'list'        && <EquipmentList session={session} />}
-      {tab === 'calibration' && <CalibrationTab session={session} />}
+      {tab === 'calibration' && (canAccessCalibration ? <CalibrationTab session={session} /> : <PaidFeatureGate featureName="Calibration Tracking" />)}
       {tab === 'records'     && <MaintenanceRecords session={session} />}
       {tab === 'settings'    && <EquipmentSettings session={session} />}
     </div>
