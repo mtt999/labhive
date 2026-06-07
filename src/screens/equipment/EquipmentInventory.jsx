@@ -481,6 +481,7 @@ function CalibrationTab({ session }) {
   const sopRef = useRef()
 
   const orgId = session?.loginMode !== 'solo' && session?.userId ? session.organizationId : null
+  const EMPTY_FORM = { manufacturer_certificate: '', start_date: '', interval_months: '', next_due_date: '', calibration_document_url: '', calibration_sop_url: '', notes: '' }
 
   useEffect(() => { load() }, [session?.organizationId])
 
@@ -488,7 +489,7 @@ function CalibrationTab({ session }) {
     setLoading(true)
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('category').order('equipment_name')
     if (orgId) eqQ = eqQ.eq('organization_id', orgId)
-    let calQ = sb.from('equipment_calibration').select('*')
+    let calQ = sb.from('equipment_calibration').select('*').order('start_date', { ascending: false })
     if (orgId) calQ = calQ.eq('organization_id', orgId)
     const [{ data: eqData }, { data: calData }] = await Promise.all([eqQ, calQ])
     setEquipment(eqData || [])
@@ -496,8 +497,12 @@ function CalibrationTab({ session }) {
     setLoading(false)
   }
 
-  function getRecord(equipmentId) {
-    return records.find(r => r.equipment_id === equipmentId)
+  function getHistory(equipmentId) {
+    return records.filter(r => r.equipment_id === equipmentId)
+  }
+
+  function getLatestRecord(equipmentId) {
+    return getHistory(equipmentId)[0] || null
   }
 
   function getStatus(record) {
@@ -516,67 +521,70 @@ function CalibrationTab({ session }) {
   }
 
   function openModal(eq) {
-    const rec = getRecord(eq.id)
+    const history = getHistory(eq.id)
     setModal({
       equipmentId: eq.id,
       equipmentName: eq.nickname ? `${eq.equipment_name} (${eq.nickname})` : eq.equipment_name,
-      id: rec?.id || null,
-      manufacturer_certificate: rec?.manufacturer_certificate || '',
-      start_date: rec?.start_date || '',
-      interval_months: rec?.interval_months ? String(rec.interval_months) : '',
-      next_due_date: rec?.next_due_date || '',
-      calibration_document_url: rec?.calibration_document_url || '',
-      calibration_sop_url: rec?.calibration_sop_url || '',
-      notes: rec?.notes || '',
+      showForm: history.length === 0,
+      form: { ...EMPTY_FORM },
     })
   }
 
-  async function uploadFile(file, type) {
+  async function refreshModalHistory(equipmentId) {
+    const { data } = await sb.from('equipment_calibration').select('*').eq('equipment_id', equipmentId).order('start_date', { ascending: false })
+    setRecords(prev => [...prev.filter(r => r.equipment_id !== equipmentId), ...(data || [])])
+  }
+
+  async function uploadFile(file, type, equipmentId) {
     const ext = file.name.split('.').pop().toLowerCase()
-    const path = `calibration/${orgId || 'solo'}/${modal.equipmentId}/${type}-${Date.now()}.${ext}`
+    const path = `calibration/${orgId || 'solo'}/${equipmentId}/${type}-${Date.now()}.${ext}`
     const { error } = await sb.storage.from('project-files').upload(path, file, { contentType: file.type })
     if (error) throw new Error(error.message)
     return sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
   }
 
   async function save() {
-    if (!modal.start_date) { toast('Please enter the calibration date.'); return }
-    if (!modal.interval_months) { toast('Please enter the calibration interval in months.'); return }
+    const f = modal.form
+    if (!f.start_date) { toast('Please enter the calibration date.'); return }
+    if (!f.interval_months) { toast('Please enter the calibration interval in months.'); return }
     setSaving(true)
     try {
-      let docUrl = modal.calibration_document_url
-      let sopUrl = modal.calibration_sop_url
-      if (docRef.current?.files[0]) docUrl = await uploadFile(docRef.current.files[0], 'doc')
-      if (sopRef.current?.files[0]) sopUrl = await uploadFile(sopRef.current.files[0], 'sop')
-      const record = {
+      let docUrl = f.calibration_document_url
+      let sopUrl = f.calibration_sop_url
+      if (docRef.current?.files[0]) docUrl = await uploadFile(docRef.current.files[0], 'doc', modal.equipmentId)
+      if (sopRef.current?.files[0]) sopUrl = await uploadFile(sopRef.current.files[0], 'sop', modal.equipmentId)
+      const { error } = await sb.from('equipment_calibration').insert({
         equipment_id: modal.equipmentId,
         organization_id: orgId,
-        manufacturer_certificate: modal.manufacturer_certificate || null,
-        start_date: modal.start_date,
-        interval_months: parseInt(modal.interval_months),
-        next_due_date: modal.next_due_date || calcNextDue(modal.start_date, modal.interval_months),
+        manufacturer_certificate: f.manufacturer_certificate || null,
+        start_date: f.start_date,
+        interval_months: parseInt(f.interval_months),
+        next_due_date: f.next_due_date || calcNextDue(f.start_date, f.interval_months),
         calibration_document_url: docUrl || null,
         calibration_sop_url: sopUrl || null,
-        notes: modal.notes || null,
+        notes: f.notes || null,
         updated_at: new Date().toISOString(),
-      }
-      if (modal.id) {
-        const { error } = await sb.from('equipment_calibration').update(record).eq('id', modal.id)
-        if (error) throw new Error(error.message)
-      } else {
-        const { error } = await sb.from('equipment_calibration').insert(record)
-        if (error) throw new Error(error.message)
-      }
-      toast('Calibration record saved ✓')
-      setModal(null)
+      })
+      if (error) throw new Error(error.message)
+      toast('Calibration record added ✓')
       if (docRef.current) docRef.current.value = ''
       if (sopRef.current) sopRef.current.value = ''
-      load()
+      await refreshModalHistory(modal.equipmentId)
+      setModal(m => ({ ...m, showForm: false, form: { ...EMPTY_FORM } }))
     } catch (e) {
       toast('Save failed: ' + (e?.message || String(e)))
     } finally {
       setSaving(false)
     }
+  }
+
+  async function deleteRecord(id, equipmentId) {
+    if (!confirm('Delete this calibration record? This cannot be undone.')) return
+    await sb.from('equipment_calibration').delete().eq('id', id)
+    const remaining = records.filter(r => r.equipment_id === equipmentId && r.id !== id)
+    setRecords(prev => prev.filter(r => r.id !== id))
+    if (remaining.length === 0) setModal(m => ({ ...m, showForm: true }))
+    toast('Record deleted.')
   }
 
   const BADGE = {
@@ -591,7 +599,7 @@ function CalibrationTab({ session }) {
   return (
     <div>
       <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
-        Track calibration schedules, certificates and SOP documents for lab equipment.
+        Track calibration schedules, certificates and SOP documents for lab equipment. Each calibration event is saved as a separate record — full history is always accessible.
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
@@ -604,7 +612,8 @@ function CalibrationTab({ session }) {
           </thead>
           <tbody>
             {equipment.map(eq => {
-              const rec = getRecord(eq.id)
+              const rec = getLatestRecord(eq.id)
+              const history = getHistory(eq.id)
               const status = getStatus(rec)
               const badge = BADGE[status]
               return (
@@ -626,7 +635,9 @@ function CalibrationTab({ session }) {
                     </span>
                   </td>
                   <td style={{ padding: '10px 10px', textAlign: 'right' }}>
-                    <button className="btn btn-sm" onClick={() => openModal(eq)}>{rec ? 'Edit' : 'Set Up'}</button>
+                    <button className="btn btn-sm" onClick={() => openModal(eq)}>
+                      {history.length > 0 ? `Records (${history.length})` : 'Set Up'}
+                    </button>
                   </td>
                 </tr>
               )
@@ -642,74 +653,104 @@ function CalibrationTab({ session }) {
 
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 520, width: '100%', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 560, width: '100%', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>Calibration Record</div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>Calibration Records</div>
               <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 6 }}>
               {modal.equipmentName}
             </div>
 
-            <div className="field">
-              <label>Manufacturer Certificate #</label>
-              <input type="text" placeholder="e.g. NIST-2024-00123" value={modal.manufacturer_certificate}
-                onChange={e => setModal(m => ({ ...m, manufacturer_certificate: e.target.value }))} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div className="field">
-                <label>Calibration Date *</label>
-                <input type="date" value={modal.start_date} onChange={e => {
-                  const next = calcNextDue(e.target.value, modal.interval_months)
-                  setModal(m => ({ ...m, start_date: e.target.value, next_due_date: next || m.next_due_date }))
-                }} />
-              </div>
-              <div className="field">
-                <label>Interval (months) *</label>
-                <input type="number" min="1" placeholder="e.g. 12" value={modal.interval_months} onChange={e => {
-                  const next = calcNextDue(modal.start_date, e.target.value)
-                  setModal(m => ({ ...m, interval_months: e.target.value, next_due_date: next || m.next_due_date }))
-                }} />
-              </div>
-            </div>
-            <div className="field">
-              <label>Next Calibration Due (auto-calculated, editable)</label>
-              <input type="date" value={modal.next_due_date}
-                onChange={e => setModal(m => ({ ...m, next_due_date: e.target.value }))} />
-            </div>
+            {!modal.showForm && (
+              <button className="btn btn-primary" style={{ marginBottom: 20 }}
+                onClick={() => setModal(m => ({ ...m, showForm: true, form: { ...EMPTY_FORM } }))}>
+                + Add New Calibration
+              </button>
+            )}
 
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '16px 0 10px' }}>Documents</div>
-
-            <div className="field">
-              <label>Calibration Certificate / Document</label>
-              {modal.calibration_document_url && (
-                <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <a href={modal.calibration_document_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 View current document</a>
-                  <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setModal(m => ({ ...m, calibration_document_url: '' }))}>Remove</button>
+            {modal.showForm && (
+              <div style={{ background: 'var(--bg2)', borderRadius: 8, padding: 16, marginBottom: 20, border: '1px solid var(--border)' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>New Calibration Entry</div>
+                <div className="field">
+                  <label>Manufacturer Certificate #</label>
+                  <input type="text" placeholder="e.g. NIST-2024-00123" value={modal.form.manufacturer_certificate}
+                    onChange={e => setModal(m => ({ ...m, form: { ...m.form, manufacturer_certificate: e.target.value } }))} />
                 </div>
-              )}
-              <input type="file" ref={docRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
-            </div>
-            <div className="field">
-              <label>Calibration SOP</label>
-              {modal.calibration_sop_url && (
-                <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <a href={modal.calibration_sop_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 View current SOP</a>
-                  <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setModal(m => ({ ...m, calibration_sop_url: '' }))}>Remove</button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="field">
+                    <label>Calibration Date *</label>
+                    <input type="date" value={modal.form.start_date} onChange={e => {
+                      const next = calcNextDue(e.target.value, modal.form.interval_months)
+                      setModal(m => ({ ...m, form: { ...m.form, start_date: e.target.value, next_due_date: next || m.form.next_due_date } }))
+                    }} />
+                  </div>
+                  <div className="field">
+                    <label>Interval (months) *</label>
+                    <input type="number" min="1" placeholder="e.g. 12" value={modal.form.interval_months} onChange={e => {
+                      const next = calcNextDue(modal.form.start_date, e.target.value)
+                      setModal(m => ({ ...m, form: { ...m.form, interval_months: e.target.value, next_due_date: next || m.form.next_due_date } }))
+                    }} />
+                  </div>
                 </div>
-              )}
-              <input type="file" ref={sopRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
-            </div>
-            <div className="field">
-              <label>Notes</label>
-              <textarea rows={3} placeholder="Additional calibration notes..." value={modal.notes}
-                onChange={e => setModal(m => ({ ...m, notes: e.target.value }))} style={{ resize: 'vertical' }} />
-            </div>
+                <div className="field">
+                  <label>Next Calibration Due (auto-calculated, editable)</label>
+                  <input type="date" value={modal.form.next_due_date}
+                    onChange={e => setModal(m => ({ ...m, form: { ...m.form, next_due_date: e.target.value } }))} />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>Documents</div>
+                <div className="field">
+                  <label>Calibration Certificate / Document</label>
+                  <input type="file" ref={docRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
+                </div>
+                <div className="field">
+                  <label>Calibration SOP</label>
+                  <input type="file" ref={sopRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
+                </div>
+                <div className="field">
+                  <label>Notes</label>
+                  <textarea rows={2} placeholder="Additional calibration notes..." value={modal.form.notes}
+                    onChange={e => setModal(m => ({ ...m, form: { ...m.form, notes: e.target.value } }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                  <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Record'}</button>
+                  {getHistory(modal.equipmentId).length > 0 && (
+                    <button className="btn" onClick={() => setModal(m => ({ ...m, showForm: false }))}>Cancel</button>
+                  )}
+                </div>
+              </div>
+            )}
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Record'}</button>
-              <button className="btn" onClick={() => setModal(null)}>Cancel</button>
-            </div>
+            {getHistory(modal.equipmentId).length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                  Calibration History
+                </div>
+                {getHistory(modal.equipmentId).map((rec, i) => {
+                  const status = getStatus(rec)
+                  const badge = BADGE[status]
+                  return (
+                    <div key={rec.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 10, position: 'relative' }}>
+                      {i === 0 && <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, fontWeight: 700, color: '#27ae60', background: '#eafaf1', padding: '1px 6px', borderRadius: 8 }}>LATEST</span>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: 13, marginBottom: 8, paddingRight: 60 }}>
+                        <span><span style={{ color: 'var(--text3)', fontSize: 11 }}>Date </span><span style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{rec.start_date || '—'}</span></span>
+                        <span><span style={{ color: 'var(--text3)', fontSize: 11 }}>Cert # </span><span style={{ fontFamily: 'var(--mono)' }}>{rec.manufacturer_certificate || '—'}</span></span>
+                        <span><span style={{ color: 'var(--text3)', fontSize: 11 }}>Interval </span><span style={{ fontFamily: 'var(--mono)' }}>{rec.interval_months ? `${rec.interval_months} mo` : '—'}</span></span>
+                        <span><span style={{ color: 'var(--text3)', fontSize: 11 }}>Next Due </span><span style={{ fontFamily: 'var(--mono)' }}>{rec.next_due_date || '—'}</span></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: badge.color, background: badge.bg }}>{badge.label}</span>
+                        {rec.calibration_document_url && <a href={rec.calibration_document_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 Certificate</a>}
+                        {rec.calibration_sop_url && <a href={rec.calibration_sop_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 SOP</a>}
+                        <button className="btn btn-sm btn-danger" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => deleteRecord(rec.id, modal.equipmentId)}>Delete</button>
+                      </div>
+                      {rec.notes && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>{rec.notes}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
