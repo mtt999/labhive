@@ -4,45 +4,27 @@ import { useAppStore } from '../../store/useAppStore'
 import { ScannerContent, MaterialTypesManager } from './BarcodeScannerScreen'
 import { isNative } from '../../lib/scanner.js'
 
-// Colorful logo for screen preview
+// LabHive logo for screen preview — navy hex with orange border and LH initials
 function ILabLogo({ size = 40 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="256,4 468,126 468,378 256,500 44,378 44,126" fill="#ffb380"/>
-      <polygon points="256,14 458,132 458,372 256,490 54,372 54,132" fill="#ff7f2a"/>
-      <polygon points="256,30 450,140 450,362 256,472 62,362 62,140" fill="#000080"/>
-      <polygon points="256,58 422,152 422,350 256,444 90,350 90,152" fill="none" stroke="#ff6b00" strokeWidth="1.2" opacity="0.25"/>
-      <circle cx="256" cy="30"  r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="140" r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="256" cy="472" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="140" r="9" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff6b00" strokeWidth="3.5" opacity="0.95"/>
-      <circle cx="394" cy="224" r="16" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff9a3c" strokeWidth="3" opacity="0.85" transform="rotate(60 256 224)"/>
-      <circle cx="179.16718" cy="294.86069" r="15" fill="#ff9a3c"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ffba6e" strokeWidth="2.5" opacity="0.75" transform="rotate(-60 256 224)"/>
-      <circle cx="325" cy="105" r="14" fill="#ffba6e"/>
-      <circle cx="256" cy="224" r="38" fill="#ff6b00" opacity="0.10"/>
-      <circle cx="256" cy="224" r="26" fill="#ff6b00" opacity="0.22"/>
-      <circle cx="256" cy="224" r="16" fill="#ff8c00" opacity="0.80"/>
-      <circle cx="256" cy="224" r="9"  fill="#ffb347"/>
-      <text x="258.37772" y="415" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="92" fontWeight="700">
-        <tspan fontStyle="italic" fill="#ff6b00">i</tspan>
-        <tspan fill="#ffffff" dx="-5">Lab</tspan>
-      </text>
+      <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" strokeWidth="24" strokeLinejoin="round"/>
+      <circle cx="256" cy="10"  r="14" fill="#FF9A4A"/>
+      <circle cx="460" cy="128" r="14" fill="#FF9A4A"/>
+      <circle cx="460" cy="372" r="14" fill="#FF9A4A"/>
+      <circle cx="256" cy="490" r="14" fill="#FF9A4A"/>
+      <circle cx="52"  cy="372" r="14" fill="#FF9A4A"/>
+      <circle cx="52"  cy="128" r="14" fill="#FF9A4A"/>
+      <text x="256" y="310" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="160" fontWeight="700" fill="#F5F0DC">LH</text>
     </svg>
   )
 }
 
-// Pure B&W logo for print labels — black outline on white, prints on any printer
+// Pure B&W LabHive logo for print labels — black outline on white, prints on any printer
 const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#fff"/>
-  <polygon points="256,20 460,133 460,379 256,492 52,379 52,133" fill="#fff" stroke="#000" stroke-width="20"/>
-  <text x="256" y="415" text-anchor="middle" font-family="Arial" font-size="88" font-weight="700">
-    <tspan font-style="italic" fill="#000">i</tspan><tspan fill="#000" dx="-4">Lab</tspan>
-  </text>
+  <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#fff" stroke="#000" stroke-width="24" stroke-linejoin="round"/>
+  <text x="256" y="310" text-anchor="middle" font-family="Arial" font-size="160" font-weight="700" fill="#000">LH</text>
 </svg>`
 
 function getScanUrl(equipmentId) {
@@ -521,7 +503,7 @@ export default function BarcodeManager() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e8eeff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🔲</div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>Barcode / QR Scan</div>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>QR Labels</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Generate and print QR labels for lab equipment</div>
           </div>
         </div>
