@@ -22,7 +22,6 @@ const LOCATIONS = [
 ]
 
 function canEdit(session) { return session?.role === 'admin' || session?.role === 'user' }
-function isAdmin(session) { return session?.role === 'admin' }
 
 function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
   const { toast } = useAppStore()
@@ -75,7 +74,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
       await sb.from('equipment_inventory').update(payload).eq('id', item.id)
     } else {
       const lm = session?.loginMode === 'solo' ? 'solo' : 'team'
-      await sb.from('equipment_inventory').insert({ ...payload, login_mode: lm, organization_id: lm === 'team' ? (session?.organizationId || null) : null })
+      await sb.from('equipment_inventory').insert({ ...payload, login_mode: lm, organization_id: lm === 'team' ? (session?.organizationId || null) : null, solo_owner_id: lm === 'solo' ? (session?.userId || null) : null })
     }
     toast('Equipment saved.')
     setSaving(false)
@@ -101,7 +100,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
               {isSolo
                 ? soloCats.length === 0
                   ? <div style={{ fontSize: 13, color: '#92400e', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '8px 12px' }}>
-                      No categories yet — open the <strong>Equipment Info</strong> icon and go to the <strong>Categories</strong> tab to create them first.
+                      No categories yet — open the <strong>Equipment Hub</strong> icon and go to the <strong>Categories</strong> tab to create them first.
                     </div>
                   : <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                       <option value="">— Select —</option>
@@ -211,7 +210,8 @@ function EquipmentList({ session }) {
     setLoading(true)
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
-    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
+    else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setItems(data || [])
     setLoading(false)
@@ -470,150 +470,245 @@ function EquipmentList({ session }) {
   )
 }
 
-function MaintenanceDue({ session }) {
+function CalibrationTab({ session }) {
   const { toast } = useAppStore()
-  const [items, setItems] = useState([])
+  const [equipment, setEquipment] = useState([])
+  const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [logModal, setLogModal] = useState(null)
-  const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0])
-  const [logNotes, setLogNotes] = useState('')
-  const [usageHours, setUsageHours] = useState({})
+  const [modal, setModal] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const docRef = useRef()
+  const sopRef = useRef()
 
-  useEffect(() => { load() }, [])
+  const orgId = session?.loginMode !== 'solo' && session?.userId ? session.organizationId : null
+
+  useEffect(() => { load() }, [session?.organizationId])
 
   async function load() {
     setLoading(true)
-    const isSolo = session?.loginMode === 'solo'
-    const orgId = !isSolo && session?.userId ? session?.organizationId : null
-    let byDateQ = sb.from('equipment_inventory').select('*').eq('is_active', true).not('next_maintenance_date', 'is', null).order('next_maintenance_date')
-    let byUsageQ = sb.from('equipment_inventory').select('*').eq('is_active', true).not('max_usage_hours', 'is', null)
-    if (orgId) { byDateQ = byDateQ.eq('organization_id', orgId); byUsageQ = byUsageQ.eq('organization_id', orgId) }
-    const [{ data: byDate }, { data: byUsage }, { data: bookings }] = await Promise.all([
-      byDateQ,
-      byUsageQ,
-      sb.from('equipment_bookings').select('equipment_id, start_time, end_time').eq('status', 'confirmed'),
-    ])
-    const usageHrs = {}
-    ;(bookings || []).forEach(b => {
-      const hrs = (new Date(b.end_time) - new Date(b.start_time)) / 3600000
-      usageHrs[b.equipment_id] = (usageHrs[b.equipment_id] || 0) + hrs
-    })
-    setUsageHours(usageHrs)
-    const allIds = new Set()
-    const merged = []
-    for (const i of [...(byDate || []), ...(byUsage || [])]) {
-      if (!allIds.has(i.id)) { allIds.add(i.id); merged.push(i) }
-    }
-    setItems(merged)
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('category').order('equipment_name')
+    if (orgId) eqQ = eqQ.eq('organization_id', orgId)
+    let calQ = sb.from('equipment_calibration').select('*')
+    if (orgId) calQ = calQ.eq('organization_id', orgId)
+    const [{ data: eqData }, { data: calData }] = await Promise.all([eqQ, calQ])
+    setEquipment(eqData || [])
+    setRecords(calData || [])
     setLoading(false)
   }
 
-  function getDaysUntil(dateStr) {
-    if (!dateStr) return null
-    return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24))
+  function getRecord(equipmentId) {
+    return records.find(r => r.equipment_id === equipmentId)
   }
 
-  function getStatus(item) {
-    const days = getDaysUntil(item.next_maintenance_date)
-    if (item.max_usage_hours) {
-      const hrs = usageHours[item.id] || 0
-      const pct = (hrs / item.max_usage_hours) * 100
-      if (pct >= 100) return { label: `Usage exceeded (${Math.round(hrs)}/${item.max_usage_hours}h)`, color: '#a32d2d', bg: '#fcebeb', priority: 0 }
-      if (pct >= 80) return { label: `Usage ${Math.round(pct)}% (${Math.round(hrs)}/${item.max_usage_hours}h)`, color: '#92400e', bg: '#fef3c7', priority: 1 }
+  function getStatus(record) {
+    if (!record?.next_due_date) return 'none'
+    const days = Math.ceil((new Date(record.next_due_date) - new Date()) / 86400000)
+    if (days < 0) return 'overdue'
+    if (days <= 30) return 'soon'
+    return 'ok'
+  }
+
+  function calcNextDue(startDate, intervalMonths) {
+    if (!startDate || !intervalMonths) return ''
+    const d = new Date(startDate + 'T00:00:00')
+    d.setMonth(d.getMonth() + parseInt(intervalMonths))
+    return d.toISOString().split('T')[0]
+  }
+
+  function openModal(eq) {
+    const rec = getRecord(eq.id)
+    setModal({
+      equipmentId: eq.id,
+      equipmentName: eq.nickname ? `${eq.equipment_name} (${eq.nickname})` : eq.equipment_name,
+      id: rec?.id || null,
+      manufacturer_certificate: rec?.manufacturer_certificate || '',
+      start_date: rec?.start_date || '',
+      interval_months: rec?.interval_months ? String(rec.interval_months) : '',
+      next_due_date: rec?.next_due_date || '',
+      calibration_document_url: rec?.calibration_document_url || '',
+      calibration_sop_url: rec?.calibration_sop_url || '',
+      notes: rec?.notes || '',
+    })
+  }
+
+  async function uploadFile(file, type) {
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `calibration/${orgId || 'solo'}/${modal.equipmentId}/${type}-${Date.now()}.${ext}`
+    const { error } = await sb.storage.from('project-files').upload(path, file, { contentType: file.type })
+    if (error) throw new Error(error.message)
+    return sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
+  }
+
+  async function save() {
+    if (!modal.start_date) { toast('Please enter the calibration date.'); return }
+    if (!modal.interval_months) { toast('Please enter the calibration interval in months.'); return }
+    setSaving(true)
+    try {
+      let docUrl = modal.calibration_document_url
+      let sopUrl = modal.calibration_sop_url
+      if (docRef.current?.files[0]) docUrl = await uploadFile(docRef.current.files[0], 'doc')
+      if (sopRef.current?.files[0]) sopUrl = await uploadFile(sopRef.current.files[0], 'sop')
+      const record = {
+        equipment_id: modal.equipmentId,
+        organization_id: orgId,
+        manufacturer_certificate: modal.manufacturer_certificate || null,
+        start_date: modal.start_date,
+        interval_months: parseInt(modal.interval_months),
+        next_due_date: modal.next_due_date || calcNextDue(modal.start_date, modal.interval_months),
+        calibration_document_url: docUrl || null,
+        calibration_sop_url: sopUrl || null,
+        notes: modal.notes || null,
+        updated_at: new Date().toISOString(),
+      }
+      if (modal.id) {
+        const { error } = await sb.from('equipment_calibration').update(record).eq('id', modal.id)
+        if (error) throw new Error(error.message)
+      } else {
+        const { error } = await sb.from('equipment_calibration').insert(record)
+        if (error) throw new Error(error.message)
+      }
+      toast('Calibration record saved ✓')
+      setModal(null)
+      if (docRef.current) docRef.current.value = ''
+      if (sopRef.current) sopRef.current.value = ''
+      load()
+    } catch (e) {
+      toast('Save failed: ' + (e?.message || String(e)))
+    } finally {
+      setSaving(false)
     }
-    if (days === null) return null
-    if (days < 0) return { label: 'Overdue', color: '#a32d2d', bg: '#fcebeb', priority: 0 }
-    if (days <= 30) return { label: `Due in ${days}d`, color: '#92400e', bg: '#fef3c7', priority: 1 }
-    if (days <= 90) return { label: `Due in ${days}d`, color: '#0369a1', bg: '#e0f2fe', priority: 2 }
-    return { label: `Due in ${days}d`, color: '#1e4d39', bg: '#e8f2ee', priority: 3 }
   }
 
-  async function logMaintenance() {
-    if (!logModal) return
-    const interval = logModal.maintenance_interval_days
-    const nextDate = interval ? new Date(new Date(logDate).getTime() + interval * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null
-    await sb.from('equipment_inventory').update({
-      last_maintenance_date: logDate,
-      next_maintenance_date: nextDate,
-      notes: logNotes ? `[${logDate}] ${logNotes}\n${logModal.notes || ''}` : logModal.notes,
-      updated_at: new Date().toISOString(),
-    }).eq('id', logModal.id)
-    toast('Maintenance logged ✓')
-    setLogModal(null); setLogNotes(''); load()
+  const BADGE = {
+    none:    { label: 'Not Set',  color: '#666',    bg: '#f0f0f0' },
+    overdue: { label: 'Overdue',  color: '#c0392b', bg: '#fdecea' },
+    soon:    { label: 'Due Soon', color: '#e67e22', bg: '#fef3e2' },
+    ok:      { label: 'Current',  color: '#27ae60', bg: '#eafaf1' },
   }
 
-  const overdue = items.filter(i => getDaysUntil(i.next_maintenance_date) < 0)
-  const soon = items.filter(i => { const d = getDaysUntil(i.next_maintenance_date); return d !== null && d >= 0 && d <= 30 })
-  const upcoming = items.filter(i => { const d = getDaysUntil(i.next_maintenance_date); return d !== null && d > 30 && d <= 90 })
-  const ok = items.filter(i => { const d = getDaysUntil(i.next_maintenance_date); return d !== null && d > 90 })
-
-  function Section({ title, color, items: sItems }) {
-    if (sItems.length === 0) return null
-    return (
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
-          <div style={{ fontWeight: 600, fontSize: 14, color }}>{title}</div>
-          <span style={{ fontSize: 12, color: 'var(--text3)' }}>{sItems.length} item{sItems.length !== 1 ? 's' : ''}</span>
-        </div>
-        {sItems.map(item => {
-          const status = getStatus(item)
-          return (
-            <div key={item.id} style={{ background: 'var(--surface)', border: `1px solid ${color}40`, borderLeft: `4px solid ${color}`, borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.equipment_name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                  {item.nickname && <span>{item.nickname} · </span>}
-                  {item.location && <span>{item.location} · </span>}
-                  Last: <span style={{ fontFamily: 'var(--mono)' }}>{item.last_maintenance_date || 'Never'}</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ background: status?.bg, color: status?.color, borderRadius: 99, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>{status?.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3, fontFamily: 'var(--mono)' }}>Due: {item.next_maintenance_date}</div>
-                </div>
-                {canEdit(session) && (
-                  <button className="btn btn-sm btn-primary" onClick={() => { setLogModal(item); setLogDate(new Date().toISOString().split('T')[0]); setLogNotes('') }}>✓ Log</button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
+  if (loading) return <div className="spinner" style={{ margin: '40px auto' }} />
 
   return (
     <div>
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-      ) : items.length === 0 ? (
-        <div className="empty-state"><div className="empty-icon">🔧</div><div>No maintenance schedules set up.</div></div>
-      ) : (
-        <>
-          <Section title="Overdue" color="#a32d2d" items={overdue} />
-          <Section title="Due within 30 days" color="#92400e" items={soon} />
-          <Section title="Due in 31–90 days" color="#0369a1" items={upcoming} />
-          <Section title="Up to date" color="#1e4d39" items={ok} />
-        </>
-      )}
-
-      {logModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Log maintenance</div>
-            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>{logModal.equipment_name}{logModal.nickname ? ` · ${logModal.nickname}` : ''}</div>
-            <div className="field"><label>Date performed</label><input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} /></div>
-            <div className="field"><label>Notes (optional)</label><textarea rows={3} value={logNotes} onChange={e => setLogNotes(e.target.value)} placeholder="What was done?" style={{ resize: 'vertical' }} /></div>
-            {logModal.maintenance_interval_days && (
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
-                Next maintenance: {new Date(new Date(logDate).getTime() + logModal.maintenance_interval_days * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
+      <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
+        Track calibration schedules, certificates and SOP documents for lab equipment.
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+              {['Equipment', 'Certificate #', 'Last Calibrated', 'Interval', 'Next Due', 'Status', ''].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {equipment.map(eq => {
+              const rec = getRecord(eq.id)
+              const status = getStatus(rec)
+              const badge = BADGE[status]
+              return (
+                <tr key={eq.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '10px 10px' }}>
+                    <div style={{ fontWeight: 600 }}>{eq.equipment_name}</div>
+                    {eq.nickname && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{eq.nickname}</div>}
+                    {eq.category && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{eq.category}</div>}
+                  </td>
+                  <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12, color: rec?.manufacturer_certificate ? 'var(--text)' : 'var(--text3)' }}>
+                    {rec?.manufacturer_certificate || '—'}
+                  </td>
+                  <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12 }}>{rec?.start_date || '—'}</td>
+                  <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12 }}>{rec?.interval_months ? `${rec.interval_months} mo` : '—'}</td>
+                  <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12 }}>{rec?.next_due_date || '—'}</td>
+                  <td style={{ padding: '10px 10px' }}>
+                    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: badge.color, background: badge.bg, whiteSpace: 'nowrap' }}>
+                      {badge.label}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 10px', textAlign: 'right' }}>
+                    <button className="btn btn-sm" onClick={() => openModal(eq)}>{rec ? 'Edit' : 'Set Up'}</button>
+                  </td>
+                </tr>
+              )
+            })}
+            {equipment.length === 0 && (
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
+                No equipment found. Add equipment in the List of Equipment tab first.
+              </td></tr>
             )}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" onClick={logMaintenance}>Save</button>
-              <button className="btn" onClick={() => setLogModal(null)}>Cancel</button>
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 520, width: '100%', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>Calibration Record</div>
+              <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 6 }}>
+              {modal.equipmentName}
+            </div>
+
+            <div className="field">
+              <label>Manufacturer Certificate #</label>
+              <input type="text" placeholder="e.g. NIST-2024-00123" value={modal.manufacturer_certificate}
+                onChange={e => setModal(m => ({ ...m, manufacturer_certificate: e.target.value }))} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field">
+                <label>Calibration Date *</label>
+                <input type="date" value={modal.start_date} onChange={e => {
+                  const next = calcNextDue(e.target.value, modal.interval_months)
+                  setModal(m => ({ ...m, start_date: e.target.value, next_due_date: next || m.next_due_date }))
+                }} />
+              </div>
+              <div className="field">
+                <label>Interval (months) *</label>
+                <input type="number" min="1" placeholder="e.g. 12" value={modal.interval_months} onChange={e => {
+                  const next = calcNextDue(modal.start_date, e.target.value)
+                  setModal(m => ({ ...m, interval_months: e.target.value, next_due_date: next || m.next_due_date }))
+                }} />
+              </div>
+            </div>
+            <div className="field">
+              <label>Next Calibration Due (auto-calculated, editable)</label>
+              <input type="date" value={modal.next_due_date}
+                onChange={e => setModal(m => ({ ...m, next_due_date: e.target.value }))} />
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '16px 0 10px' }}>Documents</div>
+
+            <div className="field">
+              <label>Calibration Certificate / Document</label>
+              {modal.calibration_document_url && (
+                <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a href={modal.calibration_document_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 View current document</a>
+                  <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setModal(m => ({ ...m, calibration_document_url: '' }))}>Remove</button>
+                </div>
+              )}
+              <input type="file" ref={docRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
+            </div>
+            <div className="field">
+              <label>Calibration SOP</label>
+              {modal.calibration_sop_url && (
+                <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a href={modal.calibration_sop_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>📄 View current SOP</a>
+                  <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setModal(m => ({ ...m, calibration_sop_url: '' }))}>Remove</button>
+                </div>
+              )}
+              <input type="file" ref={sopRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
+            </div>
+            <div className="field">
+              <label>Notes</label>
+              <textarea rows={3} placeholder="Additional calibration notes..." value={modal.notes}
+                onChange={e => setModal(m => ({ ...m, notes: e.target.value }))} style={{ resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Record'}</button>
+              <button className="btn" onClick={() => setModal(null)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -896,7 +991,7 @@ export default function EquipmentInventory() {
 
   const tabs = [
     { key: 'list', label: '📋 List of Equipment' },
-    { key: 'maintenance', label: '🔧 Maintenance Due' },
+    ...(canEdit(session) ? [{ key: 'calibration', label: '🧪 Calibration' }] : []),
     ...(canEdit(session) ? [{ key: 'records', label: '📊 Maintenance Records' }] : []),
     { key: 'settings', label: '⚙️ Settings' },
   ]
@@ -904,7 +999,7 @@ export default function EquipmentInventory() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Equipment Inventory</div>
+        <div className="section-title">Equipment List</div>
         <HelpPanel screen="equipment" />
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
@@ -915,10 +1010,10 @@ export default function EquipmentInventory() {
           </button>
         ))}
       </ScrollTabs>
-      {tab === 'list' && <EquipmentList session={session} />}
-      {tab === 'maintenance' && <MaintenanceDue session={session} />}
-      {tab === 'records' && <MaintenanceRecords session={session} />}
-      {tab === 'settings' && <EquipmentSettings session={session} />}
+      {tab === 'list'        && <EquipmentList session={session} />}
+      {tab === 'calibration' && <CalibrationTab session={session} />}
+      {tab === 'records'     && <MaintenanceRecords session={session} />}
+      {tab === 'settings'    && <EquipmentSettings session={session} />}
     </div>
   )
 }
