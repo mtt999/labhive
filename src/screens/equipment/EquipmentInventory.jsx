@@ -23,6 +23,13 @@ const LOCATIONS = [
 
 function canEdit(session) { return session?.role === 'admin' || session?.role === 'user' }
 
+function EquipmentAvatar({ url, size = 34 }) {
+  if (!url) return (
+    <div style={{ width: size, height: size, borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: Math.round(size * 0.48), color: 'var(--text3)' }}>🔧</div>
+  )
+  return <img src={url} alt="" style={{ width: size, height: size, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, display: 'block' }} />
+}
+
 function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
   const { toast } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
@@ -196,6 +203,7 @@ function EquipmentList({ session }) {
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(null)
   const [soloCats, setSoloCats] = useState([])
+  const [photoMap, setPhotoMap] = useState({})
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -214,6 +222,13 @@ function EquipmentList({ session }) {
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setItems(data || [])
+    const ids = (data || []).map(e => e.id)
+    if (ids.length > 0) {
+      const { data: det } = await sb.from('equipment_details').select('equipment_id, photo_url').in('equipment_id', ids)
+      const map = {}
+      ;(det || []).forEach(d => { if (d.photo_url) map[d.equipment_id] = d.photo_url })
+      setPhotoMap(map)
+    } else { setPhotoMap({}) }
     setLoading(false)
   }
 
@@ -424,10 +439,15 @@ function EquipmentList({ session }) {
                       <tr key={item.id} style={{ opacity: item.out_of_service ? 0.6 : 1 }}>
                         <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>{rowNum}</td>
                         <td style={{ fontWeight: 500 }}>
-                          {item.out_of_service && (
-                            <span style={{ marginRight: 6, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>OUT OF SERVICE</span>
-                          )}
-                          {item.equipment_name}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <EquipmentAvatar url={photoMap[item.id]} size={34} />
+                            <div>
+                              {item.out_of_service && (
+                                <span style={{ marginRight: 6, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>OUT OF SERVICE</span>
+                              )}
+                              {item.equipment_name}
+                            </div>
+                          </div>
                         </td>
                         <td style={{ color: 'var(--text2)' }}>{item.nickname || '—'}</td>
                         <td style={{ color: 'var(--text2)' }}>{item.location || '—'}</td>
@@ -478,6 +498,7 @@ function CalibrationTab({ session }) {
   const [modal, setModal] = useState(null)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState('all')
+  const [photoMap, setPhotoMap] = useState({})
   const docRef = useRef()
   const sopRef = useRef()
 
@@ -516,11 +537,17 @@ function CalibrationTab({ session }) {
     // see records for their equipment, team users only for their org's equipment.
     const eqIds = (eqData || []).map(e => e.id)
     if (eqIds.length > 0) {
-      const { data: calData } = await sb.from('equipment_calibration')
-        .select('*').in('equipment_id', eqIds).order('start_date', { ascending: false })
+      const [{ data: calData }, { data: detData }] = await Promise.all([
+        sb.from('equipment_calibration').select('*').in('equipment_id', eqIds).order('start_date', { ascending: false }),
+        sb.from('equipment_details').select('equipment_id, photo_url').in('equipment_id', eqIds),
+      ])
       setRecords(calData || [])
+      const pmap = {}
+      ;(detData || []).forEach(d => { if (d.photo_url) pmap[d.equipment_id] = d.photo_url })
+      setPhotoMap(pmap)
     } else {
       setRecords([])
+      setPhotoMap({})
     }
 
     setLoading(false)
@@ -769,9 +796,14 @@ function CalibrationTab({ session }) {
               return (
                 <tr key={eq.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 10px' }}>
-                    <div style={{ fontWeight: 600 }}>{eq.equipment_name}</div>
-                    {eq.nickname && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{eq.nickname}</div>}
-                    {eq.category && <div style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>{eq.category}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <EquipmentAvatar url={photoMap[eq.id]} size={34} />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{eq.equipment_name}</div>
+                        {eq.nickname && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{eq.nickname}</div>}
+                        {eq.category && <div style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>{eq.category}</div>}
+                      </div>
+                    </div>
                   </td>
                   <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12 }}>{rec?.start_date || '—'}</td>
                   <td style={{ padding: '10px 10px', fontFamily: 'var(--mono)', fontSize: 12, fontWeight: status === 'overdue' ? 700 : 400, color: status === 'overdue' ? '#c0392b' : 'inherit' }}>
@@ -807,7 +839,10 @@ function CalibrationTab({ session }) {
               <div style={{ fontWeight: 700, fontSize: 16 }}>Calibration Records</div>
               <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 6 }}>{modal.equipmentName}</div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <EquipmentAvatar url={photoMap[modal.equipmentId]} size={40} />
+              {modal.equipmentName}
+            </div>
 
             {/* ── Initial setup form ── */}
             {(modal.mode === 'setup' || modal.mode === 'edit') && (
@@ -1073,6 +1108,7 @@ function MaintenanceRecords({ session }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [usageMap, setUsageMap] = useState({})
+  const [photoMap, setPhotoMap] = useState({})
   const [editHours, setEditHours] = useState(null)
   const [saving, setSaving] = useState(false)
   const [staff, setStaff] = useState([])
@@ -1098,7 +1134,15 @@ function MaintenanceRecords({ session }) {
       const hrs = (new Date(b.end_time) - new Date(b.start_time)) / 3600000
       usage[b.equipment_id] = (usage[b.equipment_id] || 0) + hrs
     })
-    setItems(eq || []); setUsageMap(usage); setLoading(false)
+    setItems(eq || []); setUsageMap(usage)
+    const ids = (eq || []).map(e => e.id)
+    if (ids.length > 0) {
+      const { data: det } = await sb.from('equipment_details').select('equipment_id, photo_url').in('equipment_id', ids)
+      const pmap = {}
+      ;(det || []).forEach(d => { if (d.photo_url) pmap[d.equipment_id] = d.photo_url })
+      setPhotoMap(pmap)
+    }
+    setLoading(false)
   }
 
   async function assignMaintenance() {
@@ -1158,8 +1202,13 @@ function MaintenanceRecords({ session }) {
                     return (
                       <tr key={item.id}>
                         <td style={{ fontWeight: 500 }}>
-                          {item.out_of_service && <span style={{ marginRight: 4, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>OOS</span>}
-                          {item.nickname || item.equipment_name}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <EquipmentAvatar url={photoMap[item.id]} size={34} />
+                            <div>
+                              {item.out_of_service && <span style={{ marginRight: 4, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>OOS</span>}
+                              {item.nickname || item.equipment_name}
+                            </div>
+                          </div>
                         </td>
                         <td style={{ color: 'var(--text2)' }}>{item.location || '—'}</td>
                         <td style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--accent)' }}>{totalHrs}h</td>
