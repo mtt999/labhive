@@ -15,7 +15,7 @@ function ILabLogo({ size = 40 }) {
       <circle cx="256" cy="490" r="14" fill="#FF9A4A"/>
       <circle cx="52"  cy="372" r="14" fill="#FF9A4A"/>
       <circle cx="52"  cy="128" r="14" fill="#FF9A4A"/>
-      <text x="256" y="310" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="160" fontWeight="700" fill="#F5F0DC">LH</text>
+      <text x="256" y="285" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="82" fontWeight="700" fill="#F5F0DC">LabHive</text>
     </svg>
   )
 }
@@ -24,7 +24,7 @@ function ILabLogo({ size = 40 }) {
 const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#fff"/>
   <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#fff" stroke="#000" stroke-width="24" stroke-linejoin="round"/>
-  <text x="256" y="310" text-anchor="middle" font-family="Arial" font-size="160" font-weight="700" fill="#000">LH</text>
+  <text x="256" y="285" text-anchor="middle" font-family="Arial" font-size="82" font-weight="700" fill="#000">LabHive</text>
 </svg>`
 
 function getScanUrl(equipmentId) {
