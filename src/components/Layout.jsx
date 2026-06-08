@@ -76,6 +76,7 @@ export default function Layout({ children }) {
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        scrollbarGutter: 'stable',
         maxWidth: screen === 'booking' ? '100%' : 960,
         margin: '0 auto',
         width: '100%',
