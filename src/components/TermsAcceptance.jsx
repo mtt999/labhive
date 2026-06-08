@@ -4,15 +4,23 @@ import { useAppStore } from '../store/useAppStore'
 import { CURRENT_TERMS_VERSION } from '../lib/termsVersion'
 
 export default function TermsAcceptance({ session, onAccept }) {
-  const { clearSession, setSession } = useAppStore()
+  const { clearSession, setSession, toast } = useAppStore()
   const [saving, setSaving] = useState(false)
   const [declined, setDeclined] = useState(false)
 
   async function handleAccept() {
     setSaving(true)
     const table = session.loginMode === 'solo' ? 'solo_users' : 'users'
-    await sb.from(table).update({ terms_accepted_version: CURRENT_TERMS_VERSION }).eq('id', session.userId)
-    setSession({ ...session, termsAcceptedVersion: CURRENT_TERMS_VERSION })
+    const { error } = await sb.from(table)
+      .update({ terms_accepted_version: CURRENT_TERMS_VERSION })
+      .eq('id', session.userId)
+    if (error) {
+      console.error('Failed to save terms acceptance:', error)
+      toast('Could not save your acceptance — please ask your admin to run the required DB migration.')
+    }
+    const updated = { ...session, termsAcceptedVersion: CURRENT_TERMS_VERSION }
+    setSession(updated)
+    localStorage.setItem('ilab_session', JSON.stringify(updated))
     setSaving(false)
     onAccept()
   }
@@ -70,13 +78,11 @@ export default function TermsAcceptance({ session, onAccept }) {
         <div style={{ padding: '20px 28px', overflowY: 'auto', flex: 1, fontSize: 13, color: 'var(--text2)', lineHeight: 1.75, borderBottom: '1px solid var(--border)' }}>
           <p style={{ marginBottom: 12, fontWeight: 600, color: 'var(--text)' }}>Key points you should know:</p>
           <ul style={{ marginLeft: 18, marginBottom: 16 }}>
-            <li style={{ marginBottom: 8 }}>We collect your name, email, and lab activity data (bookings, inspections, training records) to operate the platform.</li>
-            <li style={{ marginBottom: 8 }}>We do <strong>not</strong> sell your data or use it for advertising.</li>
-            <li style={{ marginBottom: 8 }}>Your data is accessible only to members of your organisation and authorised administrators.</li>
-            <li style={{ marginBottom: 8 }}>Files you upload are stored in LabHive Cloud or your chosen personal storage (Google Drive, OneDrive, WebDAV).</li>
-            <li style={{ marginBottom: 8 }}>You may request deletion of your account and data at any time under the Profile tab.</li>
-            <li style={{ marginBottom: 8 }}>The platform is provided "as is" — LabHive is not liable for loss of data, missed bookings, or equipment issues.</li>
-            <li style={{ marginBottom: 0 }}>Disputes are resolved by binding individual arbitration under the laws of Illinois, USA.</li>
+            <li style={{ marginBottom: 8 }}>We collect your name, email, and lab activity data solely to run the platform. We <strong>never</strong> sell your data or use it for advertising.</li>
+            <li style={{ marginBottom: 8 }}>Your data is only accessible to you and authorised members of your organisation or workspace.</li>
+            <li style={{ marginBottom: 8 }}>Files are stored on LabHive's secure servers by default — the recommended option for best performance. You can optionally connect Google Drive, OneDrive, or other providers as a backup or alternative storage. Your account details always stay on LabHive's servers so the app keeps working.</li>
+            <li style={{ marginBottom: 8 }}><strong>Organisation admins</strong> can export and delete all org data anytime. <strong>Team members</strong> can request to export or delete their own data (your organisation will process the request). <strong>Solo users</strong> can export and delete everything from their Profile at any time.</li>
+            <li style={{ marginBottom: 0 }}>The platform is provided "as is" — LabHive is not liable for loss of data, missed bookings, or equipment issues. Disputes are resolved by binding arbitration under the laws of Illinois, USA.</li>
           </ul>
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             <a href="/privacy.html" target="_blank" rel="noopener noreferrer"

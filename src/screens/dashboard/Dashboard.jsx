@@ -30,18 +30,18 @@ function getModules(role, loginMode, activeModules) {
 function getAllModulesForStudent() {
   return [
     { key: 'supply',       screen: 'home',          label: 'Supply Inventory',          sub: 'Weekly inspection & export',       icon: '📦', bg: '#e8f2ee', color: '#2a6049' },
-    { key: 'projects',     screen: 'projects',      label: 'Project & Material',        sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#f3eeff', color: '#7c4dbd' },
+    { key: 'projects',     screen: 'projects',      label: 'Project Workspace',        sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#f3eeff', color: '#7c4dbd' },
     { key: 'training',     screen: 'training',      label: 'Training Records',          sub: 'Certs, equipment & alarm',         icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'equipment',    screen: 'equipment',     label: 'Equipment Inventory',       sub: 'Lab equipment tracking',           icon: '🔧', bg: '#fef3c7', color: '#92400e', locked: true },
+    { key: 'equipment',    screen: 'equipment',     label: 'Equipment List',       sub: 'Lab equipment tracking',           icon: '🔧', bg: '#fef3c7', color: '#92400e', locked: true },
     { key: 'equipmenthub', screen: 'equipmenthub',  label: 'Equipment',                 sub: 'Info, SOP & standards',            icon: '📚', bg: '#e8f2ee', color: '#1e4d39' },
-    { key: 'booking',      screen: 'booking',       label: 'Booking Equipment',         sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
+    { key: 'booking',      screen: 'booking',       label: 'Reserve Equipment',         sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'barcode',      screen: 'barcode',       label: 'QR Scan',                   sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
     { key: 'mileage',      screen: null,            label: 'Mileage Form',              sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
     { key: 'labsafety',    screen: null,            label: 'Lab Safety',                sub: 'Safety training & certification',  icon: '🦺', bg: '#fef3c7', color: '#92400e', external: true },
-    { key: 'remessages',   screen: 'remessages',    label: 'Contact Lab Manager (REs)', sub: 'Notes, ideas & issue reports',     icon: '💬', bg: '#e8f2ee', color: '#2a6049' },
-    { key: 'pm',           screen: 'pm',            label: 'Project Management',        sub: 'Tasks, meetings & team chat',      icon: '📋', bg: '#fff3e0', color: '#ff6b00', locked: true },
+    { key: 'remessages',   screen: 'remessages',    label: 'Lab Messages', sub: 'Notes, ideas & issue reports',     icon: '💬', bg: '#e8f2ee', color: '#2a6049' },
+    { key: 'pm',           screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & team chat',      icon: '📋', bg: '#fff3e0', color: '#ff6b00', locked: true },
     { key: 'profile',      screen: 'profile',       label: 'Profile',                   sub: 'Your info & settings',             icon: '👤', bg: '#f3eeff', color: '#7c4dbd' },
-    { key: 'barcodeqr',   screen: 'barcodeqr',     label: 'QR Scan',                   sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
+    { key: 'barcodeqr',   screen: 'barcodeqr',     label: 'QR Labels',                   sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
   ]
 }
 
@@ -125,7 +125,7 @@ function LockedCard({ m }) {
   )
 }
 
-function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool }) {
+function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool, customLinks = [] }) {
   const [confirmExternal, setConfirmExternal] = useState(null)
 
   if (isStudent) {
@@ -164,6 +164,12 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       <div className="module-icon-grid">
         {visibleModules.map(m => <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />)}
         {isAdmin && adminManageCards.map(card => <ModuleCard key={card.key} m={card} imgUrl={moduleImages[card.key]} isAdminManage onClick={() => onEditUrl(card.key)} />)}
+        {customLinks.map(link => (
+          <ModuleCard key={link.id}
+            m={{ key: link.id, label: link.label, sub: '↗ External link', icon: '🔗', bg: '#f0f9ff', color: '#0369a1', external: true }}
+            imgUrl={link.image_url || null}
+            onClick={() => setConfirmExternal({ url: link.url })} />
+        ))}
       </div>
       {confirmExternal && <ExternalLinkModal url={confirmExternal.url} onConfirm={() => { window.open(confirmExternal.url, '_blank'); setConfirmExternal(null) }} onCancel={() => setConfirmExternal(null)} />}
     </>
@@ -208,12 +214,12 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
   const trainingPct = Math.round((data.trainingsComplete/data.trainingsTotal)*100)
   const trainingColor = trainingPct===100?'#2a6049':trainingPct>=50?'#0369a1':'#c84b2f'
   const allQuickLinks = [
-    { key:'projects',    icon:'🧪', label:'Project & Material',   sub:'Inventory, results & workspace', screen:'projects',    color:'#7c4dbd' },
+    { key:'projects',    icon:'🧪', label:'Project Workspace',   sub:'Inventory, results & workspace', screen:'projects',    color:'#7c4dbd' },
     { key:'training',    icon:'🎓', label:'Training Records',     sub:'Check your certs',               screen:'training',    color:'#0369a1' },
     { key:'booking',     icon:'📅', label:'Book Equipment',       sub:'Reserve lab equipment',          screen:'booking',     color:'#0369a1' },
-    { key:'equipmenthub',icon:'📚', label:'Equipment Info',       sub:'SOPs & standards',               screen:'equipmenthub',color:'#1e4d39' },
+    { key:'equipmenthub',icon:'📚', label:'Equipment Hub',       sub:'SOPs & standards',               screen:'equipmenthub',color:'#1e4d39' },
     { key:'barcode',     icon:'📷', label:'QR Scan',               sub:'Scan lab materials',             screen:'barcode',     color:'#00796b' },
-    { key:'remessages',  icon:'💬', label:'Contact Lab Manager',  sub:'Ask REs a question',             screen:'remessages',  color:'#2a6049' },
+    { key:'remessages',  icon:'💬', label:'Lab Messages',  sub:'Ask REs a question',             screen:'remessages',  color:'#2a6049' },
     { key:'mileage',     icon:'🚗', label:'Mileage Form',         sub:'Submit reimbursement',           screen:null,          color:'#c84b2f', external:true },
   ]
   const assignedQuickLinks = (studentAllowedPool && studentAllowedPool.size > 0)
@@ -540,6 +546,7 @@ export default function Dashboard() {
   const [studentAllowedPool, setStudentAllowedPool] = useState(null)
   const [moduleImages, setModuleImages] = useState({})
   const [orgName, setOrgName] = useState('')
+  const [customLinks, setCustomLinks] = useState([])
 
   const isAdmin   = session?.role === 'admin'
   const isStudent = session?.role === 'student'
@@ -558,8 +565,11 @@ export default function Dashboard() {
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
+      // If activeModules is already set (e.g., just saved from Profile), don't overwrite it
+      // with a DB re-fetch. Only fetch when null (initial load, page reload, or after logout).
+      if (activeModules !== null) return
       // Students default to profile-only while prefs load so they never flash all icons
-      if (session?.role === 'student' && activeModules === null) setActiveModules(['profile'])
+      if (session?.role === 'student') setActiveModules(['profile'])
       if (!session?.userId) {
         const saved = localStorage.getItem('ilab_admin_modules')
         setActiveModules(saved ? JSON.parse(saved) : null)
@@ -567,7 +577,7 @@ export default function Dashboard() {
       }
       if (isSolo) {
         const [soloRes, settingsRes] = await Promise.all([
-          sb.from('solo_users').select('active_modules').eq('id', session.userId).maybeSingle(),
+          sb.from('solo_users').select('active_modules, custom_external_links').eq('id', session.userId).maybeSingle(),
           sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle(),
         ])
         let mods = soloRes.data?.active_modules
@@ -584,6 +594,7 @@ export default function Dashboard() {
           }
         } catch {}
         setActiveModules(mods?.length ? mods : null)
+        setCustomLinks((soloRes.data?.custom_external_links || []).filter(l => l.enabled))
       } else {
         const [prefsRes, orgResRaw, appRes] = await Promise.all([
           sb.from('user_dashboard_prefs').select('active_modules, allowed_modules, has_set_dashboard').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
@@ -613,14 +624,14 @@ export default function Dashboard() {
           const effectivePool = orgPool ?? appPool
           if (effectivePool !== null) {
             if (mods?.length) {
-              // Remove modules no longer in the pool; keep profile and staff-pinned always
-              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || STAFF_PINNED_MODULES.includes(k))
+              // Remove modules no longer in the pool; always keep profile and staff-pinned
+              const isStaffUser = session?.role === 'admin' || session?.role === 'user'
+              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)))
               if (userHasConfigured) {
-                // User explicitly configured — respect their choices, don't re-add unchecked modules
                 mods = filtered
               } else {
                 // User never configured — append newly-added pool modules so they appear automatically
-                const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !STAFF_PINNED_MODULES.includes(k))
+                const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !(isStaffUser && STAFF_PINNED_MODULES.includes(k)))
                 mods = [...filtered, ...missing]
               }
             } else if (session?.role !== 'student') {
@@ -628,10 +639,14 @@ export default function Dashboard() {
               mods = effectivePool
             }
           }
-          // Ensure pinned modules are always present for admin/user
-          if (session?.role === 'admin' || session?.role === 'user') {
-            if (!mods) mods = [...STAFF_PINNED_MODULES]
-            else if (!mods.includes('labmanagement')) mods = ['labmanagement', ...mods]
+          // For staff with no saved mods, default labmanagement to first position
+          if ((session?.role === 'admin' || session?.role === 'user') && !mods?.length) {
+            const staffPool = effectivePool ??
+              ALL_MODULES_META.filter(m => !m.soloLocked && !m.studentOnly).map(m => m.key)
+            const withLabFirst = staffPool.includes('labmanagement')
+              ? ['labmanagement', ...staffPool.filter(k => k !== 'labmanagement')]
+              : staffPool
+            mods = withLabFirst
           }
           // Ensure profile is always present for all team users
           if (mods && !mods.includes('profile')) mods = [...mods, 'profile']
@@ -676,18 +691,21 @@ export default function Dashboard() {
 
     const imgPrefix = isSolo ? 'solo_img_' : 'img_'
 
+    // Build explicit list of image setting keys for all modules
+    const imgKeys = ALL_MODULES_META.map(m => `${imgPrefix}${m.key}`)
+
     // Load URL settings + global icon images in parallel
-    const [{ data: settingsData }, { data: globalImgData }] = await Promise.all([
+    const [{ data: settingsData }, { data: allImgData }] = await Promise.all([
       sb.from('settings').select('key, value').in('key', ['mileage_url', 'labsafety_url']),
-      sb.from('settings').select('key, value').like('key', `${imgPrefix}%`),
+      sb.from('settings').select('key, value').in('key', imgKeys),
     ])
     ;(settingsData || []).forEach(r => {
       if (r.key === 'mileage_url') setMileageUrl(r.value)
       else if (r.key === 'labsafety_url') setLabSafetyUrl(r.value)
     })
     // Apply global images uploaded by super admin
-    ;(globalImgData || []).forEach(r => {
-      const moduleKey = r.key.replace(imgPrefix, '')
+    ;(allImgData || []).forEach(r => {
+      const moduleKey = r.key.slice(imgPrefix.length)
       if (r.value) imgs[moduleKey] = r.value
     })
 
@@ -695,7 +713,7 @@ export default function Dashboard() {
     if (session?.organizationId && !isSolo) {
       const { data: orgData } = await sb.from('organizations').select('name, module_images').eq('id', session.organizationId).maybeSingle()
       if (orgData?.name) setOrgName(orgData.name)
-      Object.assign(imgs, orgData?.module_images || {})
+      Object.entries(orgData?.module_images || {}).forEach(([k, v]) => { if (v) imgs[k] = v })
     }
 
     setModuleImages(imgs)
@@ -765,7 +783,7 @@ export default function Dashboard() {
 
       {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
       {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
-      {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} />}
+      {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} />}
       {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
 
       {editingUrl !== null && (
