@@ -116,6 +116,12 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules JSONB DEFAULT
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS module_images  JSONB DEFAULT NULL;
 ALTER TABLE users      ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase';
 ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase';
+
+-- Terms of Service acceptance tracking (required — without these columns the
+-- acceptance modal re-appears on every login because the DB update silently fails)
+ALTER TABLE users      ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER DEFAULT NULL;
+ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER DEFAULT NULL;
+
 -- Solo workspace sharing:
 -- Run supabase_solo_workspace.sql in Supabase SQL Editor
 
@@ -139,6 +145,10 @@ ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 | `SuperAdminBell.jsx` | Super admin notification bell — new solo users, support requests, system errors |
 | `logAdminError.js` | Helper to log JS errors to `admin_notifications` table |
 | `favicon.svg` | Square-cropped hexagon icon for browser tab (viewBox cropped from labhive_logo.svg) |
+
+### Cross-browser layout fixes (June 2026)
+- **Windows scrollbar**: `src/index.css` sets a global 6px thin scrollbar (`::-webkit-scrollbar` + Firefox `scrollbar-width: thin`) so Chrome on Windows doesn't use a 17px gutter that collapses the 4-column icon grid. `<main>` in `Layout.jsx` has `scrollbar-gutter: stable` to reserve constant gutter width.
+- **Dashboard fill-viewport**: On desktop (≥769px) the `.module-icon-grid` uses `align-content: stretch` so icon rows fill the available viewport height without scrolling. Each card has `min-height: 100px` and the grid has a `maxHeight` cap so single-row users don't see absurdly tall cards. Footer link is hidden on the dashboard screen to avoid adding extra scroll height.
 
 ### Google Analytics
 - **Measurement ID:** `G-62P1FB2VDT`
@@ -177,6 +187,20 @@ ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 - `clearSession` in the store must reset `activeModules: null`
 - Do NOT add a separate `activeModules` state to any screen or component
 
+**`loadDashboardPrefs()` early-return rule:** The function in `Dashboard.jsx` must return immediately if `activeModules !== null` (after the `!session?.loginMode` guard). This prevents a DB re-fetch from overwriting the store value that Profile's icon save just set when the user navigates back to Dashboard.
+
+```js
+async function loadDashboardPrefs() {
+  try {
+    if (!session?.loginMode) return
+    if (activeModules !== null) return  // store already set — don't overwrite with stale DB fetch
+    // ... rest of function
+  }
+}
+```
+
+Only fetch from DB when `activeModules === null` (initial load after login, page reload, or after `clearSession`).
+
 ### 2. Mileage (and labsafety) icons must respect activeModules — never hardcode them
 
 - Any module list rendered in Dashboard must be filtered by `activeModules` if it is set
@@ -208,10 +232,15 @@ Org admin rows are visible to lab managers (read-only) but not actionable. Only 
 
 The dashboard icon grid for team and solo users uses the `.module-icon-grid` flexbox class defined in `src/index.css`. This is the only correct way to lay out module cards so the last row is centered.
 
-- Desktop: cards are `220px` wide, 4 per row at typical viewport widths
-- Mobile (≤768px): cards are `calc(50% - 7px)`, 2 per row
+- Desktop (≥769px): cards are `220px` wide, 4 per row; `align-content: stretch` distributes available viewport height across rows; cards have `height: auto; min-height: 100px` so they fill the row height
+- Mobile (≤768px): cards are `calc(50% - 7px)`, 2 per row, fixed `height: 160px`
 
-**Do not** replace this class with `display: grid` + `gridTemplateColumns: repeat(auto-fill, ...)` — CSS Grid cannot center a lone last-row item. Flexbox with `justify-content: center` is required.
+**Viewport-filling layout (desktop):** `Dashboard.jsx` makes its outer div `height: 100%; display: flex; flex-direction: column`. The header/admin-card sections are `flexShrink: 0`. The views section is `flex: 1; minHeight: 0`. `CardGridView` sets `height: 100%` on the `.module-icon-grid` div plus a `maxHeight` cap of `rows × 190px + gaps` (computed from `gridMaxHeight(count)`) to prevent single-row cards from becoming absurdly tall. Cards themselves have no inline `height` — the CSS controls it via media query.
+
+**Do not:**
+- Replace this class with `display: grid` + `gridTemplateColumns: repeat(auto-fill, ...)` — CSS Grid cannot center a lone last-row item. Flexbox with `justify-content: center` is required.
+- Add back a fixed `height: 160` inline style to `ModuleCard` or `LockedCard` on desktop — it prevents the flex-stretch height from working.
+- Remove `scrollbar-gutter: stable` from `<main>` in Layout.jsx — it prevents Windows Chrome's 17px scrollbar from stealing content width and collapsing the grid to 3 columns.
 
 ### 6. Storage system — Mode B hybrid, never bypass StorageService for personal uploads
 
@@ -260,22 +289,13 @@ ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 's
 - `UNMANAGED_SCREENS` (Dashboard.jsx): `profile`, `dashboard`, `pm`, `barcode`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `labmanagement`
 - `INTERNAL` (App.jsx): `dashboard`, `profile`, `inspection`, `results`, `project-detail`, `pm`, `barcode`, `equipmentscan`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `projects`, `training`, `history`, `equipmenthub`, `booking`, `remessages`, `labmanagement`
 
-### 7. clearSession must always remove localStorage keys
+### 7. clearSession must always remove the login-mode localStorage key
 
 `clearSession()` in `useAppStore.js` must call:
 ```js
-localStorage.removeItem('ilab_session')
 localStorage.removeItem('ilab_login_mode')
 ```
-before calling `set(...)`. Never remove these lines.
-
-### 8. Session persistence — save to localStorage on every login
-
-Every `setSession(...)` call in `src/screens/auth/Login.jsx` must be immediately followed by:
-```js
-localStorage.setItem('ilab_session', JSON.stringify(sessionObject))
-```
-There are 3 login paths: super admin, team user, solo. All three must save to localStorage.
+before calling `set(...)`. Never remove this line. (`ilab_login_mode` controls whether the cache refresh runs on startup; removing it on logout ensures the next login starts clean.)
 
 ### 9. Icon pool: org pool OVERRIDES global pool — never intersect them
 
@@ -426,10 +446,19 @@ Defined and exported from `src/components/DashboardIconPicker.jsx`. Every module
 ## Session & navigation flows
 
 ### Session persistence
-1. Login → `Login.jsx` calls `setSession(obj)` + `localStorage.setItem('ilab_session', JSON.stringify(obj))`
-2. App reopened → `App.jsx` reads `ilab_session` from localStorage, calls `setSession(parsed)`
-3. Solo users: workspace memberships re-fetched from Supabase after restore
-4. Sign out → `clearSession()` removes `ilab_session` + `ilab_login_mode` → login page
+1. Login → `Login.jsx` calls `setSession(obj)`. Session lives only in the Zustand store.
+2. App reopened → `App.jsx` `init()` calls `sb.auth.getSession()`. If a Supabase auth session exists, `restoreSessionFromAuth(authUser)` reads fresh user data from DB and calls `setSession(...)`.
+3. Solo users: workspace memberships re-fetched from Supabase after restore.
+4. Sign out → `clearSession()` calls `sb.auth.signOut()` + removes `ilab_login_mode` from localStorage → login page.
+
+Note: `ilab_session` is written by `TermsAcceptance.jsx` and `ForcePasswordChange.jsx` (to update the stored session after those actions), but is **never read back** — session restoration is entirely through the Supabase auth session. The `localStorage.setItem('ilab_session', ...)` calls are kept for consistency but are not load-bearing.
+
+### Terms of Service versioning
+- `CURRENT_TERMS_VERSION` is defined in `src/lib/termsVersion.js` (currently `2`)
+- Bump this integer whenever terms are updated — all users will be re-prompted on next login
+- `TermsAcceptance.jsx` writes the accepted version to `users.terms_accepted_version` (or `solo_users.terms_accepted_version`) via Supabase update, then updates the session in-memory
+- **If the `terms_accepted_version` column is missing** from the DB, the update fails silently and users see the modal on every login. Run the required SQL migration to fix.
+- `TermsAcceptance` now checks the Supabase error and shows a toast if the DB update fails
 
 ### Super admin session object
 ```js
@@ -515,13 +544,13 @@ Defined and exported from `src/components/DashboardIconPicker.jsx`. Every module
 ## SQL — all tables & key columns
 
 ### Core tables (team)
-- `users`: `id`, `name`, `email`, `password_hash`, `role` (admin/user/student), `organization_id`, `is_active`, `must_change_password`, `photo_url`, `avatar`
+- `users`: `id`, `name`, `email`, `password_hash`, `role` (admin/user/student), `organization_id`, `is_active`, `must_change_password`, `photo_url`, `avatar`, `terms_accepted_version` (INTEGER)
 - `organizations`: `id`, `name`, `slug`, `created_at`, `allowed_modules` (JSONB), `module_images` (JSONB)
 - `user_screen_access`: `user_id`, `screen_key` — per-user screen grants
 - `user_dashboard_prefs`: `user_id`, `active_modules` (array), `allowed_modules` (array), `has_set_dashboard`
 
 ### Core tables (solo)
-- `solo_users`: `id`, `name`, `email`, `password_hash`, `active_modules` (array), `has_set_dashboard`
+- `solo_users`: `id`, `name`, `email`, `password_hash`, `active_modules` (array), `has_set_dashboard`, `terms_accepted_version` (INTEGER)
 - `solo_workspace_invites`, `solo_workspace_members`
 - `projects`: includes `solo_owner_id` column
 - `project_results`, `project_links`
@@ -534,6 +563,10 @@ Defined and exported from `src/components/DashboardIconPicker.jsx`. Every module
 -- Multi-tenancy org columns
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules JSONB DEFAULT NULL;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS module_images JSONB DEFAULT NULL;
+
+-- Terms of Service acceptance (missing = modal repeats every login)
+ALTER TABLE users      ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER DEFAULT NULL;
+ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER DEFAULT NULL;
 
 -- Solo workspace sharing (from supabase_solo_workspace.sql)
 -- Run supabase_solo_workspace.sql in Supabase SQL Editor
@@ -559,6 +592,10 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS module_images JSONB DEFAULT N
 - **Do not** add `orgadmins` as a tab for super admin — org admin profiles are shown inline in each org row
 - **Do not** allow lab managers (`session.role === 'user'`) to edit, deactivate, or delete org admin rows (`s.role === 'admin'`) in `StaffListPanel`
 - **Do not** replace `.module-icon-grid` with an inline CSS Grid — the flexbox class is required to center the last row of icons
+- **Do not** add back a fixed `height: 160` (or any fixed height) inline style to `ModuleCard` or `LockedCard` on desktop — it breaks the `align-content: stretch` viewport-fill layout; card height is controlled by CSS media query
+- **Do not** remove `scrollbar-gutter: stable` from `<main>` in Layout.jsx — without it, Windows Chrome's 17px scrollbar collapses the icon grid from 4 columns to 3
+- **Do not** remove the `if (activeModules !== null) return` early-return from `loadDashboardPrefs()` in Dashboard.jsx — it prevents DB re-fetch from overwriting icon selections just saved via Profile
+- **Do not** remove the `terms_accepted_version` DB columns from `users`/`solo_users` — they are required for the Terms acceptance modal to dismiss permanently
 - **Do not** call `sb.storage.from(...).upload()` directly for training certs or project record files — use `StorageService.upload(..., { personal: true })`
 - **Do not** store external file refs as plain URLs — they are `ext:provider:id` strings; use `StorageService.resolveUrl()` or `useStorageUrl()` to display them
 - **Do not** add a Storage tab only to some profile variants — it must appear in all four: `SoloProfile`, `StaffProfile`, `UserProfile`, and `AdminProfile` (org admin)
