@@ -192,9 +192,21 @@ tr:last-child td { border-bottom: none; }
 }
 .module-icon-grid > * {
   flex: 0 0 220px;
+  height: 160px; /* mobile default — overridden on desktop */
+}
+/* Desktop: rows stretch to fill available viewport height */
+@media (min-width: 769px) {
+  .module-icon-grid {
+    align-content: stretch;
+  }
+  .module-icon-grid > * {
+    height: auto;
+    min-height: 100px;
+  }
 }
 @media (max-width: 768px) {
   .module-icon-grid > * {
     flex: 0 0 calc(50% - 7px);
+    /* height: 160px inherited from base */
   }
 }

@@ -86,7 +86,6 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
         border: isAdminManage ? '1px dashed var(--border)' : '1px solid var(--border)',
         transition: 'box-shadow 0.15s',
         position: 'relative',
-        height: 160,
         backgroundColor: m.bg,
         backgroundImage: imgUrl ? `url(${imgUrl})` : 'none',
         backgroundSize: 'cover',
@@ -114,7 +113,7 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
 
 function LockedCard({ m }) {
   return (
-    <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative', height: 160, cursor: 'not-allowed' }}>
+    <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative', cursor: 'not-allowed' }}>
       <div style={{ position: 'absolute', inset: 0, background: m.bg, filter: 'blur(2px)', opacity: 0.5, pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.55)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, pointerEvents: 'none' }}>
         <div style={{ fontSize: 22, filter: 'grayscale(1)', opacity: 0.4 }}>{m.icon}</div>
@@ -123,6 +122,14 @@ function LockedCard({ m }) {
       </div>
     </div>
   )
+}
+
+const CARD_MAX_H = 190
+const GRID_GAP = 14
+const APPROX_COLS = 4
+function gridMaxHeight(count) {
+  const rows = Math.max(1, Math.ceil(count / APPROX_COLS))
+  return rows * CARD_MAX_H + (rows - 1) * GRID_GAP
 }
 
 function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool, customLinks = [] }) {
@@ -140,7 +147,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       : assignedMods.filter(m => activeModules.includes(m.key))
     return (
       <>
-        <div className="module-icon-grid">
+        <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(visibleMods.length) }}>
           {visibleMods.map(m => {
             const grantedByAdmin = m.locked && ((m.screen && studentAccess?.has(m.screen)) || studentAllowedPool?.has(m.key))
             if (m.locked && !grantedByAdmin) return <LockedCard key={m.key} m={m} />
@@ -158,10 +165,11 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
   ].filter(card => !activeModules || activeModules.includes(card.key))
 
   const visibleModules = isAdmin ? modules.filter(m => !m.external) : modules
+  const totalCards = visibleModules.length + (isAdmin ? adminManageCards.length : 0) + customLinks.length
 
   return (
     <>
-      <div className="module-icon-grid">
+      <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(totalCards) }}>
         {visibleModules.map(m => <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />)}
         {isAdmin && adminManageCards.map(card => <ModuleCard key={card.key} m={card} imgUrl={moduleImages[card.key]} isAdminManage onClick={() => onEditUrl(card.key)} />)}
         {customLinks.map(link => (
@@ -744,8 +752,8 @@ export default function Dashboard() {
 
 
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28, flexWrap:'wrap', gap:12 }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flexShrink: 0, display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28, flexWrap:'wrap', gap:12 }}>
         <div>
           <div style={{ fontSize:22, fontWeight:600, letterSpacing:'-0.4px', marginBottom:4 }}>{greeting()}, {session?.username}</div>
           <div style={{ fontSize:13, color:'var(--text3)', fontFamily:'var(--mono)' }}>{dateStr}{orgName ? ` · LabHive for ${orgName}` : ''}</div>
@@ -769,7 +777,7 @@ export default function Dashboard() {
       {isAdmin && (
         <div
           onClick={() => setScreen('orgadmin')}
-          style={{ display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', marginBottom:20, cursor:'pointer', transition:'all 0.15s' }}
+          style={{ flexShrink: 0, display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', marginBottom:20, cursor:'pointer', transition:'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(29,158,117,0.12)' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}>
           <div style={{ fontSize:28 }}>⚙️</div>
@@ -781,10 +789,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
-      {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
-      {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} />}
-      {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
+        {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
+        {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} />}
+        {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
+      </div>
 
       {editingUrl !== null && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>

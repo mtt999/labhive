@@ -26,7 +26,7 @@ function LabHiveLogo({ size = 40 }) {
 }
 
 export default function Layout({ children }) {
-  const { session, setSession, setScreen, screen, clearSession } = useAppStore()
+  const { session, setScreen, screen, clearSession } = useAppStore()
   const isMobile = useIsMobile()
   function logout() { clearSession() }
   const displayName = session?.role === 'admin' && !session?.userId ? '' : session?.username
@@ -86,7 +86,7 @@ export default function Layout({ children }) {
         paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : (screen === 'booking' ? '16px' : '24px'),
       }}>
         {children}
-        {!isMobile && (
+        {!isMobile && screen !== 'dashboard' && (
           <div style={{ textAlign: 'center', padding: '16px 0 4px', fontSize: 11, color: 'var(--text3)' }}>
             <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
             <span style={{ margin: '0 6px' }}>·</span>
