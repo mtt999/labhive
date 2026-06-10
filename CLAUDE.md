@@ -162,8 +162,8 @@ ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 - `isSolo` must be defined at component level (not inside `loadAll()`)
 
 ### Login page layout — LOCKED, do not change without explicit user permission
-- Logo size: `240px`, `marginBottom: -52px` (compensates SVG bottom whitespace)
-- Container: `height: 100%`, `overflowY: auto`, `justifyContent: flex-start`, `padding: 32px 20px 40px`
+- Logo size: `240px`, `marginTop: -72px`, `marginBottom: -52px` (compensates SVG top and bottom whitespace — the hexagon artwork sits within a larger transparent viewBox)
+- Container: `height: 100%`, `overflowY: auto`, `justifyContent: flex-start`, `padding: 8px 20px 8px`
 
 ### Customer Service modal — `?support=1` URL param
 - Visiting `https://labhive.app/?support=1` auto-opens `CustomerServiceModal`
