@@ -712,7 +712,7 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
       ({ error } = await sb.from('project_materials').insert(payload))
     }
     setSaving(false)
-    if (error) { toast('Error saving material.'); return }
+    if (error) { toast('Error: ' + (error.message || error.code || JSON.stringify(error))); return }
     toast(material ? 'Material updated.' : 'Material added.')
     onSaved()
     onClose()
