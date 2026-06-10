@@ -438,6 +438,11 @@ export default function Login() {
                   disabled={loading || !mode || lockUntil > Date.now()}>
                   {loading ? 'Signing in…' : mode === 'team' ? 'Sign in to LabHive Team' : mode === 'solo' ? 'Sign in to LabHive Solo' : 'Select a login type above'}
                 </button>
+                <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+                  <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
+                  <span style={{ margin: '0 6px' }}>·</span>
+                  <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
+                </div>
               </form>
 
               {mode === 'team' && (
@@ -516,11 +521,6 @@ export default function Login() {
           <div>The All-in-One Research Lab Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>Built by a lab researcher, for lab researchers</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
-          <div style={{ marginTop: 8 }}>
-            <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
-            <span style={{ margin: '0 6px' }}>·</span>
-            <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
-          </div>
         </div>
 
       </div>
