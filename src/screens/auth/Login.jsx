@@ -357,7 +357,7 @@ export default function Login() {
           <LabHiveLogo size={240} />
         </div>
 
-        <div className="card" style={{ padding: '28px 28px 24px' }}>
+        <div className="card" style={{ padding: '28px 28px 12px' }}>
 
           {/* Show sign-up form OR login form */}
           {showSignUp ? (
@@ -516,7 +516,7 @@ export default function Login() {
           )}
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
+        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>LabHive</div>
           <div>The All-in-One Research Lab Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>Built by a lab researcher, for lab researchers</div>
