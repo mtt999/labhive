@@ -162,7 +162,7 @@ ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 - `isSolo` must be defined at component level (not inside `loadAll()`)
 
 ### Login page layout — LOCKED, do not change without explicit user permission
-- Logo size: `240px`, `marginTop: -72px`, `marginBottom: -52px` (compensates SVG top and bottom whitespace — the hexagon artwork sits within a larger transparent viewBox)
+- Logo size: `200px`, `marginBottom: -40px` (compensates SVG bottom whitespace — the hexagon artwork sits within a larger transparent viewBox; do NOT add negative marginTop, it clips against container overflow:auto)
 - Container: `height: 100%`, `overflowY: auto`, `justifyContent: flex-start`, `padding: 8px 20px 8px`
 
 ### Customer Service modal — `?support=1` URL param
