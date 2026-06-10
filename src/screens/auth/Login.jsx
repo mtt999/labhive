@@ -353,8 +353,8 @@ export default function Login() {
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '8px 20px 8px' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
-        <div style={{ textAlign: 'center', marginTop: -72, marginBottom: -52 }}>
-          <LabHiveLogo size={240} />
+        <div style={{ textAlign: 'center', marginBottom: -40 }}>
+          <LabHiveLogo size={200} />
         </div>
 
         <div className="card" style={{ padding: '28px 28px 12px' }}>
