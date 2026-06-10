@@ -350,7 +350,7 @@ export default function Login() {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '32px 20px 40px' }}>
+    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '32px 20px 16px' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
         <div style={{ textAlign: 'center', marginBottom: -52 }}>
@@ -516,7 +516,7 @@ export default function Login() {
           )}
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>LabHive</div>
           <div>The All-in-One Research Lab Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>Built by a lab researcher, for lab researchers</div>
