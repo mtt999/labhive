@@ -210,3 +210,12 @@ tr:last-child td { border-bottom: none; }
     /* height: 160px inherited from base */
   }
 }
+
+/* ── Lab Messages two-panel layout ── */
+@media (max-width: 768px) {
+  .msg-panel-left { width: 100% !important; border-right: none !important; }
+  .msg-panel-left.msg-hidden { display: none !important; }
+  .msg-panel-right.msg-hidden { display: none !important; }
+  .msg-back-btn { display: flex !important; }
+  .msg-header-hide-mobile { display: none !important; }
+}
