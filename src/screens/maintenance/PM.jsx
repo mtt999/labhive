@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 import ScrollTabs from '../../components/ScrollTabs'
+import HelpPanel from '../../components/HelpPanel'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -2014,9 +2015,12 @@ export default function PM() {
 
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Task Board</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{isStudent ? 'Personal workspace' : 'Staff workspace'}</div>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Task Board</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{isStudent ? 'Personal workspace' : 'Staff workspace'}</div>
+        </div>
+        <HelpPanel screen="pm" />
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {tabs.map(t => (

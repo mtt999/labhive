@@ -62,7 +62,7 @@ const HELP_CONTENT = {
     ],
   },
   equipment: {
-    title: 'Equipment Inventory',
+    title: 'Equipment List',
     description: 'Full inventory of all lab equipment with condition tracking, maintenance scheduling, and usage records.',
     tips: [
       'Import your full equipment list from Excel in one click',
@@ -74,7 +74,7 @@ const HELP_CONTENT = {
     ],
   },
   booking: {
-    title: 'Booking Equipment',
+    title: 'Reserve Equipment',
     description: 'Reserve lab equipment using the calendar. Drag to select your time slot. All bookings within your organization are visible.',
     tips: [
       'Select an equipment item on the left first, then drag on the calendar to book',
@@ -98,12 +98,19 @@ const HELP_CONTENT = {
     ],
   },
   pm: {
-    title: 'Project Management',
-    description: 'Kanban-style board for tracking tasks and to-dos across your lab projects.',
+    title: 'Task Board',
+    description: 'Personal and team task tracking — add tasks, set deadlines, track progress, and collaborate. Lab users get a fully private personal workspace.',
     tips: [
-      'Create tasks and assign them to team members',
-      'Drag tasks between columns to update their status',
-      'Filter by assignee or project to focus your view',
+      'My Tasks: add tasks with deadlines, priority, and notes — click the circle to step through progress',
+      'Mark a task as Private to hide it from your group teammates (lab users default to private)',
+      'Calendar tab: three-month view of all task deadlines — red ✕ marks days you\'re out of lab',
+      'Out of Lab panel (sidebar): mark days you won\'t be in the lab so teammates can see your availability',
+      'Lab users: use Task Group (sidebar) to create or join a group — a Group Tasks tab then appears',
+      'Group Tasks shows only tasks each member has chosen to share (non-private tasks they created)',
+      'Team tab (staff): kanban board showing all lab manager tasks across the org',
+      'Meetings tab: link tasks to specific meeting dates for structured follow-up',
+      'Reminders tab: set personal time-based reminders independent of tasks',
+      'Assign Others tab (org admin only): create and assign tasks to any staff member',
     ],
   },
   remessages: {
