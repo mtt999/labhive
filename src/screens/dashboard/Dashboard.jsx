@@ -13,6 +13,7 @@ function getModules(role, loginMode, activeModules) {
     if (m.adminOnly && !isStaff) return false
     if (m.hideForStaff && isStaff) return false
     if (m.staffOnly && !isStaff) return false
+    if (m.soloLocked && loginMode === 'solo') return false
     return true
   })
   if (activeModules !== null && activeModules !== undefined) {
