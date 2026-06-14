@@ -10,7 +10,7 @@ export const ALL_MODULES_META = [
   { key: 'equipment',    screen: 'equipment',    label: 'Equipment List',     sub: 'Lab equipment tracking',          icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team', 'solo'] },
   { key: 'equipmenthub', screen: 'equipmenthub', label: 'Equipment Hub',      sub: 'SOPs & standards',                icon: '📚', bg: '#e8f2ee', color: '#1e4d39', roles: ['team', 'solo'] },
   { key: 'booking',      screen: 'booking',      label: 'Reserve Equipment',  sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team', 'solo'] },
-  { key: 'remessages',   screen: 'remessages',   label: 'Lab Messages',       sub: 'Notes, ideas & issue reports',    icon: '💬', bg: '#e8f2ee', color: '#2a6049', roles: ['team', 'solo'] },
+  { key: 'remessages',   screen: 'remessages',   label: 'Lab Messages',       sub: 'Notes, ideas & issue reports',    icon: '💬', bg: '#e8f2ee', color: '#2a6049', roles: ['team', 'solo'], soloLocked: true },
   { key: 'pm',           screen: 'pm',           label: 'Task Board',         sub: 'Tasks, meetings & team chat',     icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team', 'solo'] },
   { key: 'barcode',      screen: 'barcode',      label: 'QR Scan',            sub: 'Scan & look up lab materials',    icon: '📷', bg: '#e0f7fa', color: '#00796b', roles: ['team', 'solo'] },
   { key: 'mileage',      screen: null,           label: 'Mileage Form',       sub: 'Submit mileage reimbursement',    icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', roles: ['team', 'solo'], external: true },
@@ -21,9 +21,9 @@ export const ALL_MODULES_META = [
 ]
 
 export const PINNED_MODULES = ['profile']
-export const STAFF_PINNED_MODULES = ['labmanagement']
+export const STAFF_PINNED_MODULES = ['labmanagement'] // always visible for staff; draggable but cannot be removed
 
-function ModuleToggleCard({ module, selected, onToggle, pinned, restricted, soloLocked }) {
+function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restricted, soloLocked }) {
   if (restricted) {
     return (
       <div
@@ -74,7 +74,7 @@ function ModuleToggleCard({ module, selected, onToggle, pinned, restricted, solo
       <div style={{ fontSize: 26, marginBottom: 7, pointerEvents: 'none' }}>{module.icon}</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: selected ? module.color : 'var(--text)', marginBottom: 2, paddingRight: 22, pointerEvents: 'none' }}>{module.label}</div>
       <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{module.sub}</div>
-      {pinned && <div style={{ marginTop: 6, fontSize: 10, color: module.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
+      {(pinned || alwaysOn) && <div style={{ marginTop: 6, fontSize: 10, color: module.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
     </div>
   )
 }
@@ -82,7 +82,11 @@ function ModuleToggleCard({ module, selected, onToggle, pinned, restricted, solo
 export default function DashboardIconPicker({ session, loginMode, onDone }) {
   const { setActiveModules } = useAppStore()
   const isStaff = session?.role === 'admin' || session?.role === 'user'
-  const pinnedKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  // uiPinnedKeys: grayed out AND non-draggable (profile only)
+  const uiPinnedKeys = PINNED_MODULES
+  // alwaysOnKeys: cannot be toggled off, but ARE draggable (labmanagement for staff)
+  const alwaysOnKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  const pinnedKeys = alwaysOnKeys // keep for backward compat with selectNone/toggle gate
   const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
   const [available, setAvailable] = useState(baseAvailable)
   const [selected, setSelected] = useState(null)
@@ -347,7 +351,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
             {displayModules.map(m => {
               const isDragging = dragKey === m.key
               const isOver = dragOverKey === m.key && dragKey !== m.key
-              const canDrag = !restrictedKeys.has(m.key) && !pinnedKeys.includes(m.key)
+              const canDrag = !restrictedKeys.has(m.key) && !uiPinnedKeys.includes(m.key)
               return (
                 <div
                   key={m.key}
@@ -358,7 +362,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
                   onDragEnd={handleDragEnd}
                   style={{ opacity: isDragging ? 0.35 : 1, outline: isOver ? `2px dashed ${loginMode === 'solo' ? '#534AB7' : '#1D9E75'}` : 'none', borderRadius: 12, transition: 'opacity 0.15s' }}
                 >
-                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={pinnedKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={loginMode === 'solo' && !!m.soloLocked} />
+                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={uiPinnedKeys.includes(m.key)} alwaysOn={!uiPinnedKeys.includes(m.key) && alwaysOnKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={loginMode === 'solo' && !!m.soloLocked} />
                 </div>
               )
             })}

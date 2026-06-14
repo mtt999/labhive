@@ -136,6 +136,19 @@ CREATE TABLE IF NOT EXISTS admin_notifications (
 );
 ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 
+-- Out of lab days (Task Board → My Tasks sidebar):
+CREATE TABLE IF NOT EXISTS user_out_of_lab (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID,
+  date DATE NOT NULL,
+  note TEXT,
+  organization_id UUID,
+  login_mode TEXT DEFAULT 'team',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE user_out_of_lab ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON user_out_of_lab FOR ALL USING (true) WITH CHECK (true);
+
 -- RLS: enable on all tables (run the full ALTER TABLE block from session history)
 ```
 
@@ -145,6 +158,16 @@ ALTER TABLE admin_notifications DISABLE ROW LEVEL SECURITY;
 | `SuperAdminBell.jsx` | Super admin notification bell — new solo users, support requests, system errors |
 | `logAdminError.js` | Helper to log JS errors to `admin_notifications` table |
 | `favicon.svg` | Square-cropped hexagon icon for browser tab (viewBox cropped from labhive_logo.svg) |
+
+### Out of Lab feature (PM.jsx — Task Board)
+Users can mark days they will be out of the lab from the **My Tasks** sidebar. These days appear as red ✕ markers on the deadline mini-calendar.
+
+- **`OutOfLabPanel`** — component rendered in the My Tasks right sidebar (below deadline calendar); lets the current user add a date + optional reason and delete existing entries; calls `onChanged` to refresh the parent calendar immediately
+- **`MiniCalendar`** now accepts `outOfLabDays` prop (array of `{ date: 'YYYY-MM-DD', ... }` or plain date strings); out-of-lab days get a light red background and a red `✕` indicator; legend text updates to explain both markers
+- **`CalendarView`** fetches `user_out_of_lab` in parallel with tasks; visibility rule: admins/owners see the whole org, regular users see only their own; day popup shows a red out-of-lab banner above the task list when both exist on the same day
+- **`MyTasks`** loads the current user's upcoming out-of-lab days on mount via `loadOutOfLab()` and passes them to the sidebar `MiniCalendar`
+
+**Do not** query `user_out_of_lab` without an `organization_id` filter for team users — it would leak cross-org data.
 
 ### Cross-browser layout fixes (June 2026)
 - **Windows scrollbar**: `src/index.css` sets a global 6px thin scrollbar (`::-webkit-scrollbar` + Firefox `scrollbar-width: thin`) so Chrome on Windows doesn't use a 17px gutter that collapses the 4-column icon grid. `<main>` in `Layout.jsx` has `scrollbar-gutter: stable` to reserve constant gutter width.
@@ -558,6 +581,11 @@ Note: `ilab_session` is written by `TermsAcceptance.jsx` and `ForcePasswordChang
 ### Global settings
 - `settings`: `key` (PK), `value` — key/value store for URLs, passwords, module pools, images
 
+### Task Board tables
+- `tasks`: `id`, `title`, `status` (todo/in_progress/done), `progress` (0–100), `priority`, `deadline`, `deadline_time`, `start_date`, `start_time`, `notes`, `is_private`, `is_meeting_task`, `assigned_to`, `created_by`, `organization_id`, `login_mode`
+- `task_attachments`: `id`, `task_id`, `file_name`, `file_url`, `file_size`, `uploaded_by`, `created_at`
+- `user_out_of_lab`: `id`, `user_id`, `date` (DATE), `note`, `organization_id`, `login_mode`, `created_at`
+
 ### Required SQL (run once if not applied)
 ```sql
 -- Multi-tenancy org columns
@@ -570,6 +598,11 @@ ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER D
 
 -- Solo workspace sharing (from supabase_solo_workspace.sql)
 -- Run supabase_solo_workspace.sql in Supabase SQL Editor
+
+-- Out of lab days (Task Board):
+CREATE TABLE IF NOT EXISTS user_out_of_lab (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, user_id UUID, date DATE NOT NULL, note TEXT, organization_id UUID, login_mode TEXT DEFAULT 'team', created_at TIMESTAMPTZ DEFAULT NOW());
+ALTER TABLE user_out_of_lab ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON user_out_of_lab FOR ALL USING (true) WITH CHECK (true);
 ```
 
 ---

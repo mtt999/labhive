@@ -165,7 +165,7 @@ function TaskComments({ taskId, currentUserId, currentUserName, assignedTo }) {
   )
 }
 
-function MiniCalendar({ tasks, onDayClick, initialCal }) {
+function MiniCalendar({ tasks, onDayClick, initialCal, outOfLabDays }) {
   const [cal, setCal] = useState(() => initialCal || { year: new Date().getFullYear(), month: new Date().getMonth() })
   const today = new Date()
   const firstDay = new Date(cal.year, cal.month, 1).getDay()
@@ -179,6 +179,11 @@ function MiniCalendar({ tasks, onDayClick, initialCal }) {
       const key = d.getDate(); tasksByDay[key] = (tasksByDay[key] || 0) + 1
     }
   })
+  const oolDaySet = new Set((outOfLabDays || []).map(e => {
+    const ds = typeof e === 'string' ? e : e.date
+    const [y, m, day] = ds.split('-')
+    return `${parseInt(y)}-${parseInt(m)-1}-${parseInt(day)}`
+  }))
   const prev = () => setCal(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 })
   const next = () => setCal(c => c.month === 11 ? { year: c.year + 1, month: 0 } : { ...c, month: c.month + 1 })
   const isToday = (d) => d === today.getDate() && cal.month === today.getMonth() && cal.year === today.getFullYear()
@@ -201,18 +206,87 @@ function MiniCalendar({ tasks, onDayClick, initialCal }) {
           if (!d) return <div key={`e${i}`} />
           const count = tasksByDay[d] || 0
           const today_ = isToday(d)
+          const isOOL = oolDaySet.has(`${cal.year}-${cal.month}-${d}`)
+          const isClickable = count > 0 || isOOL
           return (
-            <div key={d} onClick={() => count > 0 && onDayClick(cal.year, cal.month, d)}
-              style={{ textAlign: 'center', borderRadius: 6, padding: '3px 0', cursor: count > 0 ? 'pointer' : 'default', background: today_ ? BLUE : 'transparent', border: count > 0 && !today_ ? `1px solid ${ORANGE}` : '1px solid transparent', transition: 'background 0.15s' }}
-              onMouseEnter={e => { if (count > 0 && !today_) e.currentTarget.style.background = ORANGE_LIGHT }}
-              onMouseLeave={e => { if (!today_) e.currentTarget.style.background = 'transparent' }}>
+            <div key={d} onClick={() => isClickable && onDayClick(cal.year, cal.month, d)}
+              style={{ textAlign: 'center', borderRadius: 6, padding: '3px 0', cursor: isClickable ? 'pointer' : 'default', background: today_ ? BLUE : isOOL && !count ? '#fff5f5' : 'transparent', border: count > 0 && !today_ ? `1px solid ${ORANGE}` : isOOL && !today_ ? '1px solid #fca5a5' : '1px solid transparent', transition: 'background 0.15s' }}
+              onMouseEnter={e => { if (isClickable && !today_) e.currentTarget.style.background = count > 0 ? ORANGE_LIGHT : '#fee2e2' }}
+              onMouseLeave={e => { if (!today_) e.currentTarget.style.background = isOOL && !count ? '#fff5f5' : 'transparent' }}>
               <div style={{ fontSize: 11, fontWeight: today_ ? 700 : 400, color: today_ ? 'white' : 'var(--text)' }}>{d}</div>
               {count > 0 && <div style={{ width: 14, height: 14, borderRadius: '50%', background: today_ ? 'white' : ORANGE, color: today_ ? BLUE : 'white', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '1px auto 0' }}>{count}</div>}
+              {isOOL && count === 0 && <div style={{ fontSize: 9, color: today_ ? 'rgba(255,255,255,0.85)' : '#c84b2f', fontWeight: 700, lineHeight: 1.2, marginTop: 1 }}>✕</div>}
             </div>
           )
         })}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, textAlign: 'center' }}>Highlighted days have tasks due</div>
+      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, textAlign: 'center' }}>
+        {outOfLabDays?.length ? 'Orange = tasks due · Red ✕ = out of lab' : 'Highlighted days have tasks due'}
+      </div>
+    </div>
+  )
+}
+
+// Requires: user_out_of_lab table in Supabase
+// SQL: CREATE TABLE IF NOT EXISTS user_out_of_lab (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, user_id UUID, date DATE NOT NULL, note TEXT, organization_id UUID, login_mode TEXT DEFAULT 'team', created_at TIMESTAMPTZ DEFAULT NOW()); ALTER TABLE user_out_of_lab ENABLE ROW LEVEL SECURITY; CREATE POLICY "allow_all" ON user_out_of_lab FOR ALL USING (true) WITH CHECK (true);
+function OutOfLabPanel({ userId, isSolo, orgId, onChanged }) {
+  const [entries, setEntries] = useState([])
+  const [newDate, setNewDate] = useState('')
+  const [newNote, setNewNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const { toast } = useAppStore()
+  const today = new Date().toISOString().split('T')[0]
+
+  useEffect(() => { if (userId) load() }, [userId])
+
+  async function load() {
+    const { data } = await sb.from('user_out_of_lab').select('*').eq('user_id', userId).gte('date', today).order('date', { ascending: true })
+    setEntries(data || [])
+  }
+
+  async function add() {
+    if (!newDate) { toast('Pick a date first.'); return }
+    setSaving(true)
+    const { data, error } = await sb.from('user_out_of_lab').insert({ user_id: userId, date: newDate, note: newNote.trim() || null, organization_id: isSolo ? null : orgId, login_mode: isSolo ? 'solo' : 'team' }).select().single()
+    if (error) { toast('Could not save: ' + error.message); setSaving(false); return }
+    setEntries(prev => [...prev, data].sort((a, b) => a.date.localeCompare(b.date)))
+    setNewDate(''); setNewNote('')
+    toast('Out of lab day saved.')
+    setSaving(false)
+    onChanged?.()
+  }
+
+  async function remove(id) {
+    await sb.from('user_out_of_lab').delete().eq('id', id)
+    setEntries(prev => prev.filter(e => e.id !== id))
+    toast('Removed.')
+    onChanged?.()
+  }
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 14, marginTop: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Out of Lab</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: newDate ? 8 : 0 }}>
+        <input type="date" value={newDate} min={today} onChange={e => setNewDate(e.target.value)} style={{ flex: 1, fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }} />
+        <button className="btn btn-sm" onClick={add} disabled={saving || !newDate} style={{ fontSize: 11, flexShrink: 0 }}>+ Add</button>
+      </div>
+      {newDate && (
+        <input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Reason (optional)" style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', marginBottom: 8, boxSizing: 'border-box' }} />
+      )}
+      {entries.length === 0
+        ? <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '8px 0' }}>No upcoming out-of-lab days.</div>
+        : <div style={{ marginTop: 8 }}>{entries.map(e => (
+          <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: '1px solid var(--surface2)' }}>
+            <span style={{ fontSize: 11, color: '#c84b2f', fontWeight: 700, flexShrink: 0, lineHeight: 1 }}>✕</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+              {e.note && <div style={{ fontSize: 10, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note}</div>}
+            </div>
+            <button onClick={() => remove(e.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 15, padding: '1px 3px', opacity: 0.6, lineHeight: 1, flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}>×</button>
+          </div>
+        ))}</div>
+      }
     </div>
   )
 }
@@ -566,16 +640,27 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId }) {
 
 function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
   const [tasks, setTasks] = useState([])
+  const [outOfLab, setOutOfLab] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('')
   const [filterPriority, setFilterPriority] = useState('')
   const [calDayPopup, setCalDayPopup] = useState(null)
 
   useEffect(() => {
-    let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
-    if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-    if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-    q.then(({ data: t }) => { setTasks(t || []); setLoading(false) })
+    async function load() {
+      let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
+      if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+      if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
+      // Admin sees all org members; others see only their own out-of-lab days
+      let oolQ = sb.from('user_out_of_lab').select('id, user_id, date, note').eq('login_mode', isSolo ? 'solo' : 'team')
+      if (!isSolo) oolQ = oolQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+      if (!isOwnerAdmin && userId) oolQ = oolQ.eq('user_id', userId)
+      const [{ data: t }, { data: ool }] = await Promise.all([q, oolQ])
+      setTasks(t || [])
+      setOutOfLab(ool || [])
+      setLoading(false)
+    }
+    load()
   }, [userId, isOwnerAdmin, isSolo, orgId])
 
   const now = new Date()
@@ -597,6 +682,11 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
     return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
   })
 
+  const oolOnDay = (year, month, day) => {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return outOfLab.filter(e => e.date === ds)
+  }
+
   if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
   return (
@@ -608,6 +698,14 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
               <div style={{ fontWeight: 600, fontSize: 15 }}>{new Date(calDayPopup.year, calDayPopup.month, calDayPopup.day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               <button onClick={() => setCalDayPopup(null)} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
             </div>
+            {oolOnDay(calDayPopup.year, calDayPopup.month, calDayPopup.day).map(e => (
+              <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 8, background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8 }}>
+                <span style={{ fontSize: 13, color: '#c84b2f', fontWeight: 700, flexShrink: 0 }}>✕</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#c84b2f' }}>Out of lab{e.note ? ` — ${e.note}` : ''}</div>
+                </div>
+              </div>
+            ))}
             {tasksOnDay(calDayPopup.year, calDayPopup.month, calDayPopup.day).map(task => (
               <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--surface2)' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: progressColor(task.progress||0), flexShrink: 0 }} />
@@ -625,6 +723,9 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
                 <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500, flexShrink: 0, ...statusStyle(task.status) }}>{task.status.replace('_', ' ')}</span>
               </div>
             ))}
+            {oolOnDay(calDayPopup.year, calDayPopup.month, calDayPopup.day).length === 0 && tasksOnDay(calDayPopup.year, calDayPopup.month, calDayPopup.day).length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '12px 0' }}>Nothing scheduled.</div>
+            )}
             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>Click a task title to open details</span>
               <button className="btn" onClick={() => setCalDayPopup(null)}>Close</button>
@@ -652,9 +753,9 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <MiniCalendar tasks={filtered} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={lastMonth} />
-        <MiniCalendar tasks={filtered} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={thisMonth} />
-        <MiniCalendar tasks={filtered} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={nextMonth} />
+        <MiniCalendar tasks={filtered} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={lastMonth} />
+        <MiniCalendar tasks={filtered} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={thisMonth} />
+        <MiniCalendar tasks={filtered} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} initialCal={nextMonth} />
       </div>
 
       <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>All deadlines</div>
@@ -692,6 +793,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
   const [staffMap, setStaffMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [outOfLab, setOutOfLab] = useState([])
 
   useEffect(() => {
     if (pendingTask) { setSelectedTask(pendingTask); onPendingTaskConsumed?.() }
@@ -703,13 +805,20 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
 
+  async function loadOutOfLab() {
+    if (!userId) return
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await sb.from('user_out_of_lab').select('id, date, note').eq('user_id', userId).gte('date', today).order('date', { ascending: true })
+    setOutOfLab(data || [])
+  }
+
   useEffect(() => {
     const handler = () => setDesktop(isDesktop())
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  useEffect(() => { load() }, [userId, isOwnerAdmin])
+  useEffect(() => { load(); loadOutOfLab() }, [userId, isOwnerAdmin])
 
   async function load() {
     try {
@@ -926,7 +1035,8 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
         </div>
         <div style={{ marginTop: desktop ? 0 : 20 }}>
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Deadline calendar</div>
-          <MiniCalendar tasks={tasks} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} />
+          <MiniCalendar tasks={tasks} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} />
+          {userId && <OutOfLabPanel userId={userId} isSolo={isSolo} orgId={orgId} onChanged={loadOutOfLab} />}
         </div>
       </div>
     </div>
@@ -1090,7 +1200,6 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
   const [showNewTask, setShowNewTask] = useState(false)
   const [newTask, setNewTask] = useState({ title: '', assigned_to: '', start_date: '', deadline: '' })
   const [selectedTask, setSelectedTask] = useState(null)
-  const { toast } = useAppStore()
   useEffect(() => {
     async function load() {
       let usersQ = sb.from('users').select('id, name, role').eq('is_active', true).order('name')
@@ -1636,7 +1745,7 @@ export default function PM() {
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Project Management</div>
+        <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Task Board</div>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Staff workspace</div>
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
