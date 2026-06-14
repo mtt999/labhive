@@ -73,8 +73,8 @@ function NewConvModal({ session, staff, onSent, onClose }) {
       receiver_id: form.receiverId || null,
       receiver_name: receiver?.name || (!form.receiverId ? 'All Staff' : null),
       subject: form.subject || null, body: form.body.trim(),
-      file_url: fileUrl, file_name: fileName,
       organization_id: session?.organizationId || null,
+      ...(fileUrl ? { file_url: fileUrl, file_name: fileName } : {}),
     })
     if (error) { toast('Failed to send: ' + error.message); setSending(false); return }
     if (form.receiverId) await sendMessageEmail(form.receiverId, session.username, form.body.trim())
@@ -234,8 +234,9 @@ export default function REMessages() {
       parent_id: selectedConv.id,
       sender_id: session.userId, sender_name: session.username,
       receiver_id: otherId || null, receiver_name: otherName || null,
-      body: replyText.trim(), file_url: fileUrl, file_name: fileName,
+      body: replyText.trim(),
       organization_id: session?.organizationId || null,
+      ...(fileUrl ? { file_url: fileUrl, file_name: fileName } : {}),
     }).select().single()
     if (replyErr) { toast('Failed to send: ' + replyErr.message); setSendingReply(false); return }
 
