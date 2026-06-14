@@ -6,7 +6,7 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects','training','booking','equipmenthub','mileage','labsafety','remessages','barcode','profile']
+  const studentAllowed = ['projects','training','booking','equipmenthub','mileage','labsafety','barcode','profile','pm']
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
     if (role === 'student' && !studentAllowed.includes(m.key)) return false

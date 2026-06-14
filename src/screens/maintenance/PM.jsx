@@ -291,6 +291,170 @@ function OutOfLabPanel({ userId, isSolo, orgId, onChanged }) {
   )
 }
 
+// Requires: team_task_groups + team_task_group_members tables (see CLAUDE.md SQL)
+function TaskGroupPanel({ userId, orgId, onGroupChange }) {
+  const [myGroup, setMyGroup] = useState(null)
+  const [accepted, setAccepted] = useState([])
+  const [pendingOut, setPendingOut] = useState([])
+  const [pendingIn, setPendingIn] = useState([])
+  const [orgUsers, setOrgUsers] = useState([])
+  const [inviteeId, setInviteeId] = useState('')
+  const [groupName, setGroupName] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const { toast } = useAppStore()
+
+  useEffect(() => { if (userId) load() }, [userId])
+
+  async function load() {
+    const { data: myMembership } = await sb.from('team_task_group_members').select('id, group_id').eq('user_id', userId).eq('status', 'accepted').maybeSingle()
+    if (myMembership) {
+      const { data: grp } = await sb.from('team_task_groups').select('id, name').eq('id', myMembership.group_id).maybeSingle()
+      setMyGroup(grp)
+      const { data: allMembers } = await sb.from('team_task_group_members').select('id, user_id, status').eq('group_id', myMembership.group_id)
+      const uids = [...new Set((allMembers || []).map(m => m.user_id).filter(Boolean))]
+      const { data: users } = uids.length ? await sb.from('users').select('id, name').in('id', uids) : { data: [] }
+      const uMap = Object.fromEntries((users || []).map(u => [u.id, u.name]))
+      setAccepted((allMembers || []).filter(m => m.status === 'accepted' && m.user_id !== userId).map(m => ({ ...m, name: uMap[m.user_id] || 'Unknown' })))
+      setPendingOut((allMembers || []).filter(m => m.status === 'pending').map(m => ({ ...m, name: uMap[m.user_id] || 'Unknown' })))
+      setPendingIn([])
+    } else {
+      setMyGroup(null); setAccepted([]); setPendingOut([])
+      const { data: incoming } = await sb.from('team_task_group_members').select('id, group_id, invited_by').eq('user_id', userId).eq('status', 'pending')
+      if (incoming?.length) {
+        const gids = incoming.map(i => i.group_id)
+        const iids = incoming.map(i => i.invited_by).filter(Boolean)
+        const [{ data: grps }, { data: inv }] = await Promise.all([
+          sb.from('team_task_groups').select('id, name').in('id', gids),
+          iids.length ? sb.from('users').select('id, name').in('id', iids) : Promise.resolve({ data: [] })
+        ])
+        const gMap = Object.fromEntries((grps || []).map(g => [g.id, g.name]))
+        const iMap = Object.fromEntries((inv || []).map(u => [u.id, u.name]))
+        setPendingIn(incoming.map(i => ({ ...i, groupName: gMap[i.group_id] || 'Unknown group', inviterName: iMap[i.invited_by] || 'Someone' })))
+      } else { setPendingIn([]) }
+    }
+    const { data: ou } = await sb.from('users').select('id, name').eq('role', 'student').eq('is_active', true).eq('organization_id', orgId).neq('id', userId).order('name')
+    setOrgUsers(ou || [])
+  }
+
+  async function createGroup() {
+    if (!groupName.trim()) { toast('Enter a group name.'); return }
+    setSaving(true)
+    const { data: grp, error } = await sb.from('team_task_groups').insert({ name: groupName.trim(), organization_id: orgId, created_by: userId }).select().single()
+    if (error) { toast('Error: ' + error.message); setSaving(false); return }
+    await sb.from('team_task_group_members').insert({ group_id: grp.id, user_id: userId, invited_by: userId, status: 'accepted' })
+    setGroupName(''); setShowCreate(false); setSaving(false)
+    onGroupChange?.(grp.id); toast('Group created!'); load()
+  }
+
+  async function invite() {
+    if (!inviteeId || !myGroup) return
+    const { data: ex } = await sb.from('team_task_group_members').select('id').eq('group_id', myGroup.id).eq('user_id', inviteeId).maybeSingle()
+    if (ex) { toast('Already in group or invited.'); return }
+    await sb.from('team_task_group_members').insert({ group_id: myGroup.id, user_id: inviteeId, invited_by: userId, status: 'pending' })
+    setInviteeId(''); setShowInvite(false); toast('Invite sent!'); load()
+  }
+
+  async function accept(inviteId, groupId) {
+    await sb.from('team_task_group_members').update({ status: 'accepted' }).eq('id', inviteId)
+    onGroupChange?.(groupId); toast('Joined group!'); load()
+  }
+
+  async function decline(inviteId) {
+    await sb.from('team_task_group_members').delete().eq('id', inviteId)
+    toast('Invite declined.'); load()
+  }
+
+  async function leaveGroup() {
+    if (!confirm('Leave this group? You will no longer see Group Tasks.')) return
+    await sb.from('team_task_group_members').delete().eq('group_id', myGroup.id).eq('user_id', userId)
+    setMyGroup(null); setAccepted([]); setPendingOut([])
+    onGroupChange?.(null); toast('You left the group.'); load()
+  }
+
+  async function cancelInvite(id) {
+    await sb.from('team_task_group_members').delete().eq('id', id)
+    toast('Invite cancelled.'); load()
+  }
+
+  const available = orgUsers.filter(u => !accepted.some(a => a.user_id === u.id) && !pendingOut.some(p => p.user_id === u.id))
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 14, marginTop: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Task Group</div>
+
+      {!myGroup && pendingIn.length > 0 && pendingIn.map(inv => (
+        <div key={inv.id} style={{ background: '#e8f2ee', border: '1px solid #a7d4be', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#2a6049', marginBottom: 1 }}>"{inv.groupName}"</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 7 }}>Invited by {inv.inviterName}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn-sm btn-primary" onClick={() => accept(inv.id, inv.group_id)} style={{ fontSize: 11 }}>Accept</button>
+            <button className="btn btn-sm" onClick={() => decline(inv.id)} style={{ fontSize: 11 }}>Decline</button>
+          </div>
+        </div>
+      ))}
+
+      {!myGroup && (
+        <>
+          {pendingIn.length === 0 && <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '4px 0', marginBottom: 8 }}>No active group.</div>}
+          {showCreate
+            ? <div>
+                <input value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Group name" autoFocus
+                  style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', marginBottom: 6, boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-sm btn-primary" onClick={createGroup} disabled={saving} style={{ fontSize: 11 }}>Create</button>
+                  <button className="btn btn-sm" onClick={() => { setShowCreate(false); setGroupName('') }} style={{ fontSize: 11 }}>Cancel</button>
+                </div>
+              </div>
+            : <button className="btn btn-sm" onClick={() => setShowCreate(true)} style={{ fontSize: 11, width: '100%' }}>+ Create group</button>
+          }
+        </>
+      )}
+
+      {myGroup && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{myGroup.name}</div>
+          {accepted.length === 0
+            ? <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>Only you so far — invite others!</div>
+            : <div style={{ marginBottom: 8 }}>{accepted.map(m => (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e8f2ee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#2a6049', flexShrink: 0 }}>{m.name?.slice(0,2).toUpperCase()}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text)' }}>{m.name}</span>
+                </div>
+              ))}</div>
+          }
+          {pendingOut.length > 0 && (
+            <div style={{ marginBottom: 8 }}>{pendingOut.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0' }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#fff3e0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: ORANGE, flexShrink: 0 }}>{p.name?.slice(0,2).toUpperCase()}</div>
+                <span style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', flex: 1 }}>{p.name} (pending)</span>
+                <button onClick={() => cancelInvite(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 14, padding: '1px 3px', opacity: 0.6, lineHeight: 1 }}
+                  onMouseEnter={e => e.currentTarget.style.opacity='1'} onMouseLeave={e => e.currentTarget.style.opacity='0.6'}>×</button>
+              </div>
+            ))}</div>
+          )}
+          {showInvite
+            ? <div style={{ marginBottom: 8 }}>
+                <select value={inviteeId} onChange={e => setInviteeId(e.target.value)}
+                  style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', marginBottom: 6 }}>
+                  <option value="">— Select lab user —</option>
+                  {available.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-sm btn-primary" onClick={invite} disabled={!inviteeId} style={{ fontSize: 11 }}>Send invite</button>
+                  <button className="btn btn-sm" onClick={() => { setShowInvite(false); setInviteeId('') }} style={{ fontSize: 11 }}>Cancel</button>
+                </div>
+              </div>
+            : available.length > 0 && <button className="btn btn-sm" onClick={() => setShowInvite(true)} style={{ fontSize: 11, width: '100%', marginBottom: 6 }}>+ Invite lab user</button>
+          }
+          <button onClick={leaveGroup} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 11, padding: '4px 0', width: '100%', textAlign: 'center', marginTop: 2 }}>Leave group</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Requires: task_attachments table + task-files storage bucket in Supabase
 // SQL: CREATE TABLE task_attachments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), task_id uuid REFERENCES tasks(id) ON DELETE CASCADE, file_name text, file_url text, file_size bigint, uploaded_by text, created_at timestamptz DEFAULT now());
 function TaskAttachments({ taskId, userName }) {
@@ -788,7 +952,7 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
   )
 }
 
-function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendingTask, onPendingTaskConsumed }) {
+function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStudent, pendingTask, onPendingTaskConsumed, onGroupChange }) {
   const [tasks, setTasks] = useState([])
   const [staffMap, setStaffMap] = useState({})
   const [loading, setLoading] = useState(true)
@@ -801,7 +965,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
   const [calDayPopup, setCalDayPopup] = useState(null)
   const [desktop, setDesktop] = useState(isDesktop())
   const [showAddTask, setShowAddTask] = useState(false)
-  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: false })
+  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isStudent ? true : false })
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
 
@@ -885,7 +1049,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
         })
         return next
       })
-      setNewTask({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: false })
+      setNewTask({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isStudent ? true : false })
       setShowAddTask(false); toast('Task added!')
     } catch (err) { toast('Could not add task: ' + (err?.message || 'Check tasks table')) }
     setSaving(false)
@@ -962,7 +1126,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
             <div className="field"><label>Notes</label><textarea rows={2} style={{ resize: 'vertical' }} value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })} placeholder="Optional notes…" /></div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)', marginBottom: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={newTask.is_private} onChange={e => setNewTask({ ...newTask, is_private: e.target.checked })} />
-              Personal task (private — others see "Personal task" in Team view)
+              {isStudent ? 'Private task (hide from group members)' : 'Personal task (private — others see "Personal task" in Team view)'}
             </label>
             <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
               <button className="btn btn-primary" onClick={addTask} disabled={saving}>{saving ? 'Adding…' : 'Add task'}</button>
@@ -1037,6 +1201,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, pendi
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Deadline calendar</div>
           <MiniCalendar tasks={tasks} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} />
           {userId && <OutOfLabPanel userId={userId} isSolo={isSolo} orgId={orgId} onChanged={loadOutOfLab} />}
+          {isStudent && userId && <TaskGroupPanel userId={userId} orgId={orgId} onGroupChange={onGroupChange} />}
         </div>
       </div>
     </div>
@@ -1186,6 +1351,94 @@ function Team({ orgId, isSolo }) {
         })}
       </div>
       <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, textAlign: 'right' }}>↔ Drag column edge to resize</div>
+    </div>
+  )
+}
+
+function StudentTeamView({ userId, groupId, orgId }) {
+  const [members, setMembers] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [viewTask, setViewTask] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      const { data: memberships } = await sb.from('team_task_group_members').select('user_id').eq('group_id', groupId).eq('status', 'accepted')
+      const memberIds = (memberships || []).map(m => m.user_id)
+      if (!memberIds.length) { setLoading(false); return }
+      const { data: users } = await sb.from('users').select('id, name').in('id', memberIds)
+      setMembers(users || [])
+      const { data: t } = await sb.from('tasks').select('*').eq('login_mode', 'team').eq('organization_id', orgId).in('assigned_to', memberIds).eq('is_private', false).order('deadline', { ascending: true, nullsFirst: false })
+      // Only show self-created tasks (not tasks assigned by lab managers)
+      setTasks((t || []).filter(task => task.created_by === task.assigned_to))
+      setLoading(false)
+    }
+    load()
+  }, [groupId, orgId])
+
+  const statusStyle = (s) => ({ todo: { background: '#f1f1f1', color: '#555' }, in_progress: { background: ORANGE_LIGHT, color: ORANGE }, done: { background: '#e8f5e9', color: '#2e7d32' } }[s] || {})
+  const userTasks = (uid) => tasks.filter(t => t.assigned_to === uid)
+
+  if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+  if (!members.length) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)', fontSize: 14 }}>No group members found.</div>
+
+  return (
+    <div>
+      {viewTask && <TaskViewModal task={viewTask} onClose={() => setViewTask(null)} />}
+      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>Only tasks each member marked as shared are visible here — private tasks are hidden.</div>
+      <div style={{ overflowX: 'auto', paddingBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 'max-content', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+          {members.map((user, idx) => {
+            const utasks = userTasks(user.id)
+            const done = utasks.filter(t => t.status === 'done').length
+            const pct = utasks.length ? Math.round((done / utasks.length) * 100) : 0
+            const isMe = user.id === userId
+            const isLast = idx === members.length - 1
+            return (
+              <div key={user.id} style={{ width: 220, flexShrink: 0, borderRight: isLast ? 'none' : '1px solid var(--border)' }}>
+                <div style={{ padding: '12px 14px 10px', background: isMe ? '#f0f4ff' : 'var(--surface2)', borderBottom: '2px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: isMe ? '#dbeafe' : ORANGE_LIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, color: isMe ? BLUE : ORANGE, flexShrink: 0 }}>{user.name?.slice(0,2).toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}{isMe ? ' (You)' : ''}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{utasks.length} shared · {done} done</div>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(pct), flexShrink: 0 }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: 5, background: '#e0e0e0', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: progressColor(pct), borderRadius: 99, transition: 'width 0.4s' }} />
+                  </div>
+                </div>
+                <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 7, background: 'var(--bg)', minHeight: 80 }}>
+                  {utasks.length === 0
+                    ? <div style={{ fontSize: 12, color: 'var(--text3)', textAlign: 'center', padding: '24px 8px' }}>{isMe ? 'No shared tasks yet' : 'No shared tasks'}</div>
+                    : utasks.map(task => (
+                      <div key={task.id} onClick={() => setViewTask(task)}
+                        style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9, padding: '9px 11px', borderLeft: `3px solid ${progressColor(task.progress||0)}`, cursor: 'pointer', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background='var(--surface2)'}
+                        onMouseLeave={e => e.currentTarget.style.background='var(--surface)'}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: task.status==='done' ? 'var(--text3)' : 'var(--text)', textDecoration: task.status==='done' ? 'line-through' : 'none', marginBottom: 6, lineHeight: 1.4, wordBreak: 'break-word' }}>{task.title}</div>
+                        <div style={{ height: 4, background: '#e8e8e8', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+                          <div style={{ height: '100%', width: `${task.progress||0}%`, background: progressColor(task.progress||0), borderRadius: 99 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600, ...statusStyle(task.status) }}>{task.status.replace('_',' ')}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <PriorityBadge priority={task.priority||'medium'} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: progressColor(task.progress||0) }}>{task.progress||0}%</span>
+                          </div>
+                        </div>
+                        {task.deadline && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 5 }}>📅 {new Date(task.deadline).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Click a task to view details.</div>
     </div>
   )
 }
@@ -1726,13 +1979,29 @@ export default function PM() {
   const { session } = useAppStore()
   const [activeTab, setActiveTab] = useState('overview')
   const [pendingTask, setPendingTask] = useState(null)
+  const [studentGroupId, setStudentGroupId] = useState(undefined) // undefined=loading, null=no group, uuid=has group
   const userId = session?.userId
   const isOwnerAdmin = !userId
   const isAdmin = session?.role === 'admin' || session?.role === 'user'
+  const isStudent = session?.role === 'student'
   const userName = session?.username || 'Staff'
   const isSolo = session?.loginMode === 'solo'
   const orgId = session?.organizationId || null
-  const tabs = [
+
+  useEffect(() => {
+    if (isStudent && userId) {
+      sb.from('team_task_group_members').select('group_id').eq('user_id', userId).eq('status', 'accepted').maybeSingle()
+        .then(({ data }) => setStudentGroupId(data?.group_id || null))
+    }
+  }, [userId, isStudent])
+
+  const tabs = isStudent ? [
+    { key: 'overview', label: 'Overview' },
+    { key: 'tasks',    label: 'My Tasks' },
+    ...(studentGroupId ? [{ key: 'team', label: 'Group Tasks' }] : []),
+    { key: 'calendar', label: 'Calendar' },
+    { key: 'reminder', label: 'Reminders' },
+  ] : [
     { key: 'overview',  label: 'Overview' },
     { key: 'tasks',     label: 'My Tasks' },
     ...(!isSolo ? [{ key: 'team', label: 'Team' }] : []),
@@ -1742,11 +2011,12 @@ export default function PM() {
     { key: 'reminder',  label: 'Reminders' },
     ...(session?.role === 'admin' ? [{ key: 'assign', label: 'Assign others' }] : [])
   ]
+
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Task Board</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Staff workspace</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{isStudent ? 'Personal workspace' : 'Staff workspace'}</div>
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {tabs.map(t => (
@@ -1757,11 +2027,12 @@ export default function PM() {
         ))}
       </ScrollTabs>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} />}
-      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} />}
-      {activeTab === 'team'      && <Team orgId={orgId} isSolo={isSolo} />}
+      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isStudent} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isStudent={isStudent} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setStudentGroupId(gid || null); if (!gid && activeTab === 'team') setActiveTab('tasks') }} />}
+      {activeTab === 'team'      && !isStudent && <Team orgId={orgId} isSolo={isSolo} />}
+      {activeTab === 'team'      && isStudent && studentGroupId && <StudentTeamView userId={userId} groupId={studentGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setActiveTab('tasks') }} />}
-      {activeTab === 'meetings'  && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
-      {activeTab === 'chat'      && <Chat userId={userId} orgId={orgId} />}
+      {activeTab === 'meetings'  && !isStudent && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
+      {activeTab === 'chat'      && !isStudent && <Chat userId={userId} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}
     </div>
