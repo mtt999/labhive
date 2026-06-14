@@ -68,15 +68,15 @@ function NewConvModal({ session, staff, onSent, onClose }) {
       }
     }
     const receiver = staff.find(s => s.id === form.receiverId)
-    await sb.from('re_messages').insert({
+    const { error } = await sb.from('re_messages').insert({
       sender_id: session.userId, sender_name: session.username,
       receiver_id: form.receiverId || null,
       receiver_name: receiver?.name || (!form.receiverId ? 'All Staff' : null),
       subject: form.subject || null, body: form.body.trim(),
       file_url: fileUrl, file_name: fileName,
       organization_id: session?.organizationId || null,
-      is_read: false,
     })
+    if (error) { toast('Failed to send: ' + error.message); setSending(false); return }
     if (form.receiverId) await sendMessageEmail(form.receiverId, session.username, form.body.trim())
     toast('Message sent ✓')
     setSending(false)
@@ -162,7 +162,9 @@ export default function REMessages() {
     setLoading(true)
     let q = sb.from('re_messages').select('*').order('created_at', { ascending: true })
     if (!isAdmin) {
-      q = q.or(`receiver_id.eq.${session.userId},sender_id.eq.${session.userId}`)
+      // staff also see broadcast messages (receiver_id is null)
+      const broadcastClause = isStaff ? `,receiver_id.is.null` : ''
+      q = q.or(`receiver_id.eq.${session.userId},sender_id.eq.${session.userId}${broadcastClause}`)
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     } else if (session?.organizationId && session?.userId) {
       q = q.eq('organization_id', session.organizationId)
@@ -228,14 +230,14 @@ export default function REMessages() {
       ? selectedConv.receiver_name
       : selectedConv.sender_name
 
-    const { data: newMsg } = await sb.from('re_messages').insert({
+    const { data: newMsg, error: replyErr } = await sb.from('re_messages').insert({
       parent_id: selectedConv.id,
       sender_id: session.userId, sender_name: session.username,
       receiver_id: otherId || null, receiver_name: otherName || null,
       body: replyText.trim(), file_url: fileUrl, file_name: fileName,
       organization_id: session?.organizationId || null,
-      is_read: false,
     }).select().single()
+    if (replyErr) { toast('Failed to send: ' + replyErr.message); setSendingReply(false); return }
 
     if (otherId) await sendMessageEmail(otherId, session.username, replyText.trim())
 
