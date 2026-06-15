@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
+import HelpPanel from '../../components/HelpPanel'
 
 async function sendMessageEmail(userId, senderName, messageBody) {
   if (!userId) return
@@ -298,7 +299,10 @@ export default function REMessages() {
               ← Back to options
             </button>
           )}
-          <div className="section-title">Lab Messages</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="section-title">Lab Messages</div>
+            <HelpPanel screen="remessages" />
+          </div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>Notes, ideas, questions &amp; issue reports</div>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCompose(true)}>+ New</button>
