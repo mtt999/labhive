@@ -666,8 +666,16 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   )
 }
 
-// ── Org modules modal (super admin only) ─────────────────────
+// ── Module lists ──────────────────────────────────────────────
+// Org-level pool (org admins): all modules except profile (always pinned)
 const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile')
+
+// Super admin global team pool: also exclude mileage & labsafety (ICT-org-specific external links)
+const APP_GLOBAL_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile' && m.key !== 'mileage' && m.key !== 'labsafety')
+
+// Super admin global solo pool: same exclusions + soloLocked
+const SOLO_GLOBAL_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked && m.key !== 'profile' && m.key !== 'mileage' && m.key !== 'labsafety')
+
 // Profile is always-on so excluded from access-control, but included here for image upload
 const ORG_IMAGE_MODULES = ALL_MODULES_META
 
@@ -789,32 +797,52 @@ function GlobalImageGrid({ modules, imagePrefix, alsoPrefix }) {
 // ── App-level modules modal (super admin only) ────────────────
 function AppModulesModal({ onClose }) {
   const { toast } = useAppStore()
+  // Configurable keys (no profile, no mileage, no labsafety)
+  const configKeys = APP_GLOBAL_MODULES.map(m => m.key)
+  // Full display keys: configurable + profile always at end by default
+  const defaultOrder = [...configKeys, 'profile']
   const [selected, setSelected] = useState(null)
+  const [order, setOrder] = useState(null)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState('icons')
+  const [dragKey, setDragKey] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
+  const dragRef = useRef(null)
 
   useEffect(() => {
     sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle()
       .then(({ data }) => {
         try {
           const parsed = data?.value ? JSON.parse(data.value) : null
-          setSelected(parsed ? new Set(parsed) : new Set(ORG_CONFIGURABLE_MODULES.map(m => m.key)))
+          const selKeys = parsed ? parsed.filter(k => configKeys.includes(k)) : configKeys
+          // Always include profile in selected (always visible)
+          setSelected(new Set([...selKeys, 'profile']))
+          // Restore saved order; append any missing keys; profile defaults last
+          if (parsed?.length) {
+            const savedValid = parsed.filter(k => defaultOrder.includes(k))
+            const missing = defaultOrder.filter(k => !savedValid.includes(k))
+            setOrder([...savedValid, ...missing])
+          } else {
+            setOrder([...defaultOrder])
+          }
         } catch {
-          setSelected(new Set(ORG_CONFIGURABLE_MODULES.map(m => m.key)))
+          setSelected(new Set([...configKeys, 'profile']))
+          setOrder([...defaultOrder])
         }
       })
   }, [])
 
+  // Profile is always visible — never toggle it
   function toggle(key) {
+    if (key === 'profile') return
     setSelected(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
   }
 
   async function save() {
     setSaving(true)
-    const allKeys = ORG_CONFIGURABLE_MODULES.map(m => m.key)
-    const selectedKeys = allKeys.filter(k => selected.has(k))
-    const toSave = selectedKeys.length === allKeys.length ? null : selectedKeys
-    const value = toSave === null ? null : JSON.stringify(toSave)
+    const ordered = (order || defaultOrder).filter(k => selected.has(k))
+    const isDefault = ordered.length === defaultOrder.length && ordered.every((k, i) => k === defaultOrder[i])
+    const value = isDefault ? null : JSON.stringify(ordered)
     if (value === null) {
       await sb.from('settings').delete().eq('key', 'app_allowed_modules')
     } else {
@@ -829,88 +857,156 @@ function AppModulesModal({ onClose }) {
     <button onClick={() => setTab(key)} style={{ padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: tab === key ? 'var(--accent)' : 'var(--surface2)', color: tab === key ? '#fff' : 'var(--text2)' }}>{label}</button>
   )
 
+  // Resolve full module meta for display (includes profile from ALL_MODULES_META)
+  const dispModules = order ? order.map(k => ALL_MODULES_META.find(m => m.key === k)).filter(Boolean) : []
+
   return (
-    <Modal onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontWeight: 600, fontSize: 16 }}>Dashboard Icons — Main App (Global)</div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, lineHeight: 1.6 }}>
-        Control which icons are available across the entire app, and optionally upload background images for each icon card.
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>{tabBtn('icons', 'Icon Access')}{tabBtn('images', 'Icon Images')}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
 
-      {tab === 'icons' && (
-        selected === null ? <div className="spinner" style={{ margin: '20px auto' }} /> : (
-          <>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-              <button className="btn btn-sm" onClick={() => setSelected(new Set(ORG_CONFIGURABLE_MODULES.map(m => m.key)))}>Select all</button>
-              <button className="btn btn-sm" onClick={() => setSelected(new Set())}>Clear all</button>
+        {/* Header */}
+        <div style={{ padding: '22px 28px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>Dashboard Icons — Main App (Global)</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, lineHeight: 1.5 }}>
+                Control which icons are available across the entire app, and optionally upload background images for each icon card.
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, maxHeight: '55vh', overflowY: 'auto' }}>
-              {ORG_CONFIGURABLE_MODULES.map(m => (
-                <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${selected.has(m.key) ? 'var(--accent)' : 'var(--border)'}`, background: selected.has(m.key) ? 'var(--accent-light)' : 'var(--surface)' }}>
-                  <input type="checkbox" checked={selected.has(m.key)} onChange={() => toggle(m.key)} style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
-                  <span style={{ fontSize: 18, lineHeight: 1 }}>{m.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{m.sub}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" onClick={save} disabled={saving || selected === null}>{saving ? 'Saving…' : 'Save'}</button>
-              <button className="btn" onClick={onClose}>Cancel</button>
-            </div>
-          </>
-        )
-      )}
-
-      {tab === 'images' && (
-        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingBottom: 8 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
-            These images appear as backgrounds on dashboard icon cards for all team users. Best size: landscape ~800×500 px. Org admins can override images for their own organization.
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 0 0 12px', flexShrink: 0 }}>×</button>
           </div>
-          <GlobalImageGrid modules={ORG_IMAGE_MODULES} imagePrefix="img_" alsoPrefix="solo_img_" />
+          <div style={{ display: 'flex', gap: 6, margin: '14px 0 0' }}>{tabBtn('icons', 'Icon Access')}{tabBtn('images', 'Icon Images')}</div>
         </div>
-      )}
-    </Modal>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 28px' }}>
+          {tab === 'icons' && (
+            !selected ? <div className="spinner" style={{ margin: '40px auto' }} /> : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text2)' }}>
+                    {/* Don't count profile in the "X enabled" figure — it's always on */}
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{[...selected].filter(k => k !== 'profile').length}</span> of {configKeys.length} enabled
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setSelected(new Set([...configKeys, 'profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
+                    <span style={{ color: 'var(--border)' }}>·</span>
+                    <button onClick={() => setSelected(new Set(['profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 14 }}>
+                  💡 This is how the dashboard looks to team users. Drag cards to reorder. Click to enable/disable. Profile is always visible.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, paddingBottom: 8 }}>
+                  {dispModules.map(m => {
+                    const pinned = m.key === 'profile'
+                    const sel = pinned || selected.has(m.key)
+                    const isDragging = dragKey === m.key
+                    const isOver = dragOver === m.key && dragKey !== m.key
+                    return (
+                      <div key={m.key}
+                        draggable
+                        onDragStart={e => { dragRef.current = m.key; e.dataTransfer.effectAllowed = 'move'; setDragKey(m.key) }}
+                        onDragOver={e => { e.preventDefault(); setDragOver(m.key) }}
+                        onDrop={e => {
+                          e.preventDefault()
+                          const src = dragRef.current
+                          if (!src || src === m.key) { setDragKey(null); setDragOver(null); return }
+                          setOrder(ord => {
+                            const from = ord.indexOf(src), to = ord.indexOf(m.key)
+                            if (from === -1 || to === -1) return ord
+                            const next = [...ord]; next.splice(from, 1); next.splice(to, 0, src); return next
+                          })
+                          dragRef.current = null; setDragKey(null); setDragOver(null)
+                        }}
+                        onDragEnd={() => { dragRef.current = null; setDragKey(null); setDragOver(null) }}
+                        onClick={() => toggle(m.key)}
+                        style={{ opacity: isDragging ? 0.35 : (pinned ? 0.8 : 1), outline: isOver ? `2px dashed var(--accent)` : 'none', borderRadius: 12, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                        <div style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '14px 14px 12px', position: 'relative', transition: 'all 0.15s', userSelect: 'none' }}>
+                          <div style={{ position: 'absolute', top: 9, right: 9, width: 20, height: 20, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', pointerEvents: 'none' }}>
+                            {sel && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                          </div>
+                          <div style={{ fontSize: 26, marginBottom: 7, pointerEvents: 'none' }}>{m.icon}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 22, pointerEvents: 'none' }}>{m.label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
+                          {pinned && <div style={{ marginTop: 6, fontSize: 10, color: m.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )
+          )}
+
+          {tab === 'images' && (
+            <>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+                These images appear as backgrounds on dashboard icon cards for all team users. Best size: landscape ~800×500 px. Org admins can override images for their own organization.
+              </div>
+              <GlobalImageGrid modules={ORG_IMAGE_MODULES} imagePrefix="img_" alsoPrefix="solo_img_" />
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {tab === 'icons' && selected && (
+          <div style={{ padding: '16px 28px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, background: 'var(--surface)' }}>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & apply →'}</button>
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
 // ── Solo users global modules modal (super admin only) ────────
-const SOLO_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked && m.key !== 'profile')
 const SOLO_IMAGE_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked)
 
 function SoloModulesModal({ onClose }) {
   const { toast } = useAppStore()
+  const configKeys = SOLO_GLOBAL_MODULES.map(m => m.key)
+  const defaultOrder = [...configKeys, 'profile']
   const [selected, setSelected] = useState(null)
+  const [order, setOrder] = useState(null)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState('icons')
+  const [dragKey, setDragKey] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
+  const dragRef = useRef(null)
 
   useEffect(() => {
     sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle()
       .then(({ data }) => {
         try {
           const parsed = data?.value ? JSON.parse(data.value) : null
-          setSelected(parsed ? new Set(parsed) : new Set(SOLO_CONFIGURABLE_MODULES.map(m => m.key)))
+          const selKeys = parsed ? parsed.filter(k => configKeys.includes(k)) : configKeys
+          setSelected(new Set([...selKeys, 'profile']))
+          if (parsed?.length) {
+            const savedValid = parsed.filter(k => defaultOrder.includes(k))
+            const missing = defaultOrder.filter(k => !savedValid.includes(k))
+            setOrder([...savedValid, ...missing])
+          } else {
+            setOrder([...defaultOrder])
+          }
         } catch {
-          setSelected(new Set(SOLO_CONFIGURABLE_MODULES.map(m => m.key)))
+          setSelected(new Set([...configKeys, 'profile']))
+          setOrder([...defaultOrder])
         }
       })
   }, [])
 
   function toggle(key) {
+    if (key === 'profile') return
     setSelected(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
   }
 
   async function save() {
     setSaving(true)
-    const allKeys = SOLO_CONFIGURABLE_MODULES.map(m => m.key)
-    const selectedKeys = allKeys.filter(k => selected.has(k))
-    const toSave = selectedKeys.length === allKeys.length ? null : selectedKeys
-    const value = toSave === null ? null : JSON.stringify(toSave)
+    const ordered = (order || defaultOrder).filter(k => selected.has(k))
+    const isDefault = ordered.length === defaultOrder.length && ordered.every((k, i) => k === defaultOrder[i])
+    const value = isDefault ? null : JSON.stringify(ordered)
     if (value === null) {
       await sb.from('settings').delete().eq('key', 'solo_allowed_modules')
     } else {
@@ -925,56 +1021,108 @@ function SoloModulesModal({ onClose }) {
     <button onClick={() => setTab(key)} style={{ padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: tab === key ? '#534AB7' : 'var(--surface2)', color: tab === key ? '#fff' : 'var(--text2)' }}>{label}</button>
   )
 
+  const dispModules = order ? order.map(k => ALL_MODULES_META.find(m => m.key === k)).filter(Boolean) : []
+
   return (
-    <Modal onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontWeight: 600, fontSize: 16 }}>Dashboard Icons — Solo Users (Global)</div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, lineHeight: 1.6 }}>
-        Control which icons solo users can see, and optionally upload background images for each icon card.
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>{tabBtn('icons', 'Icon Access')}{tabBtn('images', 'Icon Images')}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
 
-      {tab === 'icons' && (
-        selected === null ? <div className="spinner" style={{ margin: '20px auto' }} /> : (
-          <>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-              <button className="btn btn-sm" onClick={() => setSelected(new Set(SOLO_CONFIGURABLE_MODULES.map(m => m.key)))}>Select all</button>
-              <button className="btn btn-sm" onClick={() => setSelected(new Set())}>Clear all</button>
+        {/* Header */}
+        <div style={{ padding: '22px 28px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>Dashboard Icons — Solo Users (Global)</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, lineHeight: 1.5 }}>
+                Control which icons solo users can see, and optionally upload background images for each icon card.
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, maxHeight: '55vh', overflowY: 'auto' }}>
-              {SOLO_CONFIGURABLE_MODULES.map(m => (
-                <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${selected.has(m.key) ? '#534AB7' : 'var(--border)'}`, background: selected.has(m.key) ? '#EEEDFE' : 'var(--surface)' }}>
-                  <input type="checkbox" checked={selected.has(m.key)} onChange={() => toggle(m.key)} style={{ width: 16, height: 16, accentColor: '#534AB7' }} />
-                  <span style={{ fontSize: 18, lineHeight: 1 }}>{m.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{m.sub}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={save} disabled={saving || selected === null}
-                style={{ padding: '9px 22px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: (saving || selected === null) ? 'not-allowed' : 'pointer', opacity: (saving || selected === null) ? 0.6 : 1 }}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button className="btn" onClick={onClose}>Cancel</button>
-            </div>
-          </>
-        )
-      )}
-
-      {tab === 'images' && (
-        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingBottom: 8 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
-            These images appear as backgrounds on dashboard icon cards for all solo users. Best size: landscape ~800×500 px.
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 0 0 12px', flexShrink: 0 }}>×</button>
           </div>
-          <GlobalImageGrid modules={SOLO_IMAGE_MODULES} imagePrefix="solo_img_" />
+          <div style={{ display: 'flex', gap: 6, margin: '14px 0 0' }}>{tabBtn('icons', 'Icon Access')}{tabBtn('images', 'Icon Images')}</div>
         </div>
-      )}
-    </Modal>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 28px' }}>
+          {tab === 'icons' && (
+            !selected ? <div className="spinner" style={{ margin: '40px auto' }} /> : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text2)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{[...selected].filter(k => k !== 'profile').length}</span> of {configKeys.length} enabled
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setSelected(new Set([...configKeys, 'profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: '#534AB7', fontWeight: 600 }}>Select all</button>
+                    <span style={{ color: 'var(--border)' }}>·</span>
+                    <button onClick={() => setSelected(new Set(['profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 14 }}>
+                  💡 This is how the dashboard looks to solo users. Drag cards to reorder. Click to enable/disable. Profile is always visible.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, paddingBottom: 8 }}>
+                  {dispModules.map(m => {
+                    const pinned = m.key === 'profile'
+                    const sel = pinned || selected.has(m.key)
+                    const isDragging = dragKey === m.key
+                    const isOver = dragOver === m.key && dragKey !== m.key
+                    return (
+                      <div key={m.key}
+                        draggable
+                        onDragStart={e => { dragRef.current = m.key; e.dataTransfer.effectAllowed = 'move'; setDragKey(m.key) }}
+                        onDragOver={e => { e.preventDefault(); setDragOver(m.key) }}
+                        onDrop={e => {
+                          e.preventDefault()
+                          const src = dragRef.current
+                          if (!src || src === m.key) { setDragKey(null); setDragOver(null); return }
+                          setOrder(ord => {
+                            const from = ord.indexOf(src), to = ord.indexOf(m.key)
+                            if (from === -1 || to === -1) return ord
+                            const next = [...ord]; next.splice(from, 1); next.splice(to, 0, src); return next
+                          })
+                          dragRef.current = null; setDragKey(null); setDragOver(null)
+                        }}
+                        onDragEnd={() => { dragRef.current = null; setDragKey(null); setDragOver(null) }}
+                        onClick={() => toggle(m.key)}
+                        style={{ opacity: isDragging ? 0.35 : (pinned ? 0.8 : 1), outline: isOver ? '2px dashed #534AB7' : 'none', borderRadius: 12, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                        <div style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '14px 14px 12px', position: 'relative', transition: 'all 0.15s', userSelect: 'none' }}>
+                          <div style={{ position: 'absolute', top: 9, right: 9, width: 20, height: 20, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', pointerEvents: 'none' }}>
+                            {sel && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                          </div>
+                          <div style={{ fontSize: 26, marginBottom: 7, pointerEvents: 'none' }}>{m.icon}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 22, pointerEvents: 'none' }}>{m.label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
+                          {pinned && <div style={{ marginTop: 6, fontSize: 10, color: m.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )
+          )}
+
+          {tab === 'images' && (
+            <>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+                These images appear as backgrounds on dashboard icon cards for all solo users. Best size: landscape ~800×500 px.
+              </div>
+              <GlobalImageGrid modules={SOLO_IMAGE_MODULES} imagePrefix="solo_img_" />
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {tab === 'icons' && selected && (
+          <div style={{ padding: '16px 28px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, background: 'var(--surface)' }}>
+            <button onClick={save} disabled={saving}
+              style={{ padding: '10px 28px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Save & apply →'}
+            </button>
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -1334,9 +1482,39 @@ export default function Admin() {
   }
 
   async function deleteOrg(id) {
-    if (!confirm('Delete this organization? All linked users will lose their org assignment.')) return
-    const { error: unlinkErr } = await sb.from('users').update({ organization_id: null }).eq('organization_id', id)
-    if (unlinkErr) { toast('Delete failed: ' + unlinkErr.message); return }
+    if (!confirm('Delete this organization and ALL its data (users, projects, tasks, messages)? This cannot be undone.')) return
+
+    // Delete project-nested data first
+    const { data: orgProjects } = await sb.from('projects').select('id').eq('organization_id', id)
+    const projectIds = (orgProjects || []).map(p => p.id)
+    if (projectIds.length) {
+      await sb.from('test_result_entries').delete().in('project_id', projectIds)
+      await sb.from('project_record_files').delete().in('project_id', projectIds)
+      await sb.from('project_results').delete().in('project_id', projectIds)
+      await sb.from('project_links').delete().in('project_id', projectIds)
+      await sb.from('projects').delete().eq('organization_id', id)
+    }
+
+    // Delete task attachments before tasks
+    const { data: orgTasks } = await sb.from('tasks').select('id').eq('organization_id', id)
+    const taskIds = (orgTasks || []).map(t => t.id)
+    if (taskIds.length) await sb.from('task_attachments').delete().in('task_id', taskIds)
+    await sb.from('tasks').delete().eq('organization_id', id)
+
+    // Delete other org-scoped data
+    await sb.from('re_messages').delete().eq('organization_id', id)
+    await sb.from('user_out_of_lab').delete().eq('organization_id', id)
+
+    // Delete user-scoped data before deleting users
+    const { data: orgUsers } = await sb.from('users').select('id').eq('organization_id', id)
+    const userIds = (orgUsers || []).map(u => u.id)
+    if (userIds.length) {
+      await sb.from('user_screen_access').delete().in('user_id', userIds)
+      await sb.from('user_dashboard_prefs').delete().in('user_id', userIds)
+    }
+    await sb.from('users').delete().eq('organization_id', id)
+
+    // Now safe to delete the org
     const { error } = await sb.from('organizations').delete().eq('id', id)
     if (error) { toast('Delete failed: ' + error.message); return }
     loadOrgs(); loadUsers()
