@@ -1482,39 +1482,17 @@ export default function Admin() {
   }
 
   async function deleteOrg(id) {
-    if (!confirm('Delete this organization and ALL its data (users, projects, tasks, messages)? This cannot be undone.')) return
+    if (!confirm('Delete this organization and ALL its data? This cannot be undone.')) return
 
-    // Delete project-nested data first
-    const { data: orgProjects } = await sb.from('projects').select('id').eq('organization_id', id)
-    const projectIds = (orgProjects || []).map(p => p.id)
-    if (projectIds.length) {
-      await sb.from('test_result_entries').delete().in('project_id', projectIds)
-      await sb.from('project_record_files').delete().in('project_id', projectIds)
-      await sb.from('project_results').delete().in('project_id', projectIds)
-      await sb.from('project_links').delete().in('project_id', projectIds)
-      await sb.from('projects').delete().eq('organization_id', id)
-    }
-
-    // Delete task attachments before tasks
-    const { data: orgTasks } = await sb.from('tasks').select('id').eq('organization_id', id)
-    const taskIds = (orgTasks || []).map(t => t.id)
-    if (taskIds.length) await sb.from('task_attachments').delete().in('task_id', taskIds)
-    await sb.from('tasks').delete().eq('organization_id', id)
-
-    // Delete other org-scoped data
-    await sb.from('re_messages').delete().eq('organization_id', id)
-    await sb.from('user_out_of_lab').delete().eq('organization_id', id)
-
-    // Delete user-scoped data before deleting users
+    // Clean up user-linked tables before users are removed by cascade
     const { data: orgUsers } = await sb.from('users').select('id').eq('organization_id', id)
     const userIds = (orgUsers || []).map(u => u.id)
     if (userIds.length) {
       await sb.from('user_screen_access').delete().in('user_id', userIds)
       await sb.from('user_dashboard_prefs').delete().in('user_id', userIds)
     }
-    await sb.from('users').delete().eq('organization_id', id)
 
-    // Now safe to delete the org
+    // DB CASCADE handles all organization_id-linked tables automatically
     const { error } = await sb.from('organizations').delete().eq('id', id)
     if (error) { toast('Delete failed: ' + error.message); return }
     loadOrgs(); loadUsers()
