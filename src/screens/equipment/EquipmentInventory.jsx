@@ -107,7 +107,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
               {isSolo
                 ? soloCats.length === 0
                   ? <div style={{ fontSize: 13, color: '#92400e', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '8px 12px' }}>
-                      No categories yet — open the <strong>Equipment Hub</strong> icon and go to the <strong>Categories</strong> tab to create them first.
+                      No categories yet — open the <strong>Equipment</strong> icon and go to the <strong>Categories</strong> tab to create them first.
                     </div>
                   : <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                       <option value="">— Select —</option>

@@ -53,7 +53,7 @@ const MODULE_IMAGE_DEFS = [
   { key: 'projects',       label: 'Project Workspace',  icon: '🧪' },
   { key: 'training',       label: 'Training Records',    icon: '🎓' },
   { key: 'equipment',      label: 'Equipment List', icon: '🔧' },
-  { key: 'equipmenthub',   label: 'Equipment Hub',       icon: '📚' },
+  { key: 'equipmenthub',   label: 'Equipment',           icon: '📚' },
   { key: 'booking',        label: 'Reserve Equipment',   icon: '📅' },
   { key: 'remessages',     label: 'RE Messages',         icon: '💬' },
   { key: 'pm',             label: 'Task Board',  icon: '📋' },
@@ -443,7 +443,7 @@ function OrgIconPoolsPanel({ orgId }) {
 const STUDENT_ICON_OPTIONS = [
   { key: 'projects',     label: 'Project Workspace',   icon: '🧪' },
   { key: 'training',     label: 'Training Records',      icon: '🎓' },
-  { key: 'equipmenthub', label: 'Equipment Hub',         icon: '📚' },
+  { key: 'equipmenthub', label: 'Equipment',             icon: '📚' },
   { key: 'booking',      label: 'Reserve Equipment',     icon: '📅' },
   { key: 'barcode',      label: 'QR Scan',               icon: '📷' },
   { key: 'remessages',   label: 'Lab Messages',   icon: '💬' },

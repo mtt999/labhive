@@ -50,7 +50,7 @@ const HELP_CONTENT = {
     ],
   },
   equipmenthub: {
-    title: 'Equipment Hub',
+    title: 'Equipment',
     description: 'Browse all lab equipment. View photos, training videos, SOPs, and standards for each piece of equipment.',
     tips: [
       'Search or filter by category in the left panel',

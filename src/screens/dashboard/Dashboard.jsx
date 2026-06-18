@@ -226,7 +226,7 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     { key:'projects',    icon:'🧪', label:'Project Workspace',   sub:'Inventory, results & workspace', screen:'projects',    color:'#7c4dbd' },
     { key:'training',    icon:'🎓', label:'Training Records',     sub:'Check your certs',               screen:'training',    color:'#0369a1' },
     { key:'booking',     icon:'📅', label:'Book Equipment',       sub:'Reserve lab equipment',          screen:'booking',     color:'#0369a1' },
-    { key:'equipmenthub',icon:'📚', label:'Equipment Hub',       sub:'SOPs & standards',               screen:'equipmenthub',color:'#1e4d39' },
+    { key:'equipmenthub',icon:'📚', label:'Equipment',            sub:'SOPs & standards',               screen:'equipmenthub',color:'#1e4d39' },
     { key:'barcode',     icon:'📷', label:'QR Scan',               sub:'Scan lab materials',             screen:'barcode',     color:'#00796b' },
     { key:'remessages',  icon:'💬', label:'Lab Messages',  sub:'Ask REs a question',             screen:'remessages',  color:'#2a6049' },
     { key:'mileage',     icon:'🚗', label:'Mileage Form',         sub:'Submit reimbursement',           screen:null,          color:'#c84b2f', external:true },

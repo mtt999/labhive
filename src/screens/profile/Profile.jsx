@@ -10,6 +10,14 @@ import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 
+async function notifyOrgManagers(organizationId, message, type = 'info', excludeUserId = null) {
+  let q = sb.from('users').select('id').eq('organization_id', organizationId).in('role', ['user', 'admin']).eq('is_active', true)
+  if (excludeUserId) q = q.neq('id', excludeUserId)
+  const { data: managers } = await q
+  if (!managers?.length) return
+  await sb.from('notifications').insert(managers.map(m => ({ user_id: m.id, message, type, read: false })))
+}
+
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
 const DEGREES = ['MS', 'PhD', 'BS', 'Other']
 const SEMESTERS = ['Fall', 'Spring', 'Summer']
@@ -128,6 +136,8 @@ function SoloProfile({ session }) {
         <HelpPanel screen="profile" />
       </div>
 
+      <WorkspaceTransferBanner session={session} />
+
       {/* Avatar card */}
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20 }}>
         <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--surface2)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
@@ -222,12 +232,144 @@ function SoloProfile({ session }) {
   )
 }
 
+// ══════════════════════════════════════════════════════════════
+// WORKSPACE TRANSFER BANNER — shown when a pending transfer request exists
+// ══════════════════════════════════════════════════════════════
+function WorkspaceTransferBanner({ session }) {
+  const { toast, sharedWorkspaces, setSharedWorkspaces } = useAppStore()
+  const [requests, setRequests] = useState([])
+  const [processing, setProcessing] = useState(null)
+
+  useEffect(() => { loadRequests() }, [])
+
+  async function loadRequests() {
+    const { data } = await sb
+      .from('solo_workspace_transfer_requests')
+      .select('*')
+      .eq('member_id', session.userId)
+      .eq('status', 'pending')
+    setRequests(data || [])
+  }
+
+  async function deleteOwnerData(ownerId) {
+    const { data: projs } = await sb.from('projects').select('id').eq('solo_owner_id', ownerId)
+    if (projs?.length) {
+      const ids = projs.map(p => p.id)
+      await sb.from('project_results').delete().in('project_id', ids)
+      await sb.from('project_links').delete().in('project_id', ids)
+      await sb.from('projects').delete().in('id', ids)
+    }
+    await sb.from('solo_workspace_members').delete().eq('owner_id', ownerId)
+    await sb.from('solo_workspace_invites').delete().eq('owner_id', ownerId)
+    await sb.from('solo_workspace_transfer_requests').delete().eq('owner_id', ownerId)
+    await sb.from('solo_users').delete().eq('id', ownerId)
+  }
+
+  async function handleAccept(req) {
+    setProcessing(req.owner_id)
+    try {
+      const newOwner = session.userId
+      const oldOwner = req.owner_id
+      await sb.from('projects').update({ solo_owner_id: newOwner }).eq('solo_owner_id', oldOwner)
+      const { data: oldMembers } = await sb.from('solo_workspace_members').select('member_id').eq('owner_id', oldOwner)
+      const toInsert = (oldMembers || []).filter(m => m.member_id !== newOwner).map(m => ({ owner_id: newOwner, member_id: m.member_id }))
+      if (toInsert.length) await sb.from('solo_workspace_members').insert(toInsert)
+      await sb.from('solo_workspace_members').delete().eq('owner_id', oldOwner)
+      await sb.from('solo_workspace_invites').delete().eq('owner_id', oldOwner)
+      await sb.from('solo_workspace_transfer_requests').delete().eq('owner_id', oldOwner)
+      await sb.from('solo_users').delete().eq('id', oldOwner)
+      setSharedWorkspaces((sharedWorkspaces || []).filter(ws => ws.ownerId !== oldOwner))
+      toast('Workspace transferred. You are now the workspace owner.')
+      setRequests(r => r.filter(x => x.owner_id !== oldOwner))
+    } catch (err) {
+      toast('Transfer failed: ' + (err.message || String(err)))
+    }
+    setProcessing(null)
+  }
+
+  async function handleDecline(req) {
+    setProcessing(req.owner_id)
+    try {
+      await sb.from('solo_workspace_transfer_requests').update({ status: 'declined' }).eq('id', req.id)
+      const { data: remaining } = await sb.from('solo_workspace_transfer_requests')
+        .select('id').eq('owner_id', req.owner_id).eq('status', 'pending')
+      if (!remaining?.length) await deleteOwnerData(req.owner_id)
+      setSharedWorkspaces((sharedWorkspaces || []).filter(ws => ws.ownerId !== req.owner_id))
+      toast('Transfer declined.')
+      setRequests(r => r.filter(x => x.id !== req.id))
+    } catch (err) {
+      toast('Error: ' + (err.message || String(err)))
+    }
+    setProcessing(null)
+  }
+
+  if (!requests.length) return null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {requests.map(req => (
+        <div key={req.id} className="card" style={{ border: '1.5px solid #f59e0b', background: '#fffbeb' }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#92400e', marginBottom: 8 }}>Workspace Transfer Request</div>
+          <p style={{ fontSize: 14, color: '#78350f', marginBottom: 8, lineHeight: 1.6 }}>
+            <strong>{req.owner_name}</strong> is deleting their account and has offered you ownership of their workspace.
+            If you accept, all shared projects and data will transfer to you. If you decline and all teammates decline, the data will be permanently deleted.
+          </p>
+          <p style={{ fontSize: 12, color: '#92400e', marginBottom: 14 }}>
+            Expires: {new Date(req.expires_at).toLocaleDateString()}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={() => handleAccept(req)} disabled={!!processing}
+              style={{ background: '#16a34a', borderColor: '#16a34a' }}>
+              {processing === req.owner_id ? 'Processing…' : 'Accept & Take Ownership'}
+            </button>
+            <button className="btn" onClick={() => handleDecline(req)} disabled={!!processing}>Decline</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SoloDeleteAccountPanel({ session, clearSession, toast }) {
   const [typed, setTyped] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [step, setStep] = useState('confirm') // 'confirm' | 'notify'
+  const [teammates, setTeammates] = useState([])
+  const [loadingTeammates, setLoadingTeammates] = useState(true)
+
+  useEffect(() => { loadTeammates() }, [])
+
+  async function loadTeammates() {
+    const { data: members } = await sb.from('solo_workspace_members').select('member_id').eq('owner_id', session.userId)
+    if (!members?.length) { setLoadingTeammates(false); return }
+    const { data: users } = await sb.from('solo_users').select('id, name, email').in('id', members.map(m => m.member_id))
+    setTeammates(users || [])
+    setLoadingTeammates(false)
+  }
 
   async function handleDelete() {
     if (typed !== 'DELETE') return
+    if (teammates.length > 0) { setStep('notify'); return }
+    await doImmediateDelete()
+  }
+
+  async function notifyAndPendDelete() {
+    setDeleting(true)
+    try {
+      const uid = session.userId
+      await sb.from('solo_workspace_transfer_requests').insert(
+        teammates.map(m => ({ owner_id: uid, owner_name: session.username || 'A user', member_id: m.id }))
+      )
+      await sb.from('solo_users').update({ deletion_requested_at: new Date().toISOString() }).eq('id', uid)
+      await sb.auth.signOut()
+      clearSession()
+    } catch (err) {
+      toast('Error: ' + (err.message || String(err)))
+      setDeleting(false)
+    }
+  }
+
+  async function doImmediateDelete() {
     setDeleting(true)
     try {
       const uid = session.userId
@@ -250,6 +392,34 @@ function SoloDeleteAccountPanel({ session, clearSession, toast }) {
       toast('Error deleting account: ' + (err.message || String(err)))
       setDeleting(false)
     }
+  }
+
+  if (loadingTeammates) return <div className="card" style={{ border: '1.5px solid #fca5a5' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+
+  if (step === 'notify') {
+    return (
+      <div className="card" style={{ border: '1.5px solid #fca5a5' }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: '#b91c1c', marginBottom: 8 }}>Notify Teammates</div>
+        <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.6 }}>
+          You have <strong>{teammates.length} teammate{teammates.length !== 1 ? 's' : ''}</strong> sharing your workspace.
+          They will be notified and given <strong>7 days</strong> to take over your workspace data.
+          If no one accepts, all data will be permanently deleted.
+        </p>
+        <div style={{ marginBottom: 16 }}>
+          {teammates.map(t => (
+            <div key={t.id} style={{ padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8, marginBottom: 6, fontSize: 14 }}>
+              <strong>{t.name}</strong>{t.email ? ` — ${t.email}` : ''}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-danger" onClick={notifyAndPendDelete} disabled={deleting}>
+            {deleting ? 'Processing…' : 'Notify teammates & delete my account'}
+          </button>
+          <button className="btn" onClick={() => setStep('confirm')} disabled={deleting}>Cancel</button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -280,6 +450,7 @@ function DashboardIconsPanel({ session }) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = session?.role === 'admin' || session?.role === 'user'
   const pinnedKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  const uiPinnedKeys = PINNED_MODULES // grayed-out + non-draggable (profile only)
   const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
 
   const [selected, setSelected] = useState(null)
@@ -322,7 +493,7 @@ function DashboardIconsPanel({ session }) {
         const savedArr = soloRes.data?.active_modules?.length
           ? soloRes.data.active_modules.filter(k => displayKeys.includes(k))
           : null
-        setSelected(new Set(savedArr || displayKeys))
+        setSelected(new Set([...pinnedKeys, ...(savedArr || displayKeys)]))
         setDisplayOrder(initOrder(savedArr, displayKeys))
       } else {
         const [prefsRes, orgResRaw, appRes] = await Promise.all([
@@ -355,14 +526,16 @@ function DashboardIconsPanel({ session }) {
           const savedArr = data?.active_modules?.length
             ? data.active_modules.filter(k => poolKeys.includes(k) || pinnedKeys.includes(k))
             : poolKeys
-          setSelected(new Set(savedArr))
+          // Always include pinnedKeys so they are never filtered out on save
+          setSelected(new Set([...pinnedKeys, ...savedArr]))
           setDisplayOrder(initOrder(savedArr, poolKeys))
         } else {
           const displayKeys = effectivePool !== null ? allKeys.filter(k => effectivePool.includes(k) || pinnedKeys.includes(k)) : allKeys
           const savedArr = data?.active_modules?.length
             ? data.active_modules.filter(k => displayKeys.includes(k))
             : null
-          setSelected(new Set(savedArr || displayKeys))
+          // Always include pinnedKeys so they are never filtered out on save
+          setSelected(new Set([...pinnedKeys, ...(savedArr || displayKeys)]))
           setDisplayOrder(initOrder(savedArr, displayKeys))
         }
       }
@@ -436,7 +609,7 @@ function DashboardIconsPanel({ session }) {
   const selectedCount = selected.size
 
   function handleDragStart(e, key) {
-    if (pinnedKeys.includes(key)) return
+    if (uiPinnedKeys.includes(key)) return
     dragKeyRef.current = key
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', key)
@@ -485,7 +658,8 @@ function DashboardIconsPanel({ session }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, marginBottom: 24 }}>
         {displayModules.map(m => {
-          const pinned = pinnedKeys.includes(m.key)
+          const uiPinned = uiPinnedKeys.includes(m.key)
+          const alwaysOn = !uiPinned && pinnedKeys.includes(m.key) // draggable but cannot be removed
           const locked = isSolo && !!m.soloLocked
           const sel = selected.has(m.key)
           const isDragging = dragKey === m.key
@@ -503,25 +677,166 @@ function DashboardIconsPanel({ session }) {
 
           return (
             <div key={m.key}
-              draggable={!pinned}
+              draggable={!uiPinned}
               onDragStart={e => handleDragStart(e, m.key)}
               onDragOver={e => handleDragOver(e, m.key)}
               onDrop={e => handleDrop(e, m.key)}
               onDragEnd={handleDragEnd}
-              onClick={() => !pinned && toggle(m.key)}
-              style={{ borderRadius: 12, border: isOver ? `2px dashed ${loginMode === 'solo' ? '#534AB7' : 'var(--accent)'}` : sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '14px 14px 12px', cursor: pinned ? 'default' : 'grab', position: 'relative', transition: 'opacity 0.15s', opacity: isDragging ? 0.35 : pinned ? 0.7 : 1, userSelect: 'none' }}>
+              onClick={() => !uiPinned && toggle(m.key)}
+              style={{ borderRadius: 12, border: isOver ? `2px dashed ${loginMode === 'solo' ? '#534AB7' : 'var(--accent)'}` : sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '14px 14px 12px', cursor: uiPinned ? 'default' : 'grab', position: 'relative', transition: 'opacity 0.15s', opacity: isDragging ? 0.35 : uiPinned ? 0.7 : 1, userSelect: 'none' }}>
               <div style={{ position: 'absolute', top: 9, right: 9, width: 20, height: 20, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 {sel && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </div>
               <div style={{ fontSize: 26, marginBottom: 7, pointerEvents: 'none' }}>{m.icon}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 22, pointerEvents: 'none' }}>{m.label}</div>
               <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
-              {pinned && <div style={{ marginTop: 6, fontSize: 10, color: m.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
+              {(uiPinned || alwaysOn) && <div style={{ marginTop: 6, fontSize: 10, color: m.color, fontWeight: 600, pointerEvents: 'none' }}>Always visible</div>}
             </div>
           )
         })}
       </div>
       <button className="btn btn-primary" onClick={save} disabled={saving || !selected}>{saving ? 'Saving…' : 'Save dashboard icons'}</button>
+      {isSolo && <CustomLinksManager session={session} />}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// CUSTOM EXTERNAL LINKS MANAGER — solo users only, max 2 links
+// ══════════════════════════════════════════════════════════════
+function CustomLinksManager({ session }) {
+  const { toast } = useAppStore()
+  const [links, setLinks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null) // null | { idx: number | -1, label, url, image_url, enabled }
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    const { data } = await sb.from('solo_users').select('custom_external_links').eq('id', session.userId).maybeSingle()
+    setLinks(data?.custom_external_links || [])
+    setLoading(false)
+  }
+
+  async function persist(newLinks) {
+    await sb.from('solo_users').update({ custom_external_links: newLinks }).eq('id', session.userId)
+    setLinks(newLinks)
+  }
+
+  async function uploadImage(file) {
+    if (!file?.type.startsWith('image/')) { toast('Please select an image.'); return }
+    setUploading(true)
+    try {
+      const compressed = await new Promise(resolve => {
+        const img = new Image(), url = URL.createObjectURL(file)
+        img.onload = () => {
+          const s = Math.min(1, 400 / Math.max(img.width, img.height))
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.round(img.width * s); canvas.height = Math.round(img.height * s)
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+          URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
+        }
+        img.src = url
+      })
+      const path = `avatars/solo_link_${session.userId}_${Date.now()}.jpg`
+      await sb.storage.from('project-files').upload(path, compressed, { contentType: 'image/jpeg' })
+      const imageUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
+      setEditing(e => ({ ...e, image_url: imageUrl }))
+      toast('Image uploaded ✓')
+    } catch (err) { toast('Upload failed: ' + (err?.message || String(err))) }
+    setUploading(false)
+  }
+
+  async function saveLink() {
+    if (!editing.label.trim()) { toast('Label is required.'); return }
+    if (!editing.url.trim() || !/^https?:\/\//i.test(editing.url.trim())) { toast('Enter a valid URL starting with https://'); return }
+    const entry = { id: editing.idx === -1 ? Date.now().toString() : links[editing.idx].id, label: editing.label.trim(), url: editing.url.trim(), image_url: editing.image_url || '', enabled: editing.enabled }
+    const newLinks = editing.idx === -1 ? [...links, entry] : links.map((l, i) => i === editing.idx ? entry : l)
+    await persist(newLinks)
+    setEditing(null)
+    toast('Link saved ✓')
+  }
+
+  async function deleteLink(idx) {
+    await persist(links.filter((_, i) => i !== idx))
+    toast('Link removed.')
+  }
+
+  async function toggleEnabled(idx) {
+    await persist(links.map((l, i) => i === idx ? { ...l, enabled: !l.enabled } : l))
+  }
+
+  if (loading) return null
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🔗 Custom External Links</div>
+      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6 }}>
+        Add up to 2 custom shortcut icons on your dashboard that open external websites. Each icon can have a custom image and label.
+      </div>
+
+      {links.map((link, idx) => (
+        <div key={link.id} className="card" style={{ padding: '12px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {link.image_url
+            ? <img src={link.image_url} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+            : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🔗</div>
+          }
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.url}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={() => toggleEnabled(idx)}
+              style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 99, border: '1px solid', cursor: 'pointer',
+                background: link.enabled ? '#e8f2ee' : 'var(--surface2)',
+                color: link.enabled ? '#0f6e56' : 'var(--text3)',
+                borderColor: link.enabled ? '#0f6e56' : 'var(--border)' }}>
+              {link.enabled ? 'Visible' : 'Hidden'}
+            </button>
+            <button className="btn btn-sm" onClick={() => setEditing({ idx, ...link })}>Edit</button>
+            <button className="btn btn-sm btn-danger" onClick={() => deleteLink(idx)}>Remove</button>
+          </div>
+        </div>
+      ))}
+
+      {links.length < 2 && !editing && (
+        <button className="btn btn-sm btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7', marginTop: 4 }}
+          onClick={() => setEditing({ idx: -1, label: '', url: '', image_url: '', enabled: true })}>
+          + Add external link
+        </button>
+      )}
+
+      {editing && (
+        <div className="card" style={{ border: '1.5px solid #534AB7', marginTop: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#534AB7', marginBottom: 12 }}>{editing.idx === -1 ? 'New external link' : 'Edit link'}</div>
+          <div className="field">
+            <label>Label (shown on icon)</label>
+            <input value={editing.label} onChange={e => setEditing(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Mileage Form" maxLength={30} />
+          </div>
+          <div className="field">
+            <label>URL</label>
+            <input type="url" value={editing.url} onChange={e => setEditing(f => ({ ...f, url: e.target.value }))} placeholder="https://..." />
+          </div>
+          <div className="field">
+            <label>Icon image (optional)</label>
+            {editing.image_url && <img src={editing.image_url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', marginBottom: 8, display: 'block' }} />}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadImage(e.target.files[0])} />
+            <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳ Uploading…' : editing.image_url ? '🔄 Change image' : '⬆️ Upload image'}</button>
+            {editing.image_url && <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={() => setEditing(f => ({ ...f, image_url: '' }))}>Remove</button>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <input type="checkbox" id="link-enabled" checked={editing.enabled} onChange={e => setEditing(f => ({ ...f, enabled: e.target.checked }))} />
+            <label htmlFor="link-enabled" style={{ fontSize: 13, cursor: 'pointer' }}>Show on dashboard</label>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7' }} onClick={saveLink}>Save</button>
+            <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -546,7 +861,7 @@ function NotificationPrefsPanel({ userId, role }) {
       { key: 'training_expiring',  label: 'Training certificate expiring soon' },
       { key: 'training_submitted', label: 'Training submission received' },
     ]},
-    { title: '📋 Project Management', desc: 'Notifications from the PM workspace.', roles: ['user', 'admin'], events: [
+    { title: '📋 Task Board', desc: 'Notifications from the PM workspace.', roles: ['user', 'admin'], events: [
       { key: 'task_assigned',       label: 'Task assigned to me' },
       { key: 'task_comment',        label: 'New comment on my task' },
       { key: 'meeting_added',       label: 'New meeting task assigned to me' },
@@ -560,7 +875,7 @@ function NotificationPrefsPanel({ userId, role }) {
     { title: '🤝 Project Team', desc: 'Notifications about project team invites.', roles: ['student', 'user', 'admin'], events: [
       { key: 'team_invite', label: 'Project team invite received or accepted' },
     ]},
-    { title: '💬 Lab Messages', desc: 'Messages from the Contact Lab Manager feature.', roles: ['student', 'user', 'admin', 'solo'], events: [
+    { title: '💬 Lab Messages', desc: 'Messages from the Lab Messages feature.', roles: ['student', 'user', 'admin', 'solo'], events: [
       { key: 'message_reply', label: 'Reply received to my message' },
     ]},
   ].filter(s => s.roles.includes(role))
@@ -798,6 +1113,96 @@ function AdminSettings({ session: sessionProp, toast, isSuperAdmin = false }) {
   )
 }
 
+// ── Self-service delete for team users (staff / lab users) ──
+function TeamDeleteAccountPanel({ session, toast }) {
+  const [pending, setPending] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [orgUsers, setOrgUsers] = useState([])
+  const [suggestTo, setSuggestTo] = useState('')
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [{ data: req }, { data: users }] = await Promise.all([
+      sb.from('account_deletion_requests').select('*').eq('user_id', session.userId).eq('status', 'pending').maybeSingle(),
+      sb.from('users').select('id, name, role').eq('organization_id', session.organizationId).eq('is_active', true).neq('id', session.userId),
+    ])
+    setPending(req || null)
+    setOrgUsers(users || [])
+    setLoading(false)
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      const transferUser = suggestTo ? orgUsers.find(u => u.id === suggestTo) : null
+      await sb.from('account_deletion_requests').insert({
+        user_id: session.userId,
+        user_name: session.username,
+        organization_id: session.organizationId,
+        suggested_transfer_to: suggestTo || null,
+        suggested_transfer_name: transferUser?.name || null,
+      })
+      await notifyOrgManagers(session.organizationId, `${session.username} has submitted an account deletion request.`, 'deletion_request', session.userId)
+      await load()
+      toast('Request submitted. Your lab manager has been notified.')
+    } catch (err) {
+      toast('Error: ' + (err.message || String(err)))
+    }
+    setSubmitting(false)
+  }
+
+  async function handleCancel() {
+    await sb.from('account_deletion_requests').delete().eq('user_id', session.userId).eq('status', 'pending')
+    setPending(null)
+    toast('Deletion request cancelled.')
+  }
+
+  if (loading) return <div className="card" style={{ border: '1.5px solid #e5e7eb' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+
+  if (pending) {
+    return (
+      <div className="card" style={{ border: '1.5px solid #f59e0b', background: '#fffbeb' }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: '#92400e', marginBottom: 8 }}>Deletion Request Pending</div>
+        <p style={{ fontSize: 14, color: '#78350f', lineHeight: 1.6, marginBottom: 8 }}>
+          Your request has been submitted and is awaiting review by your lab manager.
+        </p>
+        <p style={{ fontSize: 12, color: '#92400e', marginBottom: 16 }}>
+          Submitted: {new Date(pending.requested_at).toLocaleDateString()}
+          {pending.suggested_transfer_name && ` · Suggested transfer to: ${pending.suggested_transfer_name}`}
+        </p>
+        <button className="btn" onClick={handleCancel}>Cancel request</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card" style={{ border: '1.5px solid #fca5a5' }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: '#b91c1c', marginBottom: 8 }}>Request Account Deletion</div>
+      <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+        Submit a deletion request to your lab manager. They will review it, optionally archive or transfer your data, and approve or deny it.
+      </p>
+      {orgUsers.length > 0 && (
+        <div className="field">
+          <label>Suggest who should receive your data (optional)</label>
+          <select value={suggestTo} onChange={e => setSuggestTo(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontFamily: 'var(--sans)', fontSize: 14, background: 'var(--surface)', color: 'var(--text1)' }}>
+            <option value="">No preference</option>
+            {orgUsers.map(u => (
+              <option key={u.id} value={u.id}>{u.name} ({u.role === 'user' ? 'Lab Manager' : u.role === 'admin' ? 'Org Admin' : 'Lab User'})</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <button className="btn btn-danger" onClick={handleSubmit} disabled={submitting} style={{ marginTop: 8 }}>
+        {submitting ? 'Submitting…' : 'Submit deletion request'}
+      </button>
+    </div>
+  )
+}
+
 // ── Shared delete confirmation modal for team users ──
 function DeleteUserModal({ user, onClose, onConfirm, deleting }) {
   const [typed, setTyped] = useState('')
@@ -875,6 +1280,7 @@ export function StudentsPanel({ toast, session }) {
     } else {
       const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single()
       if (error) { toast('Error: ' + error.message); return }
+      if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab user added: ${payload.name}`, 'new_user', session.userId)
       setShowModal(false); setEditStudent(null)
       const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
       setPendingIconSetup({ userId: newUser.id, displayName: dispName })
@@ -1104,7 +1510,7 @@ function StaffListPanel({ toast, session }) {
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
     if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); load(); toast('Staff saved ✓') }
-    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: form.name.trim() }) }
+    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${form.name.trim()}`, 'new_manager', session.userId); setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: form.name.trim() }) }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function deleteStaff(id) {
@@ -1418,7 +1824,7 @@ function StaffStudentIconManager() {
 // STAFF PROFILE
 // ══════════════════════════════════════════════════════════════
 function StaffProfile({ session }) {
-  const { toast, pendingProfileTab, setPendingProfileTab } = useAppStore()
+  const { toast, pendingProfileTab, setPendingProfileTab, clearSession } = useAppStore()
   const [activeTab, setActiveTab] = useState('info')
 
   useEffect(() => {
@@ -1440,6 +1846,7 @@ function StaffProfile({ session }) {
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
+          { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             style={{ padding: '10px 24px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: activeTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${activeTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
@@ -1452,6 +1859,7 @@ function StaffProfile({ session }) {
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
       {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
+      {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
   )
 }
@@ -1655,7 +2063,7 @@ function UserProfileForm({ session, toast }) {
 // STUDENT PROFILE
 // ══════════════════════════════════════════════════════════════
 function UserProfile({ session }) {
-  const { toast, pendingProfileTab, setPendingProfileTab } = useAppStore()
+  const { toast, pendingProfileTab, setPendingProfileTab, clearSession } = useAppStore()
   const [activeTab, setActiveTab] = useState('info')
 
   useEffect(() => {
@@ -1677,6 +2085,7 @@ function UserProfile({ session }) {
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
+          { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             style={{ padding: '10px 24px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: activeTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${activeTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
@@ -1689,6 +2098,192 @@ function UserProfile({ session }) {
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="student" />}
       {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
+      {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// APPROVAL REQUESTS PANEL — lab manager / org admin view
+// ══════════════════════════════════════════════════════════════
+export function ApprovalRequestsPanel({ toast, session, onCountChange }) {
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(null)
+  const [orgUsers, setOrgUsers] = useState([])
+  // keyed by req.id → selected transfer userId string
+  const [transferTo, setTransferTo] = useState({})
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [{ data: reqs }, { data: users }] = await Promise.all([
+      sb.from('account_deletion_requests')
+        .select('*')
+        .eq('organization_id', session.organizationId)
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: true }),
+      sb.from('users')
+        .select('id, name, role')
+        .eq('organization_id', session.organizationId)
+        .eq('is_active', true),
+    ])
+    setRequests(reqs || [])
+    onCountChange?.((reqs || []).length)
+    // Pre-fill transfer dropdown with user's suggestion
+    const defaults = {}
+    ;(reqs || []).forEach(r => { if (r.suggested_transfer_to) defaults[r.id] = r.suggested_transfer_to })
+    setTransferTo(defaults)
+    setOrgUsers(users || [])
+    setLoading(false)
+  }
+
+  // Transfer all work data (results, training, exams, files) — not personal profile
+  async function transferUserData(fromId, toId) {
+    const from = String(fromId)
+    const to   = String(toId)
+    const DATA_TABLES = [
+      'training_equipment', 'training_fresh', 'training_golf_car',
+      'training_building_alarm', 'equipment_exam_results',
+      'equipment_sop_notes', 'equipment_material_progress', 'retraining_requests',
+    ]
+    await Promise.all([
+      ...DATA_TABLES.map(t => sb.from(t).update({ user_id: to }).eq('user_id', from)),
+      sb.from('project_results').update({ submitted_by: to }).eq('submitted_by', from),
+    ])
+  }
+
+  async function exportUserData(userId, userName) {
+    try {
+      const XLSX = await import('xlsx')
+      const uid = String(userId)
+      const [
+        { data: profile }, { data: trainEq }, { data: trainFresh },
+        { data: trainGolf }, { data: trainAlarm }, { data: examResults },
+        { data: bookings }, { data: sopNotes }, { data: projResults },
+      ] = await Promise.all([
+        sb.from('users').select('id, name, email, role, degree, year_semester, supervisor, project_group, created_at').eq('id', userId).maybeSingle(),
+        sb.from('training_equipment').select('*').eq('user_id', uid),
+        sb.from('training_fresh').select('*').eq('user_id', uid),
+        sb.from('training_golf_car').select('*').eq('user_id', uid),
+        sb.from('training_building_alarm').select('*').eq('user_id', uid),
+        sb.from('equipment_exam_results').select('*').eq('user_id', uid),
+        sb.from('equipment_bookings').select('*').eq('user_id', uid),
+        sb.from('equipment_sop_notes').select('*').eq('user_id', uid),
+        sb.from('project_results').select('*').eq('submitted_by', uid),
+      ])
+      const wb = XLSX.utils.book_new()
+      if (profile) {
+        const rows = [['Field', 'Value'],
+          ['Name', profile.name], ['Email', profile.email], ['Role', profile.role],
+          ['Degree', profile.degree], ['Year/Semester', profile.year_semester],
+          ['Supervisor', profile.supervisor], ['Project Group', profile.project_group],
+          ['Member Since', profile.created_at],
+        ]
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Profile')
+      }
+      const addSheet = (data, name) => { if (data?.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name) }
+      addSheet(trainEq,     'Training — Equipment')
+      addSheet(trainFresh,  'Training — Fresh')
+      addSheet(trainGolf,   'Training — Golf Car')
+      addSheet(trainAlarm,  'Training — Alarm')
+      addSheet(examResults, 'Exam Results')
+      addSheet(bookings,    'Equipment Bookings')
+      addSheet(sopNotes,    'SOP Notes')
+      addSheet(projResults, 'Project Results')
+      if (!wb.SheetNames.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['No data found']]), 'Empty')
+      XLSX.writeFile(wb, `${userName.replace(/\s+/g, '_')}_data_archive.xlsx`)
+      toast('Export complete ✓')
+    } catch (err) {
+      toast('Export failed: ' + (err.message || String(err)))
+    }
+  }
+
+  async function handleApprove(req) {
+    setProcessing(req.id)
+    try {
+      const uid = req.user_id
+      const toId = transferTo[req.id]
+      if (toId) await transferUserData(uid, toId)
+      await sb.from('user_screen_access').delete().eq('user_id', uid)
+      await sb.from('user_dashboard_prefs').delete().eq('user_id', uid)
+      await sb.from('account_deletion_requests').update({ status: 'approved', reviewed_by: session.userId, reviewed_at: new Date().toISOString() }).eq('id', req.id)
+      await sb.from('users').delete().eq('id', uid)
+      const toName = toId ? orgUsers.find(u => u.id === toId)?.name : null
+      toast(toName ? `${req.user_name}'s data transferred to ${toName} and account deleted.` : `${req.user_name}'s account deleted.`)
+      const updated = requests.filter(x => x.id !== req.id)
+      setRequests(updated)
+      onCountChange?.(updated.length)
+    } catch (err) {
+      toast('Error: ' + (err.message || String(err)))
+    }
+    setProcessing(null)
+  }
+
+  async function handleDeny(req) {
+    setProcessing(req.id)
+    try {
+      await sb.from('account_deletion_requests').update({ status: 'denied', reviewed_by: session.userId, reviewed_at: new Date().toISOString() }).eq('id', req.id)
+      await sb.from('notifications').insert({ user_id: req.user_id, message: 'Your account deletion request has been denied by your lab manager.', type: 'deletion_denied', read: false })
+      toast(`${req.user_name}'s deletion request denied.`)
+      const updated = requests.filter(x => x.id !== req.id)
+      setRequests(updated)
+      onCountChange?.(updated.length)
+    } catch (err) {
+      toast('Error: ' + (err.message || String(err)))
+    }
+    setProcessing(null)
+  }
+
+  const roleLabel = r => r.role === 'admin' ? 'Org Admin' : r.role === 'user' ? 'Lab Manager' : 'Lab User'
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+  if (!requests.length) return <div className="empty-state"><div className="empty-icon">✅</div>No pending approval requests.</div>
+
+  return (
+    <div>
+      {requests.map(req => {
+        const selectedTo = transferTo[req.id] || ''
+        return (
+          <div key={req.id} className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{req.user_name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>
+                  Requested: {new Date(req.requested_at).toLocaleDateString()}
+                  {req.suggested_transfer_name && <span style={{ marginLeft: 8, background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>User suggests → {req.suggested_transfer_name}</span>}
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={() => exportUserData(req.user_id, req.user_name)}>⬇️ Export Data</button>
+            </div>
+
+            {/* Lab manager transfer preference */}
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 13 }}>Transfer work data &amp; results to (optional)</label>
+              <select
+                value={selectedTo}
+                onChange={e => setTransferTo(t => ({ ...t, [req.id]: e.target.value }))}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontFamily: 'var(--sans)', fontSize: 14, background: 'var(--surface)', color: 'var(--text1)' }}>
+                <option value="">No transfer — delete data</option>
+                {orgUsers.filter(u => u.id !== req.user_id).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({roleLabel(u)})</option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                Includes training records, exam results, project results, SOP notes, and file references. Personal profile data is always deleted.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-danger" onClick={() => handleApprove(req)} disabled={processing === req.id}>
+                {processing === req.id ? 'Processing…' : selectedTo ? 'Approve, Transfer & Delete' : 'Approve & Delete'}
+              </button>
+              <button className="btn btn-sm" onClick={() => handleDeny(req)} disabled={processing === req.id}>Deny</button>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1696,45 +2291,65 @@ function UserProfile({ session }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN EXPORT — routes by role
 // ══════════════════════════════════════════════════════════════
-const PROVIDER_LABELS = {
-  supabase:     { icon: '☁️', label: 'LabHive Cloud' },
-  localfolder:  { icon: '🗂️', label: 'Local Folder' },
-  gdrive:       { icon: '🟢', label: 'Google Drive' },
-  onedrive:     { icon: '🔵', label: 'OneDrive' },
-  filesystem:   { icon: '📱', label: 'iCloud / Device' },
-}
-
 function StorageTab({ toast }) {
+  const { session } = useAppStore()
   const [showModal, setShowModal] = useState(false)
-  const current = useAppStore(s => s.storageProviderKey)
-  const info = PROVIDER_LABELS[current] || PROVIDER_LABELS.supabase
+  const loginMode = session?.loginMode || localStorage.getItem('ilab_login_mode') || 'team'
+  const isOrgAdmin = loginMode === 'team' && session?.role === 'admin' && session?.userId !== null
   const oauthError = localStorage.getItem('ilab_oauth_error')
+
+  const modeA = localStorage.getItem('ilab_solo_mode_a') || 'website_only'
+  const modeB = localStorage.getItem('ilab_solo_mode_b') || 'website_only'
+  const orgMode = localStorage.getItem('ilab_org_storage_mode') || 'website_only'
+  const teamBProvider = localStorage.getItem('ilab_team_b_provider') || null
+  const groupStorage = localStorage.getItem('ilab_group_storage') || 'website'
+
+  const MODE_LABELS = { website_only: 'LabHive Cloud only ⭐', website_plus_copy: 'LabHive Cloud + backup copy', external_only: 'External provider only' }
+
+  function summary() {
+    if (loginMode === 'solo') {
+      if (modeA === 'website_only' && modeB === 'website_only') return 'All files on LabHive Cloud ⭐'
+      return `Core data: ${MODE_LABELS[modeA]} · Activity data: ${MODE_LABELS[modeB]}`
+    }
+    if (isOrgAdmin) return `Organisation: ${MODE_LABELS[orgMode]}`
+    return teamBProvider ? `Personal backup copy active` : 'Following organisation storage setting'
+  }
 
   return (
     <div className="card">
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🗄️ File Storage</div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
-        Choose where your personal files (training certificates, project records) are stored. Shared team files always stay in LabHive Cloud.
+      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+        {loginMode === 'solo'
+          ? 'Choose where your files are stored. LabHive Cloud is always recommended for the best performance. You can optionally connect Google Drive or OneDrive as a backup or alternative.'
+          : isOrgAdmin
+            ? 'Configure where your organisation\'s files are stored. LabHive Cloud is recommended for the best team experience.'
+            : 'Your organisation\'s admin controls primary file storage. You can optionally add a personal backup copy of your activity and workspace data.'}
       </div>
+
       {oauthError && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <span>Connection failed: {oauthError}</span>
           <button onClick={() => { localStorage.removeItem('ilab_oauth_error'); toast('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>×</button>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', borderRadius: 10, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28 }}>{info.icon}</span>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{info.label}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{current === 'supabase' ? 'Default — LabHive managed storage' : 'Personal storage active'}</div>
-          </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', borderRadius: 10, marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Current setting</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>{summary()}</div>
+          {loginMode === 'solo' && groupStorage !== 'website' && (
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>Group workspace: {groupStorage}</div>
+          )}
         </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}>Change</button>
+        <button className="btn btn-sm btn-primary" style={{ flexShrink: 0, marginLeft: 12 }} onClick={() => setShowModal(true)}>Configure</button>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
-        Shared files (SOPs, equipment photos, org content) always stay in LabHive Cloud regardless of this setting.
+
+      <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.7 }}>
+        {loginMode === 'solo'
+          ? 'Your account details (name, email, login) always stay on LabHive\'s servers regardless of your storage choice.'
+          : 'Equipment SOPs, calibration docs, booking records, and other core org files stay on LabHive\'s servers to ensure all team members can access them.'}
       </div>
+
       {showModal && <StorageProviderModal toast={toast} onClose={() => setShowModal(false)} />}
     </div>
   )
@@ -1751,18 +2366,18 @@ export default function Profile() {
 function AccessControl({ toast, session }) {
   const ALL_SCREENS = [
     { key: 'home',         label: 'Supply Inventory',    icon: '📦', moduleKey: 'supply' },
-    { key: 'projects',     label: 'Project & Material',  icon: '🧪', moduleKey: 'projects' },
+    { key: 'projects',     label: 'Project Workspace',  icon: '🧪', moduleKey: 'projects' },
     { key: 'training',     label: 'Training Records',    icon: '🎓', moduleKey: 'training' },
-    { key: 'equipment',    label: 'Equipment Inventory', icon: '🔧', moduleKey: 'equipment' },
-    { key: 'equipmenthub', label: 'Equipment Hub',       icon: '📚', moduleKey: 'equipmenthub' },
-    { key: 'booking',      label: 'Booking Equipment',   icon: '📅', moduleKey: 'booking' },
-    { key: 'remessages',   label: 'Contact Lab Manager', icon: '💬', moduleKey: 'remessages' },
+    { key: 'equipment',    label: 'Equipment List', icon: '🔧', moduleKey: 'equipment' },
+    { key: 'equipmenthub', label: 'Equipment',           icon: '📚', moduleKey: 'equipmenthub' },
+    { key: 'booking',      label: 'Reserve Equipment',   icon: '📅', moduleKey: 'booking' },
+    { key: 'remessages',   label: 'Lab Messages', icon: '💬', moduleKey: 'remessages' },
     { key: 'mileage',      label: 'Mileage Form',        icon: '🚗', moduleKey: 'mileage' },
     { key: 'labsafety',    label: 'Lab Safety',          icon: '🦺', moduleKey: 'labsafety' },
-    { key: 'pm',           label: 'Project Management',  icon: '📋', moduleKey: 'pm' },
+    { key: 'pm',           label: 'Task Board',  icon: '📋', moduleKey: 'pm' },
     { key: 'barcode',      label: 'QR Scan',             icon: '📷', moduleKey: 'barcode' },
     { key: 'profile',      label: 'Profile',             icon: '👤', moduleKey: 'profile' },
-    { key: 'barcodeqr',    label: 'QR Scan',             icon: '🔲', moduleKey: 'barcodeqr' },
+    { key: 'barcodeqr',    label: 'QR Labels',             icon: '🔲', moduleKey: 'barcodeqr' },
   ]
   const [users, setUsers] = useState([])
   const [selected, setSelected] = useState(null)
@@ -1841,16 +2456,16 @@ function AccessControl({ toast, session }) {
 function IconImageManager({ toast, session }) {
   const ALL_MODULES = [
     { key: 'supply',         label: 'Supply Inventory',    icon: '📦', bg: '#e8f2ee' },
-    { key: 'projects',       label: 'Project & Material',  icon: '🧪', bg: '#f3eeff' },
+    { key: 'projects',       label: 'Project Workspace',  icon: '🧪', bg: '#f3eeff' },
     { key: 'training',       label: 'Training Records',    icon: '🎓', bg: '#e0f2fe' },
-    { key: 'equipment',      label: 'Equipment Inventory', icon: '🔧', bg: '#fef3c7' },
+    { key: 'equipment',      label: 'Equipment List', icon: '🔧', bg: '#fef3c7' },
     { key: 'equipmenthub',   label: 'Equipment',           icon: '📚', bg: '#e8f2ee' },
-    { key: 'booking',        label: 'Booking Equipment',   icon: '📅', bg: '#e0f2fe' },
+    { key: 'booking',        label: 'Reserve Equipment',   icon: '📅', bg: '#e0f2fe' },
     { key: 'mileage',        label: 'Mileage Form',        icon: '🚗', bg: '#fdf0ed' },
     { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺', bg: '#fef3c7' },
-    { key: 'remessages',     label: 'Contact Lab Manager', icon: '💬', bg: '#e8f2ee' },
+    { key: 'remessages',     label: 'Lab Messages', icon: '💬', bg: '#e8f2ee' },
     { key: 'profile',        label: 'Profile',             icon: '👤', bg: '#f3eeff' },
-    { key: 'pm',             label: 'Project Management',  icon: '📋', bg: '#fff3e0' },
+    { key: 'pm',             label: 'Task Board',  icon: '📋', bg: '#fff3e0' },
     { key: 'barcode',        label: 'Barcode Scanner',     icon: '📷', bg: '#e0f7fa' },
     { key: 'labmanagement',  label: 'Lab Management',      icon: '🏛️', bg: '#e8f2ee' },
   ]

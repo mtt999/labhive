@@ -8,7 +8,7 @@ export const ALL_MODULES_META = [
   { key: 'projects',     screen: 'projects',     label: 'Project Workspace',  sub: 'Inventory, results & workspace',  icon: '🧪', bg: '#f3eeff', color: '#7c4dbd', roles: ['team', 'solo'] },
   { key: 'training',     screen: 'training',     label: 'Training Records',   sub: 'Certs, equipment & alarm',        icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team', 'solo'] },
   { key: 'equipment',    screen: 'equipment',    label: 'Equipment List',     sub: 'Lab equipment tracking',          icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team', 'solo'] },
-  { key: 'equipmenthub', screen: 'equipmenthub', label: 'Equipment Hub',      sub: 'SOPs & standards',                icon: '📚', bg: '#e8f2ee', color: '#1e4d39', roles: ['team', 'solo'] },
+  { key: 'equipmenthub', screen: 'equipmenthub', label: 'Equipment',          sub: 'SOPs & standards',                icon: '📚', bg: '#e8f2ee', color: '#1e4d39', roles: ['team', 'solo'] },
   { key: 'booking',      screen: 'booking',      label: 'Reserve Equipment',  sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team', 'solo'] },
   { key: 'remessages',   screen: 'remessages',   label: 'Lab Messages',       sub: 'Notes, ideas & issue reports',    icon: '💬', bg: '#e8f2ee', color: '#2a6049', roles: ['team', 'solo'], soloLocked: true },
   { key: 'pm',           screen: 'pm',           label: 'Task Board',         sub: 'Tasks, meetings & team chat',     icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team', 'solo'] },

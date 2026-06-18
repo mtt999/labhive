@@ -36,7 +36,7 @@ function ILabLogo({ size = 40 }) {
 const OPTION_META = [
   { id: 'sop',         icon: '📋', label: 'Standard Operating Procedure',   sub: 'Watch how-to videos, read the SOP, or turn on/off guide',   color: '#0369a1', bg: '#e0f2fe' },
   { id: 'book',        icon: '📅', label: 'Book this Equipment',            sub: 'Reserve a time slot on the lab calendar',                   color: '#2a6049', bg: '#e8f2ee' },
-  { id: 'contact',     icon: '💬', label: 'Contact Lab Manager',            sub: 'Questions, chat, or report an issue to the lab manager',    color: '#7c4dbd', bg: '#f3eeff' },
+  { id: 'contact',     icon: '💬', label: 'Lab Messages',            sub: 'Questions, chat, or report an issue to the lab manager',    color: '#7c4dbd', bg: '#f3eeff' },
   { id: 'calibration', icon: '🔧', label: 'Calibration',                   sub: 'View calibration schedule and maintenance records',          color: '#92400e', bg: '#fef3c7' },
 ]
 
@@ -206,13 +206,13 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
         )}
       </div>
 
-      {/* Staff: link to Equipment Inventory */}
+      {/* Staff: link to Equipment List */}
       {isStaff && (
         <button
           onClick={onGoToInventory}
           style={{ width: '100%', padding: '11px', borderRadius: 9, fontSize: 13, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1.5px solid #fde68a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
-          🔧 Edit / Explore in Equipment Inventory →
+          🔧 Edit / Explore in Equipment List →
         </button>
       )}
     </SectionCard>
@@ -223,10 +223,10 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
 
 function ContactSection({ onClose, onGoToMessages }) {
   return (
-    <SectionCard title="💬 Contact Lab Manager" onClose={onClose}>
+    <SectionCard title="💬 Lab Messages" onClose={onClose}>
       <div style={{ textAlign: 'center', padding: '20px 0 8px' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Contact Lab Manager</div>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Lab Messages</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
           Send a message, ask a question, or report an issue about this equipment to your lab manager.
         </div>
@@ -340,7 +340,7 @@ export default function EquipmentScan() {
           <ILabLogo size={48} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-              Equipment Info · ICT Lab
+              Equipment · ICT Lab
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, marginBottom: 6 }}>
               {equipment.equipment_name}

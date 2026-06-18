@@ -1107,7 +1107,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     if (isSolo) {
-      sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).eq('login_mode', 'solo').order('category').order('equipment_name')
+      sb.from('equipment_inventory').select('id, equipment_name, category').eq('is_active', true).eq('login_mode', 'solo').eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000').order('category').order('equipment_name')
         .then(({ data }) => { setEquipment(data || []); setLoadingEq(false) })
       if (session?.userId) {
         sb.from('projects').select('id, name, project_id').eq('solo_owner_id', session.userId).order('name')
@@ -1243,7 +1243,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
         {loadingEq
           ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
           : !categories.length && session?.loginMode === 'solo'
-            ? <div style={{ padding: '16px 12px', fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>No equipment yet.<br />Add equipment under the Equipment Info icon.</div>
+            ? <div style={{ padding: '16px 12px', fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>No equipment yet.<br />Add equipment under the Equipment icon.</div>
             : categories.map(cat => {
               const items = filteredEq.filter(e => e.category === cat)
               if (!items.length) return null
@@ -1512,7 +1512,7 @@ function RecordsPanel({ projects, allowedNames, session }) {
   useEffect(() => {
     const isSolo = session?.loginMode === 'solo'
     if (isSolo) {
-      sb.from('equipment_inventory').select('id, equipment_name').eq('is_active', true).eq('login_mode', 'solo')
+      sb.from('equipment_inventory').select('id, equipment_name').eq('is_active', true).eq('login_mode', 'solo').eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
         .then(({ data }) => setEquipment(data || []))
       return
     }

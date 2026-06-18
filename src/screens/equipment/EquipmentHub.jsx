@@ -6,21 +6,28 @@ import ScrollTabs from '../../components/ScrollTabs'
 
 function canEdit(s) { return s?.role === 'admin' || s?.role === 'user' }
 
-async function uploadFile(file, path) {
-  const { error } = await sb.storage.from('project-files').upload(path, file, { upsert: true })
+async function uploadFile(file, path, contentType) {
+  const opts = { upsert: true }
+  if (contentType) opts.contentType = contentType
+  const { error } = await sb.storage.from('project-files').upload(path, file, opts)
   if (error) throw error
   return sb.storage.from('project-files').getPublicUrl(path).data.publicUrl
 }
 
 async function compressImage(file, maxPx = 800) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const img = new Image(), url = URL.createObjectURL(file)
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image could not be read. Try a different file.')) }
     img.onload = () => {
       const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
       const canvas = document.createElement('canvas')
       canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale)
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-      URL.revokeObjectURL(url); canvas.toBlob(resolve, 'image/jpeg', 0.85)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob)
+        else reject(new Error('Image compression failed. Try a JPEG or PNG file.'))
+      }, 'image/jpeg', 0.85)
     }
     img.src = url
   })
@@ -95,9 +102,9 @@ function EquipmentInfo({ equipment, session }) {
     setUploading(true)
     try {
       const blob = await compressImage(file)
-      const url = await uploadFile(blob, `equipment/${equipment.id}/photo_${Date.now()}.jpg`)
+      const url = await uploadFile(blob, `equipment/${equipment.id}/photo_${Date.now()}.jpg`, 'image/jpeg')
       setDetailsForm(f => ({ ...f, photo_url: url })); toast('Photo uploaded ✓')
-    } catch { toast('Upload failed.') }
+    } catch (e) { toast('Upload failed: ' + (e?.message || String(e))) }
     setUploading(false)
   }
 
@@ -153,7 +160,7 @@ function EquipmentInfo({ equipment, session }) {
       {/* Photo + basic info */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ fontWeight: 600, fontSize: 15 }}>Equipment Info</div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Equipment</div>
           {canEdit(session) && !editDetails && <button className="btn btn-sm" onClick={() => setEditDetails(true)}>✏️ Edit</button>}
         </div>
         {editDetails ? (
@@ -725,6 +732,7 @@ function SoloAddEquipmentModal({ categories, session, onClose, onSaved, onGoToCa
       notes: form.notes.trim() || null,
       login_mode: 'solo',
       organization_id: null,
+      solo_owner_id: session?.userId || null,
       is_active: true,
       updated_at: new Date().toISOString(),
     })
@@ -811,7 +819,8 @@ export default function EquipmentHub() {
   async function load() {
     setLoading(true)
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
-    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
+    else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setEquipment(data || [])
     setLoading(false)
@@ -855,7 +864,7 @@ export default function EquipmentHub() {
                     <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment yet.</div>
                     {isSolo
                       ? <div style={{ fontSize: 12 }}>{soloCats.length === 0 ? 'Start by creating categories in the Categories tab, then add your equipment.' : 'Click "+ Add equipment" above to get started.'}</div>
-                      : <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment Inventory</strong> icon by your administrator.</div>
+                      : <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment List</strong> icon by your administrator.</div>
                     }
                   </div>
                 : <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
@@ -891,7 +900,7 @@ export default function EquipmentHub() {
             </div>
             <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
               {[
-                { key: 'info', label: '📋 Equipment Info' },
+                { key: 'info', label: '📋 Equipment' },
                 { key: 'standards', label: '📑 Standards' },
                 ...(canEdit(session) ? [{ key: 'access', label: '🔑 Temp Access' }] : [])
               ].map(t => (
