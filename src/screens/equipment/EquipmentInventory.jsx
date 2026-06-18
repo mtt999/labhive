@@ -204,9 +204,7 @@ function EquipmentList({ session }) {
   const [importPreview, setImportPreview] = useState(null)
   const [soloCats, setSoloCats] = useState([])
   const [teamCats, setTeamCats] = useState([])
-  const [showCatModal, setShowCatModal] = useState(false)
   const [teamLocs, setTeamLocs] = useState([])
-  const [showLocModal, setShowLocModal] = useState(false)
   const [photoMap, setPhotoMap] = useState({})
   const fileRef = useRef(null)
 
@@ -400,8 +398,6 @@ function EquipmentList({ session }) {
           <button className="btn btn-sm btn-primary" onClick={() => { setEditItem(null); setShowModal(true) }}>+ Add equipment</button>
           <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={importing}>⬆️ Import Excel</button>
           <button className="btn btn-sm" onClick={exportToExcel}>📊 Export Excel</button>
-          <button className="btn btn-sm" onClick={() => setShowCatModal(true)} title="Manage categories" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>🏷️ Categories</button>
-          <button className="btn btn-sm" onClick={() => setShowLocModal(true)} title="Manage locations" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>📍 Locations</button>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={async e => {
             try { setImportPreview(await parseExcel(e.target.files[0])); e.target.value = '' }
             catch { toast('Error reading file.') }
@@ -513,35 +509,6 @@ function EquipmentList({ session }) {
         />
       )}
 
-      {showCatModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Equipment Categories</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Add, rename, or remove categories</div>
-              </div>
-              <button onClick={() => setShowCatModal(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 4 }}>✕</button>
-            </div>
-            <CategoriesManager toast={toast} session={session} onChanged={names => setTeamCats(names)} />
-          </div>
-        </div>
-      )}
-
-      {showLocModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Equipment Locations</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Add, rename, or remove locations</div>
-              </div>
-              <button onClick={() => setShowLocModal(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 4 }}>✕</button>
-            </div>
-            <LocationsManager toast={toast} session={session} onChanged={names => setTeamLocs(names)} />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1247,7 +1214,20 @@ function EquipmentSettings({ session }) {
           <button className="btn btn-sm btn-primary" onClick={applyDefaultInterval} disabled={saving}>Apply to equipment without interval</button>
         </div>
       </div>
-      {session?.loginMode !== 'solo' && <CategoriesManager toast={toast} session={session} />}
+      {session?.loginMode !== 'solo' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>🏷️ Categories</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Add, rename, or remove equipment categories for your organization.</div>
+          <CategoriesManager toast={toast} session={session} />
+        </div>
+      )}
+      {session?.loginMode !== 'solo' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>📍 Locations</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Add, rename, or remove equipment locations (rooms, buildings, areas) for your organization.</div>
+          <LocationsManager toast={toast} session={session} />
+        </div>
+      )}
       {session?.role === 'admin' && (
         <div className="card" style={{ borderColor: 'var(--accent2)' }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, color: 'var(--accent2)' }}>Danger zone</div>
