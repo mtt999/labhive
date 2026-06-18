@@ -16,15 +16,13 @@ async function createAuthUser(email, password) {
       const { data: activeUser } = await sb.from('users').select('id, auth_id').ilike('email', email).eq('is_active', true).maybeSingle()
       if (activeUser) throw new Error('This email is already in use by an active account.')
       // It's a deleted user — reset the auth password so the new temp password works
-      let resetErr = null
-      try { ({ error: resetErr } = await sb.rpc('reset_auth_user_password', { p_email: email.trim().toLowerCase(), p_password: password })) } catch (_) { resetErr = { message: 'reset_rpc_unavailable' } }
-      if (!resetErr || resetErr.message === 'reset_rpc_unavailable') {
-        // Try to get the existing auth id so we can link the new DB row
-        let existingId = null
-        try { ({ data: existingId } = await sb.rpc('get_auth_user_id_by_email', { p_email: email.trim().toLowerCase() })) } catch (_) {}
-        if (existingId) return { id: existingId }
-      }
-      throw new Error('This email belongs to a deleted account whose auth record still exists. Run the SQL cleanup or use a different email.')
+      // Try to reset the password on the existing auth record
+      try { await sb.rpc('reset_auth_user_password', { p_email: email.trim().toLowerCase(), p_password: password }) } catch (_) {}
+      // Try to get the existing auth UUID to link the new DB row
+      let existingId = null
+      try { ({ data: existingId } = await sb.rpc('get_auth_user_id_by_email', { p_email: email.trim().toLowerCase() })) } catch (_) {}
+      // Return the existing auth id if found, otherwise null (user can still log in via custom auth)
+      return { id: existingId || null }
     }
     throw error
   }
