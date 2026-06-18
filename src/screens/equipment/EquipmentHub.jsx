@@ -186,7 +186,7 @@ function EquipmentInfo({ equipment, session }) {
         ) : (
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {details?.photo_url
-              ? <img src={details.photo_url} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', flexShrink: 0 }} />
+              ? <img src={details.photo_url} crossOrigin="anonymous" style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', flexShrink: 0 }} onError={e => { e.currentTarget.src = ''; e.currentTarget.style.display = 'none' }} />
               : <div style={{ width: 140, height: 140, borderRadius: 10, border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: 'var(--text3)', flexShrink: 0 }}>📷</div>}
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>{equipment.equipment_name}</div>

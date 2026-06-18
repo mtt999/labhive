@@ -24,10 +24,10 @@ const LOCATIONS = [
 function canEdit(session) { return session?.role === 'admin' || session?.role === 'user' }
 
 function EquipmentAvatar({ url, size = 34 }) {
-  if (!url) return (
-    <div style={{ width: size, height: size, borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: Math.round(size * 0.48), color: 'var(--text3)' }}>🔧</div>
-  )
-  return <img src={url} alt="" style={{ width: size, height: size, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, display: 'block' }} />
+  const [failed, setFailed] = useState(false)
+  const icon = <div style={{ width: size, height: size, borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: Math.round(size * 0.48), color: 'var(--text3)' }}>🔧</div>
+  if (!url || failed) return icon
+  return <img src={url} alt="" crossOrigin="anonymous" style={{ width: size, height: size, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, display: 'block' }} onError={() => setFailed(true)} />
 }
 
 function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCats = [], teamLocs = [] }) {
