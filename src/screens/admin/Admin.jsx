@@ -1195,10 +1195,22 @@ function OrgModulesModal({ org, onClose, onSaved }) {
 }
 
 // ── Org modal (super admin only) ──────────────────────────────
+const ORG_CATEGORIES = [
+  'University / Academic',
+  'Research Institute',
+  'Medical / Clinical',
+  'Industrial / Manufacturing',
+  'Government / Defense',
+  'Commercial / Private',
+  'Teaching / Training',
+  'Other',
+]
+
 function OrgModal({ org, onClose, onSaved }) {
   const { toast } = useAppStore()
   const [name, setName] = useState(org?.name || '')
   const [slug, setSlug] = useState(org?.slug || '')
+  const [category, setCategory] = useState(org?.category || '')
 
   function autoSlug(n) { return n.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') }
 
@@ -1206,11 +1218,12 @@ function OrgModal({ org, onClose, onSaved }) {
     if (!name.trim()) { toast('Please enter an organization name.'); return }
     const s = slug.trim() || autoSlug(name)
     if (!s) { toast('Please enter a slug.'); return }
+    const payload = { name: name.trim(), slug: s, category: category || null }
     if (org) {
-      const { error } = await sb.from('organizations').update({ name: name.trim(), slug: s }).eq('id', org.id)
+      const { error } = await sb.from('organizations').update(payload).eq('id', org.id)
       if (error) { toast('Error: ' + error.message); return }
     } else {
-      const { error } = await sb.from('organizations').insert({ name: name.trim(), slug: s })
+      const { error } = await sb.from('organizations').insert(payload)
       if (error) { toast('Error: ' + error.message); return }
     }
     toast('Organization saved.')
@@ -1226,6 +1239,12 @@ function OrgModal({ org, onClose, onSaved }) {
       </div>
       <div className="field"><label>Slug (URL-safe identifier)</label>
         <input value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="e.g. ict-lab" />
+      </div>
+      <div className="field"><label>Category</label>
+        <select value={category} onChange={e => setCategory(e.target.value)}>
+          <option value="">— Select category —</option>
+          {ORG_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button className="btn btn-primary" onClick={save}>{org ? 'Save' : 'Create organization'}</button>
@@ -1723,9 +1742,16 @@ export default function Admin() {
               <div key={o.id} className="card" style={{ padding: '14px 18px', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div>
-                    <button onClick={() => setOrgModulesModal(o)} style={{ fontWeight: 600, fontSize: 15, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, textAlign: 'left', textDecoration: 'underline dotted' }}>
-                      {o.name}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <button onClick={() => setOrgModulesModal(o)} style={{ fontWeight: 600, fontSize: 15, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, textAlign: 'left', textDecoration: 'underline dotted' }}>
+                        {o.name}
+                      </button>
+                      {o.category && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600, border: '1px solid var(--accent)', whiteSpace: 'nowrap' }}>
+                          {o.category}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2, fontFamily: 'var(--mono)' }}>
                       {o.slug} · {count} user{count !== 1 ? 's' : ''}
                     </div>
