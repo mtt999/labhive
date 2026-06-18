@@ -1437,8 +1437,8 @@ export default function Admin() {
   async function deleteUser(user) {
     if (!confirm('Delete this user permanently? All their records (training, bookings, tasks) will also be removed.')) return
     const uid = user.id
-    // Pre-delete all user-owned data in parallel to avoid FK constraint failures
-    await Promise.all([
+    // Pre-delete all user-owned data — use allSettled so a missing table never aborts the rest
+    await Promise.allSettled([
       sb.from('user_screen_access').delete().eq('user_id', uid),
       sb.from('user_dashboard_prefs').delete().eq('user_id', uid),
       sb.from('user_out_of_lab').delete().eq('user_id', uid),
@@ -1465,7 +1465,7 @@ export default function Admin() {
     await sb.from('tasks').update({ assigned_to: null }).eq('assigned_to', uid)
     // Try to remove Supabase auth account so the email can be reused (non-critical)
     if (user.auth_id) {
-      await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }).catch(() => {})
+      try { await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }) } catch (_) {}
     }
     const { error } = await sb.from('users').delete().eq('id', uid)
     if (error) { toast('Delete failed: ' + error.message); return }
