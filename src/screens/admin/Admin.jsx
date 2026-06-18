@@ -1435,16 +1435,39 @@ export default function Admin() {
   }
 
   async function deleteUser(user) {
-    if (!confirm('Delete this user permanently?')) return
-    // Pre-clean tables that FK to users but are not covered by CASCADE
-    await sb.from('user_screen_access').delete().eq('user_id', user.id)
-    await sb.from('user_dashboard_prefs').delete().eq('user_id', user.id)
+    if (!confirm('Delete this user permanently? All their records (training, bookings, tasks) will also be removed.')) return
+    const uid = user.id
+    // Pre-delete all user-owned data in parallel to avoid FK constraint failures
+    await Promise.all([
+      sb.from('user_screen_access').delete().eq('user_id', uid),
+      sb.from('user_dashboard_prefs').delete().eq('user_id', uid),
+      sb.from('user_out_of_lab').delete().eq('user_id', uid),
+      sb.from('notification_prefs').delete().eq('user_id', uid),
+      sb.from('notifications').delete().eq('user_id', uid),
+      sb.from('booking_notifications').delete().eq('user_id', uid),
+      sb.from('reminders').delete().eq('user_id', uid),
+      sb.from('task_comments').delete().eq('user_id', uid),
+      sb.from('team_task_group_members').delete().eq('user_id', uid),
+      sb.from('account_deletion_requests').delete().eq('user_id', uid),
+      sb.from('equipment_exam_results').delete().eq('user_id', uid),
+      sb.from('equipment_material_progress').delete().eq('user_id', uid),
+      sb.from('equipment_sop_notes').delete().eq('user_id', uid),
+      sb.from('equipment_temp_access').delete().eq('user_id', uid),
+      sb.from('equipment_bookings').delete().eq('user_id', uid),
+      sb.from('training_fresh').delete().eq('user_id', uid),
+      sb.from('training_golf_car').delete().eq('user_id', uid),
+      sb.from('training_building_alarm').delete().eq('user_id', uid),
+      sb.from('training_equipment').delete().eq('user_id', uid),
+      sb.from('training_schedule').delete().eq('user_id', uid),
+      sb.from('email_notifications_queue').delete().eq('user_id', uid),
+    ])
+    // Unassign tasks rather than delete them
+    await sb.from('tasks').update({ assigned_to: null }).eq('assigned_to', uid)
     // Try to remove Supabase auth account so the email can be reused (non-critical)
     if (user.auth_id) {
       await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }).catch(() => {})
     }
-    // DB CASCADE handles all remaining FK-linked tables
-    const { error } = await sb.from('users').delete().eq('id', user.id)
+    const { error } = await sb.from('users').delete().eq('id', uid)
     if (error) { toast('Delete failed: ' + error.message); return }
     loadUsers()
     toast('User deleted.')
