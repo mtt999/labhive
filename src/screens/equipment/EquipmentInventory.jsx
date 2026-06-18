@@ -260,7 +260,7 @@ function EquipmentList({ session }) {
       const reader = new FileReader()
       reader.onload = e => {
         try {
-          const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
+          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true })
           const ws = wb.Sheets[wb.SheetNames[0]]
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false })
           const headers = rows[0]?.map(h => (h || '').toString().toLowerCase().trim()) || []
@@ -317,7 +317,7 @@ function EquipmentList({ session }) {
         } catch (err) { reject(err) }
       }
       reader.onerror = reject
-      reader.readAsBinaryString(file)
+      reader.readAsArrayBuffer(file)
     })
   }
 
@@ -1129,9 +1129,10 @@ function LocationsManager({ toast, session, onChanged }) {
 
   async function addLocation() {
     if (!newLoc.trim() || !orgId) return
-    await sb.from('equipment_locations').insert({ name: newLoc.trim(), organization_id: orgId })
+    const { error } = await sb.from('equipment_locations').insert({ name: newLoc.trim(), organization_id: orgId })
+    if (error) { toast('Error: ' + error.message); return }
     setNewLoc('')
-    loadLocs()
+    await loadLocs()
     toast('Location added.')
   }
 
