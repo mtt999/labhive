@@ -30,7 +30,7 @@ function EquipmentAvatar({ url, size = 34 }) {
   return <img src={url} alt="" style={{ width: size, height: size, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, display: 'block' }} />
 }
 
-function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCats = [] }) {
+function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCats = [], teamLocs = [] }) {
   const { toast } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
   const blank = {
@@ -124,7 +124,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
                 ? <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Bench A, Storage Room…" />
                 : <select value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}>
                     <option value="">— Select —</option>
-                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                    {(teamLocs.length ? teamLocs : LOCATIONS).map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
               }
             </div>
@@ -205,6 +205,8 @@ function EquipmentList({ session }) {
   const [soloCats, setSoloCats] = useState([])
   const [teamCats, setTeamCats] = useState([])
   const [showCatModal, setShowCatModal] = useState(false)
+  const [teamLocs, setTeamLocs] = useState([])
+  const [showLocModal, setShowLocModal] = useState(false)
   const [photoMap, setPhotoMap] = useState({})
   const fileRef = useRef(null)
 
@@ -215,6 +217,7 @@ function EquipmentList({ session }) {
         .then(({ data }) => { try { setSoloCats(JSON.parse(data?.value || '[]')) } catch { setSoloCats([]) } })
     } else if (!isSolo && session?.organizationId) {
       loadTeamCats()
+      loadTeamLocs()
     }
   }, [])
 
@@ -222,6 +225,12 @@ function EquipmentList({ session }) {
     if (!session?.organizationId) return
     const { data } = await sb.from('equipment_categories').select('name').eq('organization_id', session.organizationId).order('name')
     setTeamCats((data || []).map(c => c.name))
+  }
+
+  async function loadTeamLocs() {
+    if (!session?.organizationId) return
+    const { data } = await sb.from('equipment_locations').select('name').eq('organization_id', session.organizationId).order('name')
+    setTeamLocs((data || []).map(l => l.name))
   }
 
   async function load() {
@@ -375,7 +384,10 @@ function EquipmentList({ session }) {
         </select>
         <select value={filterLoc} onChange={e => setFilterLoc(e.target.value)} style={{ width: 'auto' }}>
           <option value="">All locations</option>
-          {[...new Set(items.map(i => i.location).filter(Boolean))].sort().map(l => <option key={l} value={l}>{l}</option>)}
+          {(teamLocs.length
+            ? teamLocs
+            : [...new Set(items.map(i => i.location).filter(Boolean))].sort()
+          ).map(l => <option key={l} value={l}>{l}</option>)}
         </select>
         <select value={filterCond} onChange={e => setFilterCond(e.target.value)} style={{ width: 'auto' }}>
           <option value="">All conditions</option>
@@ -389,6 +401,7 @@ function EquipmentList({ session }) {
           <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={importing}>⬆️ Import Excel</button>
           <button className="btn btn-sm" onClick={exportToExcel}>📊 Export Excel</button>
           <button className="btn btn-sm" onClick={() => setShowCatModal(true)} title="Manage categories" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>🏷️ Categories</button>
+          <button className="btn btn-sm" onClick={() => setShowLocModal(true)} title="Manage locations" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>📍 Locations</button>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={async e => {
             try { setImportPreview(await parseExcel(e.target.files[0])); e.target.value = '' }
             catch { toast('Error reading file.') }
@@ -494,6 +507,7 @@ function EquipmentList({ session }) {
           session={session}
           soloCats={soloCats}
           teamCats={teamCats}
+          teamLocs={teamLocs}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={load}
         />
@@ -509,11 +523,22 @@ function EquipmentList({ session }) {
               </div>
               <button onClick={() => setShowCatModal(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 4 }}>✕</button>
             </div>
-            <CategoriesManager
-              toast={toast}
-              session={session}
-              onChanged={names => setTeamCats(names)}
-            />
+            <CategoriesManager toast={toast} session={session} onChanged={names => setTeamCats(names)} />
+          </div>
+        </div>
+      )}
+
+      {showLocModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Equipment Locations</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Add, rename, or remove locations</div>
+              </div>
+              <button onClick={() => setShowLocModal(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 4 }}>✕</button>
+            </div>
+            <LocationsManager toast={toast} session={session} onChanged={names => setTeamLocs(names)} />
           </div>
         </div>
       )}
@@ -1108,6 +1133,78 @@ function CategoriesManager({ toast, session, onChanged }) {
               <span style={{ flex: 1 }}>{c.name}</span>
               <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} title="Rename" onClick={() => { setEditingId(c.id); setEditName(c.name) }}>✏️</button>
               <button className="btn btn-sm btn-danger" style={{ padding: '2px 8px', fontSize: 11 }} title="Delete" onClick={() => deleteCategory(c.id)}>✕</button>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LocationsManager({ toast, session, onChanged }) {
+  const [locations, setLocations] = useState([])
+  const [newLoc, setNewLoc] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const orgId = session?.organizationId || null
+
+  useEffect(() => { loadLocs() }, [])
+
+  async function loadLocs() {
+    if (!orgId) { setLocations([]); setLoading(false); return }
+    setLoading(true)
+    const { data } = await sb.from('equipment_locations').select('*').eq('organization_id', orgId).order('name')
+    setLocations(data || [])
+    setLoading(false)
+    onChanged?.((data || []).map(l => l.name))
+  }
+
+  async function addLocation() {
+    if (!newLoc.trim() || !orgId) return
+    await sb.from('equipment_locations').insert({ name: newLoc.trim(), organization_id: orgId })
+    setNewLoc('')
+    loadLocs()
+    toast('Location added.')
+  }
+
+  async function saveEdit(id) {
+    if (!editName.trim() || !orgId) return
+    await sb.from('equipment_locations').update({ name: editName.trim() }).eq('id', id).eq('organization_id', orgId)
+    setEditingId(null)
+    loadLocs()
+    toast('Location renamed.')
+  }
+
+  async function deleteLocation(id) {
+    if (!confirm('Delete this location? Equipment using it will become unassigned.')) return
+    await sb.from('equipment_locations').delete().eq('id', id).eq('organization_id', orgId)
+    loadLocs()
+    toast('Location deleted.')
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <input value={newLoc} onChange={e => setNewLoc(e.target.value)} onKeyDown={e => e.key === 'Enter' && addLocation()} placeholder="New location name…" style={{ flex: 1 }} autoFocus />
+        <button className="btn btn-sm btn-primary" onClick={addLocation}>Add</button>
+      </div>
+      {loading ? <div className="spinner" style={{ margin: '0 auto' }} /> : locations.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '16px 0' }}>No locations yet — add one above.</div>
+      ) : locations.map(l => (
+        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent3)', flexShrink: 0 }} />
+          {editingId === l.id ? (
+            <>
+              <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(l.id); if (e.key === 'Escape') setEditingId(null) }} style={{ flex: 1, fontSize: 13, padding: '3px 8px' }} autoFocus />
+              <button className="btn btn-sm btn-primary" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => saveEdit(l.id)}>Save</button>
+              <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setEditingId(null)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1 }}>{l.name}</span>
+              <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} title="Rename" onClick={() => { setEditingId(l.id); setEditName(l.name) }}>✏️</button>
+              <button className="btn btn-sm btn-danger" style={{ padding: '2px 8px', fontSize: 11 }} title="Delete" onClick={() => deleteLocation(l.id)}>✕</button>
             </>
           )}
         </div>
