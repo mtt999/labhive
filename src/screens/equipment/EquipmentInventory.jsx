@@ -219,6 +219,7 @@ function EquipmentList({ session }) {
   }, [])
 
   async function loadTeamCats() {
+    if (!session?.organizationId) return
     const { data } = await sb.from('equipment_categories').select('name').eq('organization_id', session.organizationId).order('name')
     setTeamCats((data || []).map(c => c.name))
   }
@@ -1049,31 +1050,30 @@ function CategoriesManager({ toast, session, onChanged }) {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
-  const orgId = session?.userId ? session?.organizationId : null
+  const orgId = session?.organizationId || null
 
   useEffect(() => { loadCats() }, [])
 
   async function loadCats() {
+    if (!orgId) { setCategories([]); setLoading(false); return }
     setLoading(true)
-    let q = sb.from('equipment_categories').select('*').order('name')
-    if (orgId) q = q.eq('organization_id', orgId)
-    const { data } = await q
+    const { data } = await sb.from('equipment_categories').select('*').eq('organization_id', orgId).order('name')
     setCategories(data || [])
     setLoading(false)
     onChanged?.((data || []).map(c => c.name))
   }
 
   async function addCategory() {
-    if (!newCat.trim()) return
-    await sb.from('equipment_categories').insert({ name: newCat.trim(), organization_id: orgId || null })
+    if (!newCat.trim() || !orgId) return
+    await sb.from('equipment_categories').insert({ name: newCat.trim(), organization_id: orgId })
     setNewCat('')
     loadCats()
     toast('Category added.')
   }
 
   async function saveEdit(id) {
-    if (!editName.trim()) return
-    await sb.from('equipment_categories').update({ name: editName.trim() }).eq('id', id)
+    if (!editName.trim() || !orgId) return
+    await sb.from('equipment_categories').update({ name: editName.trim() }).eq('id', id).eq('organization_id', orgId)
     setEditingId(null)
     loadCats()
     toast('Category renamed.')
@@ -1081,7 +1081,7 @@ function CategoriesManager({ toast, session, onChanged }) {
 
   async function deleteCategory(id) {
     if (!confirm('Delete this category? Equipment using it will become uncategorized.')) return
-    await sb.from('equipment_categories').delete().eq('id', id)
+    await sb.from('equipment_categories').delete().eq('id', id).eq('organization_id', orgId)
     loadCats()
     toast('Category deleted.')
   }
