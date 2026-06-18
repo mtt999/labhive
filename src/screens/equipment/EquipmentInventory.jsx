@@ -30,7 +30,7 @@ function EquipmentAvatar({ url, size = 34 }) {
   return <img src={url} alt="" style={{ width: size, height: size, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, display: 'block' }} />
 }
 
-function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
+function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCats = [] }) {
   const { toast } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
   const blank = {
@@ -115,7 +115,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [] }) {
                     </select>
                 : <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                     <option value="">— Select —</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {(teamCats?.length ? teamCats : CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
               }
             </div>
@@ -203,6 +203,8 @@ function EquipmentList({ session }) {
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(null)
   const [soloCats, setSoloCats] = useState([])
+  const [teamCats, setTeamCats] = useState([])
+  const [showCatModal, setShowCatModal] = useState(false)
   const [photoMap, setPhotoMap] = useState({})
   const fileRef = useRef(null)
 
@@ -211,8 +213,15 @@ function EquipmentList({ session }) {
     if (isSolo && session?.userId) {
       sb.from('settings').select('value').eq('key', `solo_eq_cats_${session.userId}`).maybeSingle()
         .then(({ data }) => { try { setSoloCats(JSON.parse(data?.value || '[]')) } catch { setSoloCats([]) } })
+    } else if (!isSolo && session?.organizationId) {
+      loadTeamCats()
     }
   }, [])
+
+  async function loadTeamCats() {
+    const { data } = await sb.from('equipment_categories').select('name').eq('organization_id', session.organizationId).order('name')
+    setTeamCats((data || []).map(c => c.name))
+  }
 
   async function load() {
     setLoading(true)
@@ -360,7 +369,7 @@ function EquipmentList({ session }) {
           <option value="">All categories</option>
           {(isSolo
             ? [...new Set(items.map(i => i.category).filter(Boolean))].sort()
-            : CATEGORIES
+            : teamCats.length ? teamCats : CATEGORIES
           ).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filterLoc} onChange={e => setFilterLoc(e.target.value)} style={{ width: 'auto' }}>
@@ -378,6 +387,7 @@ function EquipmentList({ session }) {
           <button className="btn btn-sm btn-primary" onClick={() => { setEditItem(null); setShowModal(true) }}>+ Add equipment</button>
           <button className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={importing}>⬆️ Import Excel</button>
           <button className="btn btn-sm" onClick={exportToExcel}>📊 Export Excel</button>
+          <button className="btn btn-sm" onClick={() => setShowCatModal(true)} title="Manage categories" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>🏷️ Categories</button>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={async e => {
             try { setImportPreview(await parseExcel(e.target.files[0])); e.target.value = '' }
             catch { toast('Error reading file.') }
@@ -482,9 +492,29 @@ function EquipmentList({ session }) {
           item={editItem}
           session={session}
           soloCats={soloCats}
+          teamCats={teamCats}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={load}
         />
+      )}
+
+      {showCatModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Equipment Categories</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Add, rename, or remove categories</div>
+              </div>
+              <button onClick={() => setShowCatModal(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: 4 }}>✕</button>
+            </div>
+            <CategoriesManager
+              toast={toast}
+              session={session}
+              onChanged={names => setTeamCats(names)}
+            />
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1013,44 +1043,73 @@ function CalibrationTab({ session }) {
   )
 }
 
-function CategoriesManager({ toast, session }) {
+function CategoriesManager({ toast, session, onChanged }) {
   const [categories, setCategories] = useState([])
   const [newCat, setNewCat] = useState('')
   const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
   const orgId = session?.userId ? session?.organizationId : null
+
   useEffect(() => { loadCats() }, [])
+
   async function loadCats() {
     setLoading(true)
     let q = sb.from('equipment_categories').select('*').order('name')
     if (orgId) q = q.eq('organization_id', orgId)
     const { data } = await q
-    setCategories(data || []); setLoading(false)
+    setCategories(data || [])
+    setLoading(false)
+    onChanged?.((data || []).map(c => c.name))
   }
+
   async function addCategory() {
     if (!newCat.trim()) return
     await sb.from('equipment_categories').insert({ name: newCat.trim(), organization_id: orgId || null })
-    setNewCat(''); loadCats(); toast('Category added.')
+    setNewCat('')
+    loadCats()
+    toast('Category added.')
   }
+
+  async function saveEdit(id) {
+    if (!editName.trim()) return
+    await sb.from('equipment_categories').update({ name: editName.trim() }).eq('id', id)
+    setEditingId(null)
+    loadCats()
+    toast('Category renamed.')
+  }
+
   async function deleteCategory(id) {
-    if (!confirm('Delete this category?')) return
+    if (!confirm('Delete this category? Equipment using it will become uncategorized.')) return
     await sb.from('equipment_categories').delete().eq('id', id)
-    loadCats(); toast('Category deleted.')
+    loadCats()
+    toast('Category deleted.')
   }
+
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Categories</div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Add or remove equipment categories.</div>
+    <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} placeholder="New category name…" style={{ flex: 1 }} />
+        <input value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} placeholder="New category name…" style={{ flex: 1 }} autoFocus />
         <button className="btn btn-sm btn-primary" onClick={addCategory}>Add</button>
       </div>
-      {loading ? <div className="spinner" style={{ margin: '0 auto' }} /> : categories.map(c => (
-        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface2)', fontSize: 13 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-            {c.name}
-          </div>
-          <button className="btn btn-sm btn-danger" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => deleteCategory(c.id)}>✕</button>
+      {loading ? <div className="spinner" style={{ margin: '0 auto' }} /> : categories.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '16px 0' }}>No categories yet — add one above.</div>
+      ) : categories.map(c => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+          {editingId === c.id ? (
+            <>
+              <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(c.id); if (e.key === 'Escape') setEditingId(null) }} style={{ flex: 1, fontSize: 13, padding: '3px 8px' }} autoFocus />
+              <button className="btn btn-sm btn-primary" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => saveEdit(c.id)}>Save</button>
+              <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setEditingId(null)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1 }}>{c.name}</span>
+              <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} title="Rename" onClick={() => { setEditingId(c.id); setEditName(c.name) }}>✏️</button>
+              <button className="btn btn-sm btn-danger" style={{ padding: '2px 8px', fontSize: 11 }} title="Delete" onClick={() => deleteCategory(c.id)}>✕</button>
+            </>
+          )}
         </div>
       ))}
     </div>
