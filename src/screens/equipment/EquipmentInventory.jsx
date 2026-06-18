@@ -1215,14 +1215,14 @@ function EquipmentSettings({ session }) {
           <button className="btn btn-sm btn-primary" onClick={applyDefaultInterval} disabled={saving}>Apply to equipment without interval</button>
         </div>
       </div>
-      {session?.loginMode !== 'solo' && (
+      {canEdit(session) && session?.loginMode !== 'solo' && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>🏷️ Categories</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Add, rename, or remove equipment categories for your organization.</div>
           <CategoriesManager toast={toast} session={session} />
         </div>
       )}
-      {session?.loginMode !== 'solo' && (
+      {canEdit(session) && session?.loginMode !== 'solo' && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>📍 Locations</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Add, rename, or remove equipment locations (rooms, buildings, areas) for your organization.</div>
