@@ -1436,20 +1436,16 @@ export default function Admin() {
 
   async function deleteUser(user) {
     if (!confirm('Delete this user permanently?')) return
-    // Always delete auth account so the email can be reused
+    // Pre-clean tables that FK to users but are not covered by CASCADE
+    await sb.from('user_screen_access').delete().eq('user_id', user.id)
+    await sb.from('user_dashboard_prefs').delete().eq('user_id', user.id)
+    // Try to remove Supabase auth account so the email can be reused (non-critical)
     if (user.auth_id) {
       await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }).catch(() => {})
     }
-    if (isSuperAdmin) {
-      const { error } = await sb.rpc('delete_user_account', {
-        p_user_id: user.id,
-        p_auth_id: user.auth_id || null,
-      })
-      if (error) { toast('Delete failed: ' + error.message); return }
-    } else {
-      const { error } = await sb.from('users').delete().eq('id', user.id)
-      if (error) { toast('Delete failed: ' + error.message); return }
-    }
+    // DB CASCADE handles all remaining FK-linked tables
+    const { error } = await sb.from('users').delete().eq('id', user.id)
+    if (error) { toast('Delete failed: ' + error.message); return }
     loadUsers()
     toast('User deleted.')
   }
