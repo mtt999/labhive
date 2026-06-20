@@ -103,7 +103,15 @@ function EquipmentInfo({ equipment, session }) {
     try {
       const blob = await compressImage(file)
       const url = await uploadFile(blob, `equipment/${equipment.id}/photo_${Date.now()}.jpg`, 'image/jpeg')
-      setDetailsForm(f => ({ ...f, photo_url: url })); toast('Photo uploaded ✓')
+      // Persist photo_url to DB immediately so all browsers see it without a manual Save
+      if (details) {
+        await sb.from('equipment_details').update({ photo_url: url, updated_at: new Date().toISOString() }).eq('id', details.id)
+      } else {
+        await sb.from('equipment_details').insert({ equipment_id: equipment.id, photo_url: url, website_url: '', notes: '' })
+      }
+      setDetailsForm(f => ({ ...f, photo_url: url }))
+      load()
+      toast('Photo saved ✓')
     } catch (e) { toast('Upload failed: ' + (e?.message || String(e))) }
     setUploading(false)
   }
