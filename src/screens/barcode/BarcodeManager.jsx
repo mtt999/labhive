@@ -4,28 +4,25 @@ import { useAppStore } from '../../store/useAppStore'
 import { ScannerContent, MaterialTypesManager } from './BarcodeScannerScreen'
 import { isNative } from '../../lib/scanner.js'
 
-// LabHive logo for screen preview — navy hex with orange border and LH initials
-function ILabLogo({ size = 40 }) {
+// "LabHive" text badge centered over QR — screen preview
+function LabHiveBadge({ fontSize = 11, px = 4, py = 3 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" strokeWidth="24" strokeLinejoin="round"/>
-      <circle cx="256" cy="10"  r="14" fill="#FF9A4A"/>
-      <circle cx="460" cy="128" r="14" fill="#FF9A4A"/>
-      <circle cx="460" cy="372" r="14" fill="#FF9A4A"/>
-      <circle cx="256" cy="490" r="14" fill="#FF9A4A"/>
-      <circle cx="52"  cy="372" r="14" fill="#FF9A4A"/>
-      <circle cx="52"  cy="128" r="14" fill="#FF9A4A"/>
-      <text x="256" y="285" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="82" fontWeight="700" fill="#F5F0DC">LabHive</text>
-    </svg>
+    <div style={{ background: '#0C1140', border: '1.5px solid #FF6B1A', borderRadius: 4, padding: `${py}px ${px}px`, lineHeight: 1 }}>
+      <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize, fontWeight: 700, color: '#F5F0DC', whiteSpace: 'nowrap', display: 'block', letterSpacing: '0.02em' }}>LabHive</span>
+    </div>
   )
 }
 
-// Pure B&W LabHive logo for print labels — black outline on white, prints on any printer
-const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" fill="#fff"/>
-  <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#fff" stroke="#000" stroke-width="24" stroke-linejoin="round"/>
-  <text x="256" y="285" text-anchor="middle" font-family="Arial" font-size="82" font-weight="700" fill="#000">LabHive</text>
+// "LabHive" text badge for print — SVG so it renders on any printer
+const PRINT_LOGO_SVG = (size) => {
+  const w = Math.round(size * 2.2)
+  const h = Math.round(size * 0.65)
+  const fs = Math.round(h * 0.58)
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="${w}" height="${h}" rx="3" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="${w / 2}" y="${h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Arial, sans-serif" font-size="${fs}" font-weight="800" fill="#000">LabHive</text>
 </svg>`
+}
 
 function getScanUrl(equipmentId) {
   const base = isNative() ? 'https://labhive.app/' : `${window.location.origin}/labhive/`
@@ -36,8 +33,7 @@ function getScanUrl(equipmentId) {
 function QRLabel({ equipment, size }) {
   const is2x2 = size === '2x2'
   const containerPx = is2x2 ? 192 : 384
-  const qrPx       = is2x2 ? 112 : 230
-  const logoInQr   = is2x2 ? 36  : 72
+  const qrPx = is2x2 ? 112 : 230
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(equipment.id))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
   return (
@@ -53,13 +49,11 @@ function QRLabel({ equipment, size }) {
       gap: is2x2 ? 6 : 12,
       overflow: 'hidden',
     }}>
-      {/* QR code with iLab logo centered inside */}
+      {/* QR code with LabHive badge centered inside */}
       <div style={{ position: 'relative', width: qrPx, height: qrPx, flexShrink: 0 }}>
         <img src={qrUrl} width={qrPx} height={qrPx} style={{ display: 'block', imageRendering: 'pixelated' }} alt="QR Code" />
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <div style={{ background: '#fff', borderRadius: 4, padding: is2x2 ? 2 : 4, lineHeight: 0 }}>
-            <ILabLogo size={logoInQr} />
-          </div>
+          <LabHiveBadge fontSize={is2x2 ? 7 : 12} px={is2x2 ? 3 : 6} py={is2x2 ? 2 : 4} />
         </div>
       </div>
 
@@ -91,12 +85,12 @@ function printLabels(equipmentList, size) {
   const is2x2 = size === '2x2'
   const inchSize = is2x2 ? '2in' : '4in'
   const containerPx = is2x2 ? 192 : 384
-  const qrPx  = is2x2 ? 112 : 230
-  const logoInQr = is2x2 ? 36 : 72
+  const qrPx     = is2x2 ? 112 : 230
+  const badgeH   = is2x2 ? 18  : 32
 
   const labelHtml = (eq) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(eq.id))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
-    const logoSvg = PRINT_LOGO_SVG(logoInQr)
+    const logoSvg = PRINT_LOGO_SVG(badgeH)
     const name = (eq.equipment_name + (eq.nickname ? ` (${eq.nickname})` : '')).replace(/</g, '&lt;').replace(/>/g, '&gt;')
     return `<div class="label">
   <div class="qr-wrap"><img class="qr-img" src="${qrUrl}" alt="QR"/><div class="qr-logo">${logoSvg}</div></div>
