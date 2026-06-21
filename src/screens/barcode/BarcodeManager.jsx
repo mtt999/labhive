@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { ScannerContent, MaterialTypesManager } from './BarcodeScannerScreen'
+import { ScannerContent } from './BarcodeScannerScreen'
 import { isNative } from '../../lib/scanner.js'
 
 // LabHive hexagon logo for screen preview
@@ -512,7 +512,6 @@ export default function BarcodeManager() {
           { key: 'equipment', label: '🔲 Equipment Barcode',   sub: 'Generate & print QR labels' },
           { key: 'records',   label: '📋 Records',             sub: 'Equipment list & bulk export' },
           { key: 'materials', label: '📷 Project Materials',   sub: 'Scan & browse project materials' },
-          { key: 'types',     label: '🏷️ Material Types',      sub: 'Manage material type list' },
         ].map(t => (
           <button
             key={t.key}
@@ -533,7 +532,6 @@ export default function BarcodeManager() {
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
       {tab === 'materials' && <ScannerContent />}
-      {tab === 'types'     && <MaterialTypesManager session={session} />}
     </div>
   )
 }

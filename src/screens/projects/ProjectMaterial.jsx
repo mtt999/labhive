@@ -10,6 +10,7 @@ import TeamMembersPanel from '../../components/TeamMembersPanel'
 import ProjectMaterials from './ProjectMaterials'
 import MaterialStorage from '../storage/MaterialStorage'
 import ProjectDatabase from './ProjectDatabase'
+import { MaterialTypesManager } from '../barcode/BarcodeScannerScreen'
 
 // ── Helpers ────────────────────────────────────────────────────
 function InfoCell({ label, value }) {
@@ -1998,6 +1999,7 @@ export default function ProjectMaterial() {
       { key: 'results',   label: '✏️ Project Test Results' },
       { key: 'workspace', label: '📋 Workspace' },
     ] : []),
+    { key: 'types', label: '🏷️ Material Types' },
   ]
 
   return (
@@ -2028,6 +2030,8 @@ export default function ProjectMaterial() {
       {mainTab === 'workspace' && (
         <WorkspaceTab session={session} projects={assignedProjects} isSolo={isSolo} readOnly={viewingShared} allowedNames={allowedNames} userProjectGroup={userProjectGroup} userAssignedProjectIds={userAssignedProjectIds} />
       )}
+
+      {mainTab === 'types' && <MaterialTypesManager session={session} />}
     </div>
   )
 }
