@@ -1816,17 +1816,17 @@ function Reminders({ userId }) {
   if (!userId) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)', fontSize: 14 }}>Reminders are personal — sign in as a lab manager to use this feature.</div>
   if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
-  const ReminderCard = ({ r }) => (
+  const ReminderCard = ({ r, isFuture = false }) => (
     <div
       onClick={() => !r.is_done && startEdit(r)}
-      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', background: r.is_done ? 'var(--surface2)' : 'transparent', transition: 'background 0.15s', cursor: r.is_done ? 'default' : 'pointer' }}
-      onMouseEnter={e => { if (!r.is_done) e.currentTarget.style.background = 'var(--surface2)' }}
-      onMouseLeave={e => { if (!r.is_done) e.currentTarget.style.background = 'transparent' }}>
-      <button onClick={e => { e.stopPropagation(); toggleDone(r) }} style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${r.is_done ? '#2e7d32' : 'var(--border)'}`, background: r.is_done ? '#2e7d32' : 'transparent', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', background: r.is_done ? 'var(--surface2)' : 'transparent', opacity: isFuture ? 0.55 : 1, transition: 'background 0.15s, opacity 0.15s', cursor: r.is_done ? 'default' : 'pointer' }}
+      onMouseEnter={e => { if (!r.is_done) { e.currentTarget.style.background = 'var(--surface2)'; if (isFuture) e.currentTarget.style.opacity = '0.8' } }}
+      onMouseLeave={e => { if (!r.is_done) { e.currentTarget.style.background = 'transparent'; if (isFuture) e.currentTarget.style.opacity = '0.55' } }}>
+      <button onClick={e => { e.stopPropagation(); if (!isFuture) toggleDone(r) }} style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${r.is_done ? '#2e7d32' : 'var(--border)'}`, background: r.is_done ? '#2e7d32' : 'transparent', flexShrink: 0, cursor: isFuture ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }} title={isFuture ? 'Not active yet' : ''}>
         {r.is_done && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: r.is_done ? 'var(--text3)' : 'var(--text)', textDecoration: r.is_done ? 'line-through' : 'none' }}>{r.title}</div>
+        <div style={{ fontSize: 14, fontWeight: 500, color: r.is_done ? 'var(--text3)' : isFuture ? 'var(--text2)' : 'var(--text)', textDecoration: r.is_done ? 'line-through' : 'none' }}>{r.title}</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
           {(r.start_day || r.end_day) && (
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
@@ -1835,14 +1835,14 @@ function Reminders({ userId }) {
             </span>
           )}
           {(r.start_time || r.end_time) && (
-            <span style={{ fontSize: 11, color: BLUE }}>
+            <span style={{ fontSize: 11, color: isFuture ? 'var(--text3)' : BLUE }}>
               🕐 {r.start_time ? fmtTime(r.start_time) : ''}
               {r.end_time ? ` – ${fmtTime(r.end_time)}` : ''}
             </span>
           )}
         </div>
         {r.notes && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, fontStyle: 'italic' }}>{r.notes}</div>}
-        {!r.is_done && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>Tap to edit</div>}
+        {!r.is_done && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>{isFuture ? 'Tap to edit · Not active yet' : 'Tap to edit'}</div>}
       </div>
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
         <button onClick={e => { e.stopPropagation(); deleteReminder(r.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 16, padding: '2px 4px', opacity: 0.6, lineHeight: 1 }}
@@ -1900,14 +1900,16 @@ function Reminders({ userId }) {
         }
       </div>
 
-      {futureItems.length > 0 && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>
-            📅 Upcoming <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>({futureItems.length})</span>
-          </div>
-          {futureItems.map(r => <ReminderCard key={r.id} r={r} />)}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+        <div style={{ padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>📅 Upcoming</span>
+          <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>{futureItems.length} reminder{futureItems.length !== 1 ? 's' : ''}</span>
         </div>
-      )}
+        {futureItems.length === 0
+          ? <div style={{ padding: '16px', fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No upcoming reminders.</div>
+          : futureItems.map(r => <ReminderCard key={r.id} r={r} isFuture />)
+        }
+      </div>
 
       {doneItems.length > 0 && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
