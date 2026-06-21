@@ -2,9 +2,28 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 
+function LabHiveLogo({ size }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" strokeWidth="28" strokeLinejoin="round"/>
+      <text x="256" y="290" textAnchor="middle" dominantBaseline="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="96" fontWeight="700" fill="#F5F0DC">LabHive</text>
+    </svg>
+  )
+}
+
 function QRCode({ value, size = 180 }) {
-  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=10`
-  return <img src={url} width={size} height={size} style={{ display: 'block' }} alt="QR Code" />
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 2}x${size * 2}&data=${encodeURIComponent(value)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+  const logoSize = Math.round(size * 0.32)
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <img src={url} width={size} height={size} style={{ display: 'block', imageRendering: 'pixelated' }} alt="QR Code" />
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+        <div style={{ background: '#fff', borderRadius: 4, padding: 3, lineHeight: 0 }}>
+          <LabHiveLogo size={logoSize} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function typeLabel(type) {
