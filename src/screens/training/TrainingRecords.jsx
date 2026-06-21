@@ -1223,14 +1223,17 @@ function StudentLocker({ session }) {
 // MAIN TRAINING RECORDS COMPONENT
 // ══════════════════════════════════════════════════════════════
 export default function TrainingRecords() {
-  const { session, toast } = useAppStore()
+  const { session, toast, sidebarSubTab, setSidebarSubTab } = useAppStore()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [subTab, setSubTab] = useState(() => {
-    if (localStorage.getItem('examEquipment')) return 'exam'
-    return 'fresh'
-  })
   const [expiryAlerts, setExpiryAlerts] = useState([])
+
+  // Deep-link from exam notification — jump to exam tab via sidebar
+  useEffect(() => {
+    if (localStorage.getItem('examEquipment') && !sidebarSubTab) setSidebarSubTab('exam')
+  }, [])
+
+  const subTab = sidebarSubTab || 'fresh'
 
   useEffect(() => { loadStudents() }, [])
 
@@ -1264,15 +1267,6 @@ export default function TrainingRecords() {
   }
 
   const isSolo = session?.loginMode === 'solo'
-  const subTabs = [
-    { key: 'fresh',     label: '1 · Lab User Documents' },
-    ...(!isSolo ? [{ key: 'golf',  label: '2 · Vehicle' }] : []),
-    { key: 'equipment', label: isSolo ? '2 · Equipment Training Records' : '3 · Equipment' },
-    ...(!isSolo ? [{ key: 'alarm', label: '4 · Building Alarm' }] : []),
-    ...(canEdit(session) ? [{ key: 'requests', label: '📋 Training Requests' }] : []),
-    ...(!isSolo ? [{ key: 'exam',   label: '📝 Exam' }] : []),
-    ...(!isSolo ? [{ key: 'locker', label: '🗄️ Lab User Locker' }] : []),
-  ]
 
   return (
     <div>
@@ -1296,15 +1290,6 @@ export default function TrainingRecords() {
           ))}
         </div>
       )}
-
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-        {subTabs.map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)}
-            style={{ padding: '10px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
 
       {subTab === 'requests' && <TrainingRequestsPanel session={session} />}
       {subTab === 'exam'     && <ExamTab session={session} />}

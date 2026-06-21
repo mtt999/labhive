@@ -2021,8 +2021,8 @@ function Chat({ userId, orgId }) {
 }
 
 export default function PM() {
-  const { session } = useAppStore()
-  const [activeTab, setActiveTab] = useState('overview')
+  const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
+  const activeTab = sidebarSubTab || 'overview'
   const [pendingTask, setPendingTask] = useState(null)
   const [studentGroupId, setStudentGroupId] = useState(undefined) // undefined=loading, null=no group, uuid=has group
   const userId = session?.userId
@@ -2040,22 +2040,6 @@ export default function PM() {
     }
   }, [userId, isStudent])
 
-  const tabs = isStudent ? [
-    { key: 'overview', label: 'Overview' },
-    { key: 'tasks',    label: 'My Tasks' },
-    ...(studentGroupId ? [{ key: 'team', label: 'Group Tasks' }] : []),
-    { key: 'calendar', label: 'Calendar' },
-    { key: 'reminder', label: 'Reminders' },
-  ] : [
-    { key: 'overview',  label: 'Overview' },
-    { key: 'tasks',     label: 'My Tasks' },
-    ...(!isSolo ? [{ key: 'team', label: 'Team' }] : []),
-    { key: 'calendar',  label: 'Calendar' },
-    ...(!isSolo ? [{ key: 'meetings', label: 'Meetings' }] : []),
-    { key: 'reminder',  label: 'Reminders' },
-    ...(session?.role === 'admin' ? [{ key: 'assign', label: 'Assign others' }] : [])
-  ]
-
   return (
     <div>
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -2065,19 +2049,11 @@ export default function PM() {
         </div>
         <HelpPanel screen="pm" />
       </div>
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            style={{ padding: '10px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: activeTab === t.key ? BLUE : 'var(--text2)', borderBottom: `2px solid ${activeTab === t.key ? BLUE : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} />}
-      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isStudent} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isStudent={isStudent} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setStudentGroupId(gid || null); if (!gid && activeTab === 'team') setActiveTab('tasks') }} />}
+      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isStudent} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isStudent={isStudent} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setStudentGroupId(gid || null); if (!gid && activeTab === 'team') setSidebarSubTab('tasks') }} />}
       {activeTab === 'team'      && !isStudent && <Team orgId={orgId} isSolo={isSolo} />}
       {activeTab === 'team'      && isStudent && studentGroupId && <StudentTeamView userId={userId} groupId={studentGroupId} orgId={orgId} />}
-      {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setActiveTab('tasks') }} />}
+      {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
       {activeTab === 'meetings'  && !isStudent && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}

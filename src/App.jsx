@@ -14,6 +14,8 @@ import ProjectMaterial from './screens/projects/ProjectMaterial'
 import ProjectDetail from './screens/projects/ProjectDetail'
 import History from './screens/inspection/History'
 import TrainingRecords from './screens/training/TrainingRecords'
+import TrainingRecordsProto from './screens/training/TrainingRecordsProto'
+import LayoutProto from './screens/proto/LayoutProto'
 import Profile from './screens/profile/Profile'
 import EquipmentInventory from './screens/equipment/EquipmentInventory'
 import EquipmentHub from './screens/equipment/EquipmentHub'
@@ -336,11 +338,11 @@ export default function App() {
       return
     }
     if (session?.role === 'student') {
-      const baseAllowed = ['dashboard', 'projects', 'project-detail', 'training', 'profile', 'equipmenthub', 'booking', 'remessages', 'barcode', 'barcodeqr', 'equipmentscan', 'home', 'equipment', 'pm', 'history']
+      const baseAllowed = ['dashboard', 'projects', 'project-detail', 'training', 'profile', 'equipmenthub', 'booking', 'remessages', 'barcode', 'barcodeqr', 'equipmentscan', 'home', 'equipment', 'pm', 'history', 'training-proto', 'layout-proto']
       if (!baseAllowed.includes(screen) && !(userAccess && userAccess.has(screen))) setScreen('dashboard')
     }
     // equipmentscan, barcodeqr, barcode, home, equipment bypass per-user access control
-    const INTERNAL = new Set(['dashboard', 'profile', 'inspection', 'results', 'project-detail', 'pm', 'barcode', 'equipmentscan', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'projects', 'training', 'history', 'equipmenthub', 'booking', 'remessages', 'labmanagement'])
+    const INTERNAL = new Set(['dashboard', 'profile', 'inspection', 'results', 'project-detail', 'pm', 'barcode', 'equipmentscan', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'projects', 'training', 'training-proto', 'layout-proto', 'history', 'equipmenthub', 'booking', 'remessages', 'labmanagement'])
     if ((session?.role === 'user' || session?.role === 'admin') && userAccess && !INTERNAL.has(screen)) {
       if (!userAccess.has(screen)) setScreen('dashboard')
     }
@@ -379,6 +381,8 @@ export default function App() {
     'project-detail': <ProjectDetail />,
     history: <History />,
     training: <TrainingRecords />,
+    'training-proto': <TrainingRecordsProto />,
+    'layout-proto': <LayoutProto />,
     profile: <Profile />,
     equipment: <EquipmentInventory />,
     equipmenthub: <EquipmentHub />,

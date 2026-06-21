@@ -8,7 +8,7 @@ export const useAppStore = create((set, get) => ({
   clearSession: () => {
     sb.auth.signOut()
     localStorage.removeItem('ilab_login_mode')
-    set({ session: null, loginMode: null, sharedWorkspaces: [], viewingWorkspaceOwnerId: null, activeModules: null, currentProjectId: null })
+    set({ session: null, loginMode: null, sharedWorkspaces: [], viewingWorkspaceOwnerId: null, activeModules: null, currentProjectId: null, sidebarSubTab: null })
   },
 
   // ── Active dashboard modules (icon picker) ──
@@ -57,7 +57,11 @@ export const useAppStore = create((set, get) => ({
 
   // ── Navigation ──
   screen: 'dashboard',
-  setScreen: (s) => set({ screen: s }),
+  setScreen: (s) => set({ screen: s, sidebarSubTab: null }),
+
+  // ── Sidebar sub-tab (set by Layout sidebar, read by each screen) ──
+  sidebarSubTab: null,
+  setSidebarSubTab: (key) => set({ sidebarSubTab: key }),
   pendingAdminTab: null,
   setPendingAdminTab: (tab) => set({ pendingAdminTab: tab }),
   pendingProfileTab: null,

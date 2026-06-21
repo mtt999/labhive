@@ -462,10 +462,10 @@ function RecordsTab({ equipment, loading }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function BarcodeManager() {
-  const { session } = useAppStore()
+  const { session, sidebarSubTab } = useAppStore()
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('equipment')
+  const tab = sidebarSubTab || 'equipment'
 
   const isAdminOrStaff = session?.role === 'admin' || session?.role === 'user'
 
@@ -504,29 +504,6 @@ export default function BarcodeManager() {
         <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
           When scanned with a phone camera, the QR code opens the LabHive login page. After logging in, users get quick access to equipment info, booking, maintenance history, and more.
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {[
-          { key: 'equipment', label: '🔲 Equipment Barcode',   sub: 'Generate & print QR labels' },
-          { key: 'records',   label: '📋 Records',             sub: 'Equipment list & bulk export' },
-          { key: 'materials', label: '📷 Project Materials',   sub: 'Scan & browse project materials' },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: 600,
-              border: 'none', borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent',
-              background: 'none', color: tab === t.key ? 'var(--accent)' : 'var(--text3)',
-              cursor: 'pointer', transition: 'all 0.12s', borderRadius: '8px 8px 0 0',
-              marginBottom: -1,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
       </div>
 
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}

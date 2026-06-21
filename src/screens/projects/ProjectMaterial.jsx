@@ -1907,9 +1907,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 
 // ── Main Screen ────────────────────────────────────────────────
 export default function ProjectMaterial() {
-  const { session, sharedWorkspaces, viewingWorkspaceOwnerId } = useAppStore()
+  const { session, sharedWorkspaces, viewingWorkspaceOwnerId, sidebarSubTab } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
-  const [mainTab, setMainTab] = useState('inventory')
+  const mainTab = sidebarSubTab || 'inventory'
   const [allProjects, setAllProjects] = useState([])
   const [allowedNames, setAllowedNames] = useState(undefined) // undefined = loading; null = admin (no filter); Set = filtered
   const [userProjectGroup, setUserProjectGroup] = useState(undefined) // undefined = loading; null = no group; string = group name
@@ -1993,31 +1993,12 @@ export default function ProjectMaterial() {
   const isLabUser = !isSolo && session?.dbRole === 'student'
   const hasProjectAccess = !isLabUser || !!userAssignedProjectIds
 
-  const mainTabs = [
-    { key: 'inventory', label: '📦 Material Inventory' },
-    ...(hasProjectAccess ? [
-      { key: 'results',   label: '✏️ Project Test Results' },
-      { key: 'workspace', label: '📋 Workspace' },
-    ] : []),
-    { key: 'types', label: '🏷️ Material Types' },
-  ]
-
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="section-title">Project Workspace</div>
         <HelpPanel screen="projects" />
       </div>
-
-      {/* Main tabs */}
-      <ScrollTabs style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
-        {mainTabs.map(t => (
-          <button key={t.key} onClick={() => setMainTab(t.key)}
-            style={{ padding: '12px 22px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: mainTab === t.key ? accentColor : 'var(--text2)', borderBottom: `3px solid ${mainTab === t.key ? accentColor : 'transparent'}`, marginBottom: -2, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
 
       {mainTab === 'inventory' && (
         <MaterialInventoryTab session={session} isSolo={isSolo} onProjectCreated={loadAllProjects} />
