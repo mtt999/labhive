@@ -1,4 +1,3 @@
-import FloorPlanPicker from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -120,7 +119,6 @@ export default function MaterialStorage({ project }) {
   const [selectedId, setSelectedId] = useState(null)
   const [showScanner, setShowScanner] = useState(false)
   const [showPrint, setShowPrint] = useState(false)
-  const [showFloorPlan, setShowFloorPlan] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingBarcode, setEditingBarcode] = useState(null)
 
@@ -244,20 +242,14 @@ export default function MaterialStorage({ project }) {
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
             <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Location</div>
-            {(selected.locations || []).length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {(selected.locations || []).length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(selected.locations || []).map((loc, i) => (
                   <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {loc.detail || loc.location_id || loc.location}</span>
                 ))}
               </div>
-            )}
-            <button className="btn btn-sm btn-primary" onClick={() => setShowFloorPlan(true)}>
-              🗺️ {(selected.locations || []).length > 0 ? 'Update location on floor plan' : 'Assign location on floor plan'}
-            </button>
-            {showFloorPlan && (
-              <FloorPlanPicker projectId={project.id} projectName={project.name} materialId={selected.id} materialType={selected.material_type} currentLocations={selected.locations || []}
-                onConfirm={async (locs) => { await sb.from('project_materials').update({ locations: locs }).eq('id', selected.id); load() }}
-                onClose={() => setShowFloorPlan(false)} />
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text3)' }}>No location assigned. Use the floor plan in the Project Materials tab to set one.</div>
             )}
           </div>
 
