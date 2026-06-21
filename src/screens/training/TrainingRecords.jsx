@@ -522,7 +522,7 @@ function EquipmentTraining({ students, session }) {
 
   async function addEquipment() {
     if (!newEquip.name.trim()) { toast('Equipment name required.'); return }
-    await sb.from('equipment_inventory').insert({ equipment_name: newEquip.name.trim(), nickname: newEquip.description.trim() || newEquip.name.trim(), is_active: true })
+    await sb.from('equipment_inventory').insert({ equipment_name: newEquip.name.trim(), nickname: newEquip.description.trim() || newEquip.name.trim(), is_active: true, organization_id: session?.organizationId || null, login_mode: 'team' })
     setNewEquip({ name: '', description: '' })
     setShowAddEquip(false)
     load(); toast('Equipment added.')
@@ -983,12 +983,12 @@ function StudentLocker({ session }) {
 
   async function load() {
     setLoading(true)
+    const orgId = session?.organizationId
     let stQ = sb.from('users').select('id, name, last_name, project_group').eq('role', 'student').eq('is_active', true).order('name')
-    if (session?.organizationId) stQ = stQ.eq('organization_id', session.organizationId)
-    const [{ data: lk }, { data: st }] = await Promise.all([
-      sb.from('student_lockers').select('*').order('locker_number'),
-      stQ,
-    ])
+    if (orgId) stQ = stQ.eq('organization_id', orgId)
+    let lkQ = sb.from('student_lockers').select('*').order('locker_number')
+    if (orgId) lkQ = lkQ.eq('organization_id', orgId)
+    const [{ data: lk }, { data: st }] = await Promise.all([lkQ, stQ])
     if (!lk || lk.length === 0) {
       setLockers(Array.from({ length: TOTAL_LOCKERS }, (_, i) => ({ locker_number: i + 1, user_id: null, user_name: null })))
     } else {
@@ -1002,16 +1002,18 @@ function StudentLocker({ session }) {
     if (!selectedStudent) { toast('Select a lab user.'); return }
     const student = students.find(s => s.id === selectedStudent)
     if (!student) return
+    const orgId = session?.organizationId
     const displayName = firstName(student)
     const { error } = await sb.from('student_lockers').upsert({
       locker_number: lockerNumber,
+      organization_id: orgId || null,
       user_id: student.id,
       user_name: displayName,
       assigned_by: session.username,
       assigned_at: new Date().toISOString(),
       notes: notes || null,
       is_unavailable: false,
-    }, { onConflict: 'locker_number' })
+    }, { onConflict: 'organization_id,locker_number' })
     if (error) { toast('Error: ' + error.message); return }
     toast(`Locker ${lockerNumber} assigned to ${displayName} ✓`)
     setAssigning(null); setSelectedStudent(''); setNotes('')
@@ -1020,9 +1022,12 @@ function StudentLocker({ session }) {
 
   async function unassignLocker(locker) {
     if (!confirm(`Remove ${locker.user_name} from locker ${locker.locker_number}?`)) return
-    const { error } = await sb.from('student_lockers').update({
+    const orgId = session?.organizationId
+    let q = sb.from('student_lockers').update({
       user_id: null, user_name: null, assigned_by: null, assigned_at: null, notes: null
     }).eq('locker_number', locker.locker_number)
+    if (orgId) q = q.eq('organization_id', orgId)
+    const { error } = await q
     if (error) { toast('Error: ' + error.message); return }
     toast(`Locker ${locker.locker_number} cleared.`)
     load()
@@ -1031,13 +1036,15 @@ function StudentLocker({ session }) {
   async function toggleUnavailable(lockerNumber) {
     const locker = lockers.find(l => Number(l.locker_number) === lockerNumber)
     const nowUnavailable = !locker?.is_unavailable
-    // Optimistic update so checkbox reflects immediately
+    const orgId = session?.organizationId
     setLockers(prev => {
       const exists = prev.find(l => Number(l.locker_number) === lockerNumber)
       if (exists) return prev.map(l => Number(l.locker_number) === lockerNumber ? { ...l, is_unavailable: nowUnavailable } : l)
       return [...prev, { locker_number: lockerNumber, is_unavailable: nowUnavailable, user_id: null, user_name: null }]
     })
-    const { error } = await sb.from('student_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
+    let q = sb.from('student_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
+    if (orgId) q = q.eq('organization_id', orgId)
+    const { error } = await q
     if (error) { toast('Error: ' + error.message); load() }
   }
 

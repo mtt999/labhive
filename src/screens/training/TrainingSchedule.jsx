@@ -476,7 +476,9 @@ export function ExamTab({ session }) {
 
   async function loadEquipment() {
     setLoading(true)
-    const { data: eq } = await sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('nickname')
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('nickname')
+    if (session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    const { data: eq } = await eqQ
     setEquipment(eq || [])
 
     // Auto-select from localStorage (coming from Equipment page CTA)
@@ -537,6 +539,7 @@ export function ExamTab({ session }) {
     await sb.from('equipment_exam_results').insert({
       user_id: session.userId, equipment_id: selectedEq,
       score, total: questions.length, passed, answers,
+      organization_id: session?.organizationId || null,
     })
     // Mark progress
     await sb.from('equipment_material_progress').upsert({
