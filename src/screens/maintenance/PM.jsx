@@ -1927,21 +1927,23 @@ function Reminders({ userId }) {
         }
       </div>
 
-      {pastItems.length > 0 && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-          <button onClick={() => setShowDone(s => !s)} style={{ width: '100%', padding: '10px 16px', background: 'var(--surface2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: 'var(--text2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🕘 Past &amp; History</span>
-              <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{pastItems.length} item{pastItems.length !== 1 ? 's' : ''}</span>
-            </div>
-            <span style={{ fontSize: 12 }}>{showDone ? '▲' : '▼'}</span>
-          </button>
-          {showDone && pastItems.map(r => {
-            const isExpired = !r.is_done && r.end_day && r.end_day < today
-            return <ReminderCard key={r.id} r={r} isExpired={!!isExpired} />
-          })}
-        </div>
-      )}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        <button onClick={() => setShowDone(s => !s)} style={{ width: '100%', padding: '10px 16px', background: 'var(--surface2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: 'var(--text2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🕘 Past &amp; History</span>
+            <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{pastItems.length} item{pastItems.length !== 1 ? 's' : ''}</span>
+          </div>
+          <span style={{ fontSize: 12 }}>{showDone ? '▲' : '▼'}</span>
+        </button>
+        {showDone && (
+          pastItems.length === 0
+            ? <div style={{ padding: '16px', fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No past reminders yet.</div>
+            : pastItems.map(r => {
+                const isExpired = !r.is_done && r.end_day && r.end_day < today
+                return <ReminderCard key={r.id} r={r} isExpired={!!isExpired} />
+              })
+        )}
+      </div>
     </div>
   )
 }
