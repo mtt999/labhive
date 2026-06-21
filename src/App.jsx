@@ -5,7 +5,7 @@ import Login from './screens/auth/Login'
 import AdminLogin from './screens/auth/AdminLogin'
 import Layout from './components/Layout'
 import Dashboard from './screens/dashboard/Dashboard'
-import REMessages from './screens/messaging/REMessages'
+import LabMessage from './screens/messaging/LabMessage'
 import Home from './screens/inspection/Home'
 import Inspection from './screens/inspection/Inspection'
 import Results from './screens/inspection/Results'
@@ -383,7 +383,7 @@ export default function App() {
     equipment: <EquipmentInventory />,
     equipmenthub: <EquipmentHub />,
     booking: <BookingEquipment />,
-    remessages: <REMessages />,
+    remessages: <LabMessage />,
     pm: <PM />,
     barcode: <BarcodeScannerScreen />,
     barcodeqr: <BarcodeManager />,

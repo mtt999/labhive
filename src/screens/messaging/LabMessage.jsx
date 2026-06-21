@@ -4,6 +4,17 @@ import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 import HelpPanel from '../../components/HelpPanel'
 
+async function sendAppNotification(userId, senderName, messageBody) {
+  if (!userId) return
+  await sb.from('notifications').insert({
+    user_id: userId,
+    type: 'new_message',
+    title: `New message from ${senderName}`,
+    body: messageBody.slice(0, 100) + (messageBody.length > 100 ? '…' : ''),
+    read: false,
+  })
+}
+
 async function sendMessageEmail(userId, senderName, messageBody) {
   if (!userId) return
   const { data: prefs } = await sb.from('notification_prefs').select('*').eq('user_id', userId).maybeSingle()
@@ -78,7 +89,10 @@ function NewConvModal({ session, staff, onSent, onClose }) {
       ...(fileUrl ? { file_url: fileUrl, file_name: fileName } : {}),
     })
     if (error) { toast('Failed to send: ' + error.message); setSending(false); return }
-    if (form.receiverId) await sendMessageEmail(form.receiverId, session.username, form.body.trim())
+    if (form.receiverId) {
+      await sendAppNotification(form.receiverId, session.username, form.body.trim())
+      await sendMessageEmail(form.receiverId, session.username, form.body.trim())
+    }
     toast('Message sent ✓')
     setSending(false)
     onSent()
@@ -120,7 +134,7 @@ function NewConvModal({ session, staff, onSent, onClose }) {
   )
 }
 
-export default function REMessages() {
+export default function LabMessage() {
   const { session, toast, setScreen } = useAppStore()
   const [conversations, setConversations] = useState([])
   const [staff, setStaff] = useState([])
@@ -153,9 +167,8 @@ export default function REMessages() {
   }, [selectedId, selectedConv?.replies?.length])
 
   async function loadStaff() {
-    const isStudent = session?.role === 'student'
-    // Lab users see only lab managers; lab managers and org admins see everyone
-    const roles = isStudent ? ['user'] : ['user', 'admin']
+    // Lab managers see lab managers + org admins; lab users and org admins see only lab managers
+    const roles = isStaff ? ['user', 'admin'] : ['user']
     let q = sb.from('users').select('id, name, role').in('role', roles).eq('is_active', true).order('name')
     if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
@@ -244,7 +257,10 @@ export default function REMessages() {
     }).select().single()
     if (replyErr) { toast('Failed to send: ' + replyErr.message); setSendingReply(false); return }
 
-    if (otherId) await sendMessageEmail(otherId, session.username, replyText.trim())
+    if (otherId) {
+      await sendAppNotification(otherId, session.username, replyText.trim())
+      await sendMessageEmail(otherId, session.username, replyText.trim())
+    }
 
     if (newMsg) {
       setConversations(cs => cs.map(c => c.id === selectedId
