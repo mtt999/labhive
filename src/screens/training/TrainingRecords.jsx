@@ -583,6 +583,7 @@ function EquipmentTraining({ students, session }) {
       equipment_name: eq?.nickname || eq?.equipment_name,
       status: 'pending',
       requested_at: new Date().toISOString(),
+      organization_id: session?.organizationId || null,
     })
     if (error) { toast('Error: ' + error.message); return }
     toast('Training request submitted ✓')

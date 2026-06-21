@@ -45,11 +45,12 @@ export function TrainingRequestsPanel({ session }) {
 
   async function load() {
     setLoading(true)
-    const [{ data: reqs }, { data: sched }, { data: eq }] = await Promise.all([
-      sb.from('retraining_requests').select('*').order('id', { ascending: false }),
-      sb.from('training_schedule').select('*').order('created_at', { ascending: false }),
-      sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true),
-    ])
+    const orgId = session?.organizationId
+    let retQ = sb.from('retraining_requests').select('*').order('id', { ascending: false })
+    let schedQ = sb.from('training_schedule').select('*').order('created_at', { ascending: false })
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true)
+    if (orgId) { retQ = retQ.eq('organization_id', orgId); schedQ = schedQ.eq('organization_id', orgId); eqQ = eqQ.eq('organization_id', orgId) }
+    const [{ data: reqs }, { data: sched }, { data: eq }] = await Promise.all([retQ, schedQ, eqQ])
     setRequests(reqs || [])
     setSchedules(sched || [])
     setEquipment(eq || [])
@@ -71,6 +72,7 @@ export function TrainingRequestsPanel({ session }) {
       proposed_date: new Date(proposeDate).toISOString(),
       status: 'proposed', notes: proposeNotes || null,
       updated_at: new Date().toISOString(),
+      organization_id: session?.organizationId || null,
     }
     let schedErr
     if (sched) {
