@@ -153,7 +153,10 @@ export default function REMessages() {
   }, [selectedId, selectedConv?.replies?.length])
 
   async function loadStaff() {
-    let q = sb.from('users').select('id, name, role').in('role', ['user', 'admin']).eq('is_active', true).order('name')
+    const isStudent = session?.role === 'student'
+    // Lab users see only lab managers; lab managers and org admins see everyone
+    const roles = isStudent ? ['user'] : ['user', 'admin']
+    let q = sb.from('users').select('id, name, role').in('role', roles).eq('is_active', true).order('name')
     if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setStaff(data || [])
