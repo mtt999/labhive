@@ -1103,35 +1103,52 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
       )}
 
       {showAddTask && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', width: '100%', maxWidth: 420, padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>Add new task</div>
-              <button onClick={() => setShowAddTask(false)} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--border)', width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 22px 0' }}>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>Add new task</div>
+              <button onClick={() => setShowAddTask(false)} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1, padding: '0 2px' }}>×</button>
             </div>
-            <div className="field"><label>Task title *</label><input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="What needs to be done?" autoFocus /></div>
-            <div className="field">
-              <label>Priority</label>
-              <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
+            {/* Body */}
+            <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Task title *</label>
+                <input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="What needs to be done?" autoFocus />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Priority</label>
+                <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="field" style={{ marginBottom: 0 }}><label>Start date</label><input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} /></div>
+                <div className="field" style={{ marginBottom: 0 }}><label>Start time <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(opt)</span></label><input type="time" value={newTask.start_time} onChange={e => setNewTask({ ...newTask, start_time: e.target.value })} /></div>
+                <div className="field" style={{ marginBottom: 0 }}><label>Deadline</label><input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} /></div>
+                <div className="field" style={{ marginBottom: 0 }}><label>Deadline time <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(opt)</span></label><input type="time" value={newTask.deadline_time} onChange={e => setNewTask({ ...newTask, deadline_time: e.target.value })} /></div>
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Notes <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(opt)</span></label>
+                <textarea rows={3} style={{ resize: 'vertical' }} value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })} placeholder="Optional notes…" />
+              </div>
+              {/* Private toggle */}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: newTask.is_private ? 'var(--accent-light)' : 'var(--surface2)', cursor: 'pointer', transition: 'background 0.15s' }}>
+                <input type="checkbox" checked={newTask.is_private} onChange={e => setNewTask({ ...newTask, is_private: e.target.checked })} style={{ marginTop: 2, flexShrink: 0, accentColor: 'var(--accent)' }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🔒 Private task</div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, lineHeight: 1.4 }}>
+                    {isStudent ? 'Hidden from group members.' : 'Others see this as "Personal task" — title and notes stay private.'}
+                  </div>
+                </div>
+              </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div className="field"><label>Start date</label><input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} /></div>
-              <div className="field"><label>Start time <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(opt)</span></label><input type="time" value={newTask.start_time} onChange={e => setNewTask({ ...newTask, start_time: e.target.value })} /></div>
-              <div className="field"><label>Deadline</label><input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} /></div>
-              <div className="field"><label>Deadline time <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(opt)</span></label><input type="time" value={newTask.deadline_time} onChange={e => setNewTask({ ...newTask, deadline_time: e.target.value })} /></div>
-            </div>
-            <div className="field"><label>Notes</label><textarea rows={2} style={{ resize: 'vertical' }} value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })} placeholder="Optional notes…" /></div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)', marginBottom: 16, cursor: 'pointer' }}>
-              <input type="checkbox" checked={newTask.is_private} onChange={e => setNewTask({ ...newTask, is_private: e.target.checked })} />
-              {isStudent ? 'Private task (hide from group members)' : 'Personal task (private — others see "Personal task" in Team view)'}
-            </label>
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-              <button className="btn btn-primary" onClick={addTask} disabled={saving}>{saving ? 'Adding…' : 'Add task'}</button>
-              <button className="btn" onClick={() => setShowAddTask(false)}>Cancel</button>
+            {/* Footer */}
+            <div style={{ display: 'flex', gap: 10, padding: '0 22px 20px' }}>
+              <button className="btn btn-primary" onClick={addTask} disabled={saving} style={{ flex: 1 }}>{saving ? 'Adding…' : 'Add task'}</button>
+              <button className="btn" onClick={() => setShowAddTask(false)} style={{ flex: 1 }}>Cancel</button>
             </div>
           </div>
         </div>
