@@ -1,5 +1,6 @@
 import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import ScrollTabs from '../../components/ScrollTabs'
@@ -842,40 +843,39 @@ export default function EquipmentHub() {
     return (!q || [e.equipment_name, e.nickname, e.category, e.location].some(f => f?.toLowerCase().includes(q))) && (!filterCat || e.category === filterCat)
   })
 
-  const equipmentPanel = (
-    <div style={{ display: 'flex', flexDirection: mobile ? 'column' : 'row', gap: 20, alignItems: 'flex-start', minHeight: 500 }}>
-      {/* Left panel */}
-      <div style={{ width: mobile ? '100%' : 260, flexShrink: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        {isSolo && (
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
-            <button
-              className="btn btn-sm"
-              style={{ width: '100%', background: soloCats.length === 0 ? 'var(--surface2)' : '#534AB7', color: soloCats.length === 0 ? 'var(--text3)' : '#fff', border: 'none', fontWeight: 600, fontSize: 13 }}
-              onClick={() => soloCats.length === 0 ? setHubTab('categories') : setShowAddModal(true)}>
-              {soloCats.length === 0 ? '⚠️ Create categories first →' : '＋ Add equipment'}
-            </button>
-          </div>
-        )}
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search…" style={{ width: '100%', marginBottom: 8 }} />
-          <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+  // ── List panel — rendered in sidebar (desktop) or inline (mobile) ──
+  const listPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {isSolo && (
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <button className="btn btn-sm"
+            style={{ width: '100%', background: soloCats.length === 0 ? 'var(--surface2)' : '#534AB7', color: soloCats.length === 0 ? 'var(--text3)' : '#fff', border: 'none', fontWeight: 600, fontSize: 13 }}
+            onClick={() => soloCats.length === 0 ? setHubTab('categories') : setShowAddModal(true)}>
+            {soloCats.length === 0 ? '⚠️ Create categories first →' : '＋ Add equipment'}
+          </button>
         </div>
-        <div style={{ overflowY: 'auto', maxHeight: mobile ? 220 : 600 }}>
-          {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-            : filtered.length === 0 ? (
-              equipment.length === 0
-                ? <div style={{ padding: '20px 14px', fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
-                    <div style={{ fontSize: 22, marginBottom: 8 }}>🔧</div>
-                    <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment yet.</div>
-                    {isSolo
-                      ? <div style={{ fontSize: 12 }}>{soloCats.length === 0 ? 'Start by creating categories in the Categories tab, then add your equipment.' : 'Click "+ Add equipment" above to get started.'}</div>
-                      : <div style={{ fontSize: 12 }}>Equipment will appear here once items are added under the <strong>Equipment List</strong> icon by your administrator.</div>
-                    }
-                  </div>
-                : <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
+      )}
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search…" style={{ width: '100%', marginBottom: 6 }} />
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+          <option value="">All categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading
+          ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+          : filtered.length === 0
+            ? (equipment.length === 0
+              ? <div style={{ padding: '20px 14px', fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 22, marginBottom: 8 }}>🔧</div>
+                  <div style={{ fontWeight: 500, marginBottom: 4 }}>No equipment yet.</div>
+                  {isSolo
+                    ? <div style={{ fontSize: 12 }}>{soloCats.length === 0 ? 'Start by creating categories, then add equipment.' : 'Click "+ Add equipment" above.'}</div>
+                    : <div style={{ fontSize: 12 }}>Equipment is added by your administrator under <strong>Equipment</strong>.</div>
+                  }
+                </div>
+              : <div style={{ padding: 16, fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No equipment found.</div>
             )
             : filtered.map((e, idx) => (
               <div key={e.id} onClick={() => { setSelected(e); setSubTab('info') }}
@@ -883,7 +883,7 @@ export default function EquipmentHub() {
                 onMouseEnter={ev => { if (selected?.id !== e.id) ev.currentTarget.style.background = 'var(--surface2)' }}
                 onMouseLeave={ev => { if (selected?.id !== e.id) ev.currentTarget.style.background = 'transparent' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, flexShrink: 0 }}>#{idx+1}</span>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, flexShrink: 0 }}>#{idx + 1}</span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: selected?.id === e.id ? 600 : 500, fontSize: 13, color: selected?.id === e.id ? 'var(--accent)' : 'var(--text)' }}>{e.nickname || e.equipment_name}</div>
                     {e.nickname && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{e.equipment_name}</div>}
@@ -892,48 +892,48 @@ export default function EquipmentHub() {
                 </div>
               </div>
             ))
-          }
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {!selected ? (
-          <div className="empty-state" style={{ marginTop: 60 }}><div className="empty-icon">🔧</div><div>Select equipment from the list to view details</div></div>
-        ) : (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
-              {selected.nickname && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
-            </div>
-            <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-              {[
-                { key: 'info', label: '📋 Equipment' },
-                { key: 'standards', label: '📑 Standards' },
-                ...(canEdit(session) ? [{ key: 'access', label: '🔑 Temp Access' }] : [])
-              ].map(t => (
-                <button key={t.key} onClick={() => setSubTab(t.key)}
-                  style={{ padding: '10px 20px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                  {t.label}
-                </button>
-              ))}
-            </ScrollTabs>
-            {subTab === 'info' && <EquipmentInfo equipment={selected} session={session} />}
-            {subTab === 'standards' && <StandardsTab equipment={selected} session={session} />}
-            {subTab === 'access' && canEdit(session) && <TemporaryAccessPanel equipment={selected} session={session} />}
-          </div>
-        )}
+        }
       </div>
     </div>
   )
 
+  // ── Detail panel — always in the content area ──
+  const detailPanel = !selected ? (
+    <div className="empty-state" style={{ marginTop: 60 }}>
+      <div className="empty-icon">🔧</div>
+      <div>Select equipment from the {mobile ? 'list above' : 'sidebar'} to view details</div>
+    </div>
+  ) : (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
+        {selected.nickname && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
+      </div>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        {[
+          { key: 'info', label: '📋 Equipment' },
+          { key: 'standards', label: '📑 Standards' },
+          ...(canEdit(session) ? [{ key: 'access', label: '🔑 Temp Access' }] : [])
+        ].map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)}
+            style={{ padding: '10px 20px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+            {t.label}
+          </button>
+        ))}
+      </ScrollTabs>
+      {subTab === 'info' && <EquipmentInfo equipment={selected} session={session} />}
+      {subTab === 'standards' && <StandardsTab equipment={selected} session={session} />}
+      {subTab === 'access' && canEdit(session) && <TemporaryAccessPanel equipment={selected} session={session} />}
+    </div>
+  )
+
+  const sidebarSlot = !mobile && document.getElementById('sidebar-portal-slot')
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <HelpPanel screen="equipmenthub" />
-      </div>
+      <HelpPanel screen="equipmenthub" />
 
-      {/* Solo top-level tabs */}
+      {/* Solo top-level tabs (categories vs equipment) */}
       {isSolo && (
         <ScrollTabs style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
           {[{ key: 'equipment', label: '🔧 My Equipment' }, { key: 'categories', label: '🏷️ Categories' }].map(t => (
@@ -945,13 +945,24 @@ export default function EquipmentHub() {
         </ScrollTabs>
       )}
 
-      {(!isSolo || hubTab === 'equipment') && equipmentPanel}
+      {(!isSolo || hubTab === 'equipment') && (
+        <>
+          {/* Desktop: portal list panel to sidebar, show detail full-width */}
+          {sidebarSlot && createPortal(listPanel, sidebarSlot)}
+
+          {/* Mobile: list inline above detail */}
+          {mobile && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>
+              {listPanel}
+            </div>
+          )}
+
+          {detailPanel}
+        </>
+      )}
 
       {isSolo && hubTab === 'categories' && (
-        <SoloCategoriesTab
-          session={session}
-          onChanged={() => loadSoloCats(session?.userId).then(setSoloCats)}
-        />
+        <SoloCategoriesTab session={session} onChanged={() => loadSoloCats(session?.userId).then(setSoloCats)} />
       )}
 
       {showAddModal && (

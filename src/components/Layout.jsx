@@ -165,7 +165,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
 
           {/* Sub-tabs */}
           {tabs ? (
-            <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
+            <nav style={{ padding: '8px', overflowY: 'auto', flexShrink: 0 }}>
               {tabs.map(t => {
                 const active = activeTab === t.key
                 return (
@@ -180,9 +180,9 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
                 )
               })}
             </nav>
-          ) : (
-            <div style={{ flex: 1 }} />
-          )}
+          ) : null}
+          {/* Portal slot — screens inject custom sidebar content here via createPortal */}
+          <div id="sidebar-portal-slot" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }} />
         </>
       )}
     </aside>
