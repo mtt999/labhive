@@ -801,8 +801,8 @@ function SettingsTab() {
 }
 
 export default function Home() {
-  const { rooms, supplies, setScreen, setInspection, settings, toast, session } = useAppStore()
-  const [subTab, setSubTab] = useState('inspect')
+  const { rooms, supplies, setScreen, setInspection, settings, toast, session, sidebarSubTab } = useAppStore()
+  const subTab = sidebarSubTab || 'inspect'
 
   const today = new Date().getDay()
   const due = parseInt(settings['due_day'] || 5)
@@ -819,18 +819,6 @@ export default function Home() {
   }
 
   const isAdmin = session?.role === 'admin'
-  const canManage = session?.role === 'admin' || session?.role === 'user' || session?.loginMode === 'solo'
-
-  const subTabs = [
-    { key: 'inspect',  label: 'Inspection' },
-    { key: 'export',   label: 'Export Data' },
-    ...(canManage ? [
-      { key: 'rooms',    label: 'Rooms' },
-      { key: 'supplies', label: 'Supplies' },
-      { key: 'import',   label: 'Import' },
-      { key: 'settings', label: 'Settings' },
-    ] : []),
-  ]
 
   return (
     <div>
@@ -845,25 +833,17 @@ export default function Home() {
         </div>
       )}
 
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        {subTabs.map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)}
-            style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
-
       {subTab === 'inspect' && (
         <div>
           {rooms.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">🏠</div>No rooms yet. Go to Rooms tab to add rooms.</div>
           ) : (
-            <div className="room-grid">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
               {rooms.map(r => {
                 const cnt = supplies.filter(s => s.room_id === r.id).length
                 return (
-                  <div key={r.id} className="room-card" onClick={() => startInspection(r.id)} style={r.photo_url ? { paddingTop: 0, overflow: 'hidden' } : {}}>
+                  <div key={r.id} className="room-card" onClick={() => startInspection(r.id)}
+                    style={{ width: 160, flexShrink: 0, ...(r.photo_url ? { paddingTop: 0, overflow: 'hidden' } : {}) }}>
                     {r.photo_url ? <img src={r.photo_url} style={{ width: 'calc(100% + 32px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '-20px -16px 12px' }} /> : <div style={{ fontSize: 28, marginBottom: 8 }}>{r.icon || '🧪'}</div>}
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{cnt} item{cnt !== 1 ? 's' : ''}</div>

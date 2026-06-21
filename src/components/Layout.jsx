@@ -89,6 +89,20 @@ function getScreenTabs(screen, session) {
     { key: 'materials', icon: '📷', label: 'Project Materials' },
   ]
 
+  if (screen === 'home') {
+    const canManage = session?.role === 'admin' || session?.role === 'user' || session?.loginMode === 'solo'
+    return [
+      { key: 'inspect',  icon: '🔍', label: 'Inspection' },
+      { key: 'export',   icon: '📊', label: 'Export Data' },
+      ...(canManage ? [
+        { key: 'rooms',    icon: '🏠', label: 'Rooms' },
+        { key: 'supplies', icon: '📦', label: 'Supplies' },
+        { key: 'import',   icon: '📥', label: 'Import' },
+        { key: 'settings', icon: '⚙️', label: 'Settings' },
+      ] : []),
+    ]
+  }
+
   return null
 }
 
