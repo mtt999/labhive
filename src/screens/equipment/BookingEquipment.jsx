@@ -2,6 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
@@ -2462,64 +2463,67 @@ function BookingCalendar({ session }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: 'flex-start' }}>
-
-      {/* ── Left: equipment selector ── */}
-      <div style={{ width: isMobile ? '100%' : 220, flexShrink: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search…" style={{ width: '100%', fontSize: 12 }} />
-          <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        {(() => {
-          const allIds = filteredEq.map(e => e.id)
-          const allSelected = allIds.length > 0 && allIds.every(id => selectedEq.includes(id))
-          const someSelected = !allSelected && allIds.some(id => selectedEq.includes(id))
-          return (
-            <div
-              onClick={() => allSelected ? setSelectedEq([]) : setSelectedEq(prev => [...new Set([...prev, ...allIds])])}
-              style={{ padding: '7px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: allSelected ? 'var(--accent-light)' : 'var(--surface2)' }}
-            >
+      {/* ── Equipment selector panel — portaled to sidebar on desktop ── */}
+      {(() => {
+        const allIds = filteredEq.map(e => e.id)
+        const allSelected = allIds.length > 0 && allIds.every(id => selectedEq.includes(id))
+        const someSelected = !allSelected && allIds.some(id => selectedEq.includes(id))
+        const selectorPanel = (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search…" style={{ width: '100%', fontSize: 12 }} />
+              <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+                <option value="">All categories</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div onClick={() => allSelected ? setSelectedEq([]) : setSelectedEq(prev => [...new Set([...prev, ...allIds])])}
+              style={{ padding: '7px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: allSelected ? 'var(--accent-light)' : 'var(--surface2)', flexShrink: 0 }}>
               <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${allSelected || someSelected ? 'var(--accent)' : 'var(--border)'}`, background: allSelected ? 'var(--accent)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {allSelected && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
                 {someSelected && <span style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>—</span>}
               </div>
               <span style={{ fontSize: 12, fontWeight: 600, color: allSelected ? 'var(--accent)' : 'var(--text2)' }}>
-                {allSelected ? `All selected (${allIds.length})` : someSelected ? `${selectedEq.filter(id => allIds.includes(id)).length} selected` : 'Select all'}
+                {allSelected ? `All (${allIds.length})` : someSelected ? `${selectedEq.filter(id => allIds.includes(id)).length} selected` : 'Select all'}
               </span>
               {selectedEq.length > 0 && (
                 <button onClick={e => { e.stopPropagation(); setSelectedEq([]) }} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 11, padding: 0 }}>Clear</button>
               )}
             </div>
-          )
-        })()}
-        <div style={{ maxHeight: isMobile ? 200 : 500, overflowY: 'auto' }}>
-          {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-            : filteredEq.map(e => (
-              <div key={e.id} onClick={() => toggleEquipment(e.id)}
-                style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
-                onMouseEnter={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'var(--surface2)' }}
-                onMouseLeave={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'transparent' }}>
-                <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--border)'}`, background: selectedEq.includes(e.id) ? 'var(--accent)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {selectedEq.includes(e.id) && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {e.nickname || e.equipment_name}
-                    {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+                : filteredEq.map(e => (
+                  <div key={e.id} onClick={() => toggleEquipment(e.id)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
+                    onMouseEnter={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'var(--surface2)' }}
+                    onMouseLeave={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'transparent' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--border)'}`, background: selectedEq.includes(e.id) ? 'var(--accent)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {selectedEq.includes(e.id) && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.nickname || e.equipment_name}
+                        {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
+                      </div>
+                      {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
+                    </div>
                   </div>
-                  {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
-                </div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
+                ))
+              }
+            </div>
+          </div>
+        )
+        const sidebarSlot = !isMobile && document.getElementById('sidebar-portal-slot')
+        return (
+          <>
+            {sidebarSlot && createPortal(selectorPanel, sidebarSlot)}
+            {isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 12 }}>{selectorPanel}</div>}
+          </>
+        )
+      })()}
 
-      {/* ── Right: calendar ── */}
-      <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : 'auto' }}>
+      {/* ── Calendar (full width on desktop, below selector on mobile) ── */}
+      <div style={{ width: '100%' }}>
 
         {/* Calendar toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
@@ -2725,7 +2729,6 @@ function BookingCalendar({ session }) {
         />
       )}
     </div>
-  </div>
   )
 }
 

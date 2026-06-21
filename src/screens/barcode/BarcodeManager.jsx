@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { useIsMobile } from '../../components/Layout'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { ScannerContent } from './BarcodeScannerScreen'
@@ -144,6 +146,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
   const [selected, setSelected] = useState(null)
   const [printSize, setPrintSize] = useState('2x2')
   const [copied, setCopied] = useState(false)
+  const isMobile = useIsMobile()
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))]
   const filtered = equipment.filter(e => {
@@ -160,70 +163,46 @@ function EquipmentBarcodeTab({ equipment, loading }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
-      {/* Left: equipment list */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Select Equipment</div>
-          <input
-            type="search"
-            placeholder="Search by name, nickname, location…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)', marginBottom: 8, boxSizing: 'border-box' }}
-          />
-          <select
-            value={filterCat}
-            onChange={e => setFilterCat(e.target.value)}
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)' }}
-          >
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-          {loading ? (
-            <div style={{ padding: 32, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>No equipment found.</div>
-          ) : filtered.map(eq => (
-            <div
-              key={eq.id}
-              onClick={() => setSelected(eq)}
-              style={{
-                padding: '11px 16px',
-                borderBottom: '0.5px solid var(--surface2)',
-                cursor: 'pointer',
-                background: selected?.id === eq.id ? 'var(--accent-light)' : 'transparent',
-                display: 'flex', alignItems: 'center', gap: 10,
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={e => { if (selected?.id !== eq.id) e.currentTarget.style.background = 'var(--surface2)' }}
-              onMouseLeave={e => { if (selected?.id !== eq.id) e.currentTarget.style.background = 'transparent' }}
-            >
-              <div style={{
-                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                background: selected?.id === eq.id ? 'var(--accent)' : 'var(--surface2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, color: selected?.id === eq.id ? '#fff' : 'var(--text3)',
-                fontWeight: 700,
-              }}>
-                {selected?.id === eq.id ? '✓' : '🔧'}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: selected?.id === eq.id ? 700 : 500, color: selected?.id === eq.id ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {eq.equipment_name}
-                  {eq.nickname && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)', marginLeft: 6 }}>({eq.nickname})</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-                  {[eq.category, eq.location].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+  const listPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <input type="search" placeholder="🔍 Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', marginBottom: 6 }} />
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+          <option value="">All categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ padding: 32, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>No equipment found.</div>
+        ) : filtered.map(eq => (
+          <div key={eq.id} onClick={() => setSelected(eq)}
+            style={{ padding: '10px 12px', borderBottom: '0.5px solid var(--surface2)', cursor: 'pointer', background: selected?.id === eq.id ? 'var(--accent-light)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.12s' }}
+            onMouseEnter={e => { if (selected?.id !== eq.id) e.currentTarget.style.background = 'var(--surface2)' }}
+            onMouseLeave={e => { if (selected?.id !== eq.id) e.currentTarget.style.background = 'transparent' }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, flexShrink: 0, background: selected?.id === eq.id ? 'var(--accent)' : 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: selected?.id === eq.id ? '#fff' : 'var(--text3)', fontWeight: 700 }}>
+              {selected?.id === eq.id ? '✓' : '🔧'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: selected?.id === eq.id ? 700 : 500, color: selected?.id === eq.id ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {eq.equipment_name}{eq.nickname && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)', marginLeft: 5 }}>({eq.nickname})</span>}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{[eq.category, eq.location].filter(Boolean).join(' · ')}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const sidebarSlot = !isMobile && document.getElementById('sidebar-portal-slot')
+
+  return (
+    <div>
+      {sidebarSlot && createPortal(listPanel, sidebarSlot)}
+      {isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>{listPanel}</div>}
 
       {/* Right: preview + print */}
       <div>
