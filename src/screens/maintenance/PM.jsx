@@ -2025,7 +2025,6 @@ export default function PM() {
     ...(!isSolo ? [{ key: 'team', label: 'Team' }] : []),
     { key: 'calendar',  label: 'Calendar' },
     ...(!isSolo ? [{ key: 'meetings', label: 'Meetings' }] : []),
-    ...(!isSolo ? [{ key: 'chat', label: 'Chat' }] : []),
     { key: 'reminder',  label: 'Reminders' },
     ...(session?.role === 'admin' ? [{ key: 'assign', label: 'Assign others' }] : [])
   ]
@@ -2053,7 +2052,6 @@ export default function PM() {
       {activeTab === 'team'      && isStudent && studentGroupId && <StudentTeamView userId={userId} groupId={studentGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setActiveTab('tasks') }} />}
       {activeTab === 'meetings'  && !isStudent && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
-      {activeTab === 'chat'      && !isStudent && <Chat userId={userId} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}
     </div>
