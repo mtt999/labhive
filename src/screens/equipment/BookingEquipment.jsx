@@ -218,12 +218,9 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     if (!form.start_time || !form.end_time) { toast('Please select a start and end time.'); return }
     if (new Date(form.end_time) <= new Date(form.start_time)) { toast('End time must be after start time.'); return }
     if (conflict) { toast('This time slot conflicts with an existing booking.'); return }
-    const isSolo = session?.loginMode === 'solo' || session?.role === 'solo'
-    if (isSolo) {
-      if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
-      if (form.purposeType === 'project' && !form.purposeProjectId && projects.length > 0) { toast('Select a project.'); return }
-      if (form.purposeType === 'other' && !form.purposeOther.trim()) { toast('Describe the reason for the booking.'); return }
-    }
+    if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
+    if (form.purposeType === 'project' && !form.purposeProjectId && projects.length > 0) { toast('Select a project.'); return }
+    if (form.purposeType === 'other' && !form.purposeOther.trim()) { toast('Describe the reason for the booking.'); return }
     setSaving(true)
     // Check if equipment requires approval for this user
     let requiresApproval = false
@@ -323,7 +320,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
         </div>
 
         <div className="field">
-          <label>Purpose of use</label>
+          <label>Purpose of use *</label>
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
             {[
               { id: 'project', icon: '🧪', label: 'Project' },
@@ -803,6 +800,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
                       if (!reschedule) onBookingClick(b)
                       // reschedule click handled by onMouseUp (hasMoved=false)
                     }}
+                    title={[b.booked_on_behalf_of || b.user_name, b.title, b.notes].filter(Boolean).join(' · ')}
                     style={{ position: 'absolute', top: seg.top + 1, left: leftVal, right: rightVal, height: seg.height, background: statusBg[b.status], border: `1px solid ${statusColor[b.status]}50`, borderLeft: `3px solid ${statusColor[b.status]}`, borderRadius: br, padding: '2px 5px', fontSize: 10, overflow: 'hidden', zIndex: isDragging ? 1 : 2, cursor: reschedule ? 'grab' : 'pointer', opacity: isDragging ? 0.35 : 1 }}>
                     {/* Resize top handle */}
                     {reschedule && seg.isStart && (
@@ -871,6 +869,7 @@ function MonthView({ monthDate, bookings, onDayClick, onBookingClick }) {
               <div style={{ fontWeight: isToday ? 700 : 400, fontSize: 13, color: isToday ? 'var(--accent)' : isCurrentMonth ? 'var(--text)' : 'var(--text3)', marginBottom: 2 }}>{day.getDate()}</div>
               {dayBookings.slice(0, 3).map(b => (
                 <div key={b.id} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onBookingClick(b) }}
+                  title={[b.booked_on_behalf_of || b.user_name, b.title, b.notes].filter(Boolean).join(' · ')}
                   style={{ fontSize: 10, background: statusBg[b.status], color: statusColor[b.status], borderRadius: 3, padding: '1px 4px', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                   {fmtTime(b.start_time)} {b.booked_on_behalf_of || b.user_name}
                 </div>
@@ -1505,7 +1504,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && (
             <button className="btn btn-sm" onClick={() => onEdit(booking)}>✏️ Edit</button>
           )}
@@ -1515,10 +1514,19 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
           {isAdmin(session) && booking.status !== 'denied' && booking.status !== 'cancelled' && !showDenyForm && (
             <button className="btn btn-sm btn-danger" onClick={() => setShowDenyForm(true)}>✕ Deny</button>
           )}
-          {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && (
-            <button className="btn btn-sm" style={{ color: 'var(--accent2)' }} onClick={() => onDelete(booking)}>🗑 Cancel</button>
-          )}
         </div>
+        {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && new Date(booking.start_time) > new Date() && (
+          <button
+            className="btn btn-danger"
+            style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
+            onClick={() => onDelete(booking)}
+          >
+            🗑 Cancel booking
+          </button>
+        )}
+        {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && new Date(booking.start_time) <= new Date() && (
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4, fontStyle: 'italic' }}>Booking has started — cancellation not available.</div>
+        )}
 
         {photoRequired && <CleanlinessSection booking={booking} session={session} eqName={eq?.nickname || eq?.equipment_name} onUpdated={onUpdated} />}
       </div>
@@ -1879,6 +1887,14 @@ function BookingCalendar({ session }) {
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [showMultiModal, setShowMultiModal] = useState(false)
   const [multiSlot, setMultiSlot] = useState(null)
+  // Multi-device drag booking mode
+  const [multiDraftMode, setMultiDraftMode]   = useState(false)
+  const [multiDraftSlots, setMultiDraftSlots] = useState({}) // eqId -> { start, end }
+  const [multiDraftIdx, setMultiDraftIdx]     = useState(0)
+  const [multiDraftPurpose, setMultiDraftPurpose] = useState('')
+  const [multiDraftOther, setMultiDraftOther]     = useState('')
+  const [multiDraftNotes, setMultiDraftNotes]     = useState('')
+  const [multiDraftSaving, setMultiDraftSaving]   = useState(false)
   const [bookingDraft, setBookingDraft] = useState(null)
   const [editBooking, setEditBooking] = useState(null)
   const [detailBooking, setDetailBooking] = useState(null)
@@ -1931,7 +1947,8 @@ function BookingCalendar({ session }) {
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
-    if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
+    else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setEquipment(data || [])
     equipmentRef.current = data || []
@@ -2162,7 +2179,12 @@ function BookingCalendar({ session }) {
       return
     }
     if (selectedEq.length > 1) {
-      setMultiSlot(slot); setShowMultiModal(true)
+      const idx = multiDraftMode ? multiDraftIdx : 0
+      if (idx < selectedEq.length) {
+        setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
+        setMultiDraftIdx(idx + 1)
+        if (!multiDraftMode) setMultiDraftMode(true)
+      }
     } else {
       setBookingDraft(slot)
       const usePanel = !isMobile && window.innerWidth >= 1050 && calView === 'week'
@@ -2201,10 +2223,51 @@ function BookingCalendar({ session }) {
     const end   = new Date(day); end.setHours(17, 0, 0, 0)
     const slot  = { start: start.toISOString().slice(0,16), end: end.toISOString().slice(0,16) }
     if (selectedEq.length > 1) {
-      setMultiSlot(slot); setShowMultiModal(true)
+      const idx = multiDraftMode ? multiDraftIdx : 0
+      if (idx < selectedEq.length) {
+        setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
+        setMultiDraftIdx(idx + 1)
+        if (!multiDraftMode) setMultiDraftMode(true)
+      }
     } else {
       setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
     }
+  }
+
+  function exitMultiDraft() {
+    setMultiDraftMode(false); setMultiDraftSlots({}); setMultiDraftIdx(0)
+    setMultiDraftPurpose(''); setMultiDraftOther(''); setMultiDraftNotes('')
+  }
+
+  async function bookAllFromDraft() {
+    if (!multiDraftPurpose) { toast('Select a purpose for the bookings.'); return }
+    if (multiDraftPurpose === 'other' && !multiDraftOther.trim()) { toast('Describe the reason.'); return }
+    const allSet = selectedEq.every(id => multiDraftSlots[id])
+    if (!allSet) { toast('Set a time slot for every selected equipment first.'); return }
+    setMultiDraftSaving(true)
+    const purposeTitle = multiDraftPurpose === 'project' ? 'Project' : multiDraftPurpose === 'thesis' ? 'Thesis' : `Other: ${multiDraftOther.trim()}`
+    let failed = 0
+    for (const eqId of selectedEq) {
+      const t = multiDraftSlots[eqId]
+      const { error } = await sb.from('equipment_bookings').insert({
+        equipment_id: eqId,
+        user_id: session.userId,
+        user_name: session.username,
+        title: purposeTitle,
+        start_time: new Date(t.start).toISOString(),
+        end_time:   new Date(t.end).toISOString(),
+        status: 'confirmed',
+        notes: multiDraftNotes.trim() || null,
+        created_by: session.username,
+        updated_at: new Date().toISOString(),
+      })
+      if (error) failed++
+    }
+    setMultiDraftSaving(false)
+    if (failed > 0) toast(`${failed} booking(s) failed — check for conflicts.`)
+    else toast(`${selectedEq.length} bookings confirmed ✓`)
+    exitMultiDraft()
+    loadBookings()
   }
 
   async function handleDeny(booking, reason) {
@@ -2239,6 +2302,7 @@ function BookingCalendar({ session }) {
   }
 
   async function handleCancel(booking) {
+    if (new Date(booking.start_time) <= new Date()) { toast('Past bookings cannot be cancelled.'); return }
     if (!confirm('Cancel this booking?')) return
     setDetailBooking(null)
     await sb.from('equipment_bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', booking.id)
@@ -2496,6 +2560,83 @@ function BookingCalendar({ session }) {
               {selectedEq.length === 0 && (
                 <div style={{ padding: '8px 14px', background: '#fef3c7', borderBottom: '1px solid #f0d070', fontSize: 12, color: '#92400e' }}>
                   💡 Select equipment on the left to enable drag-to-book
+                </div>
+              )}
+              {selectedEq.length > 1 && !multiDraftMode && (
+                <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 4 }}>📅 Multi-device booking — {selectedEq.length} equipment selected</div>
+                  <div style={{ fontSize: 12, color: '#534AB7' }}>Drag on the calendar to set a time slot for each device one by one. After the first drag the progress tracker will appear here.</div>
+                </div>
+              )}
+              {multiDraftMode && (
+                <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 8 }}>
+                        {multiDraftIdx < selectedEq.length
+                          ? `Drag on calendar to set time for: ${equipment.find(e => e.id === selectedEq[multiDraftIdx])?.nickname || equipment.find(e => e.id === selectedEq[multiDraftIdx])?.equipment_name} (${multiDraftIdx + 1} of ${selectedEq.length})`
+                          : `All ${selectedEq.length} times set — fill in details below and confirm`}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                        {selectedEq.map((id, i) => {
+                          const eq = equipment.find(e => e.id === id)
+                          const slot = multiDraftSlots[id]
+                          const isCurrent = i === multiDraftIdx
+                          return (
+                            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99, fontSize: 12, fontWeight: 600,
+                              background: slot ? '#e8f2ee' : isCurrent ? '#534AB7' : 'rgba(83,74,183,0.12)',
+                              color: slot ? '#0f6e56' : isCurrent ? '#fff' : '#534AB7',
+                              border: `1px solid ${slot ? '#0f6e56' : isCurrent ? '#534AB7' : '#C5C2F5'}` }}>
+                              {slot ? '✓' : isCurrent ? '→' : '○'} {eq?.nickname || eq?.equipment_name}
+                              {slot && <span style={{ fontWeight: 400, marginLeft: 4 }}>{fmtTime(slot.start)}</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {Object.keys(multiDraftSlots).length > 0 && multiDraftIdx < selectedEq.length && (
+                        <button className="btn btn-sm" style={{ fontSize: 11, marginBottom: 8 }}
+                          onClick={() => {
+                            const first = multiDraftSlots[selectedEq[0]]
+                            if (!first) return
+                            const all = Object.fromEntries(selectedEq.map(id => [id, first]))
+                            setMultiDraftSlots(all); setMultiDraftIdx(selectedEq.length)
+                            toast('Time applied to all equipment ✓')
+                          }}>
+                          Copy first time to all
+                        </button>
+                      )}
+                      {multiDraftIdx >= selectedEq.length && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 4 }}>
+                          <div className="field" style={{ margin: 0, minWidth: 200 }}>
+                            <label style={{ fontSize: 11 }}>Purpose of use *</label>
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                              {[{ id: 'project', label: '🧪 Project' }, { id: 'thesis', label: '📚 Thesis' }, { id: 'other', label: '📝 Other' }].map(opt => (
+                                <div key={opt.id} onClick={() => setMultiDraftPurpose(opt.id)}
+                                  style={{ padding: '5px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                                    border: multiDraftPurpose === opt.id ? '2px solid #534AB7' : '1.5px solid var(--border)',
+                                    background: multiDraftPurpose === opt.id ? '#EEEDFE' : 'var(--surface)',
+                                    color: multiDraftPurpose === opt.id ? '#534AB7' : 'var(--text)' }}>
+                                  {opt.label}
+                                </div>
+                              ))}
+                            </div>
+                            {multiDraftPurpose === 'other' && (
+                              <input value={multiDraftOther} onChange={e => setMultiDraftOther(e.target.value)} placeholder="Describe the reason…" style={{ marginTop: 6, fontSize: 12 }} />
+                            )}
+                          </div>
+                          <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
+                            <label style={{ fontSize: 11 }}>Notes (optional)</label>
+                            <input value={multiDraftNotes} onChange={e => setMultiDraftNotes(e.target.value)} placeholder="Any notes for all bookings…" style={{ fontSize: 12 }} />
+                          </div>
+                          <button className="btn btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7', whiteSpace: 'nowrap' }}
+                            onClick={bookAllFromDraft} disabled={multiDraftSaving}>
+                            {multiDraftSaving ? 'Confirming…' : `Confirm ${selectedEq.length} bookings`}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button className="btn btn-sm" onClick={exitMultiDraft} style={{ flexShrink: 0 }}>✕ Cancel</button>
+                  </div>
                 </div>
               )}
               <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
@@ -3016,7 +3157,7 @@ export default function BookingEquipment() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Booking Equipment</div>
+        <div className="section-title">Reserve Equipment</div>
         <HelpPanel screen="booking" />
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
