@@ -2005,7 +2005,7 @@ export default function ProjectMaterial() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">Project &amp; Material</div>
+        <div className="section-title">Project Workspace</div>
         <HelpPanel screen="projects" />
       </div>
 

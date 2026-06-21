@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
+import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../barcode/BarcodeScannerScreen'
 
 // ── Constants ─────────────────────────────────────────────────
 const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
@@ -108,8 +109,9 @@ function CheckList({ options, selected, onChange, required }) {
 }
 
 // ── Material type form (conditional fields) ───────────────────
-function MaterialTypeForm({ form, setForm }) {
-  const types = [
+// orgTypes: array of {key, label} loaded from org's material_types (or category defaults)
+function MaterialTypeForm({ form, setForm, orgTypes }) {
+  const types = orgTypes?.length ? orgTypes : [
     { key: 'aggregate',      label: 'Aggregate' },
     { key: 'asphalt_binder', label: 'Asphalt Binder' },
     { key: 'plant_mix',      label: 'Plant Mix' },
@@ -236,6 +238,14 @@ function MaterialTypeForm({ form, setForm }) {
         <div className="field">
           <label>Additional Info <span style={{ color: 'var(--accent2)' }}>*</span></label>
           <textarea rows={3} value={form.other_info || ''} onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))} placeholder="Describe the material type and any relevant details…" style={{ resize: 'vertical' }} />
+        </div>
+      )}
+
+      {/* ── GENERIC fallback for custom/non-civil-eng types ── */}
+      {form.material_type && !['aggregate','asphalt_binder','plant_mix','cores','other'].includes(form.material_type) && (
+        <div className="field">
+          <label>Additional Details (optional)</label>
+          <textarea rows={3} value={form.other_info || ''} onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))} placeholder="Grade, specification, lot number, or any relevant details…" style={{ resize: 'vertical' }} />
         </div>
       )}
     </Section>
@@ -453,28 +463,15 @@ function PhotosForm({ form, setForm, materialId }) {
     setForm(f => ({ ...f, photos: f.photos.filter(p => p !== url) }))
   }
 
+  const hasPhotos = (form.photos || []).length > 0
+
   return (
     <Section title="6 · Material Photos">
-      {/* Drop zone */}
-      <div
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files) }}
-        onClick={() => inputRef.current?.click()}
-        style={{ border: '2px dashed var(--border)', borderRadius: 'var(--radius)', padding: 28, textAlign: 'center', cursor: 'pointer', marginBottom: 16, transition: 'all 0.15s' }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent3)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-      >
-        <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text2)', marginBottom: 4 }}>
-          {uploading ? 'Uploading…' : 'Drag & drop photos here, or click to browse'}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>Multiple photos supported · JPG, PNG</div>
-        <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
-      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
 
       {/* Photo grid */}
-      {(form.photos || []).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+      {hasPhotos && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10, marginBottom: 10 }}>
           {form.photos.map((url, i) => (
             <div key={i} style={{ position: 'relative', borderRadius: 'var(--radius)', overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '1' }}>
               <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -485,6 +482,32 @@ function PhotosForm({ form, setForm, materialId }) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Full drop zone when no photos yet; compact button when photos exist */}
+      {!hasPhotos ? (
+        <div
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files) }}
+          onClick={() => inputRef.current?.click()}
+          style={{ border: '2px dashed var(--border)', borderRadius: 'var(--radius)', padding: 28, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent3)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text2)', marginBottom: 4 }}>
+            {uploading ? 'Uploading…' : 'Drag & drop photos here, or click to browse'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Multiple photos supported · JPG, PNG</div>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1.5px dashed var(--border)', background: 'var(--surface2)', fontSize: 13, color: 'var(--text2)', cursor: 'pointer' }}
+        >
+          📷 {uploading ? 'Uploading…' : 'Add more photos'}
+        </button>
       )}
     </Section>
   )
@@ -646,6 +669,17 @@ function validate(form, toast, isSolo) {
 function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
   const { toast, session } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
+  const [orgTypes, setOrgTypes] = useState(null)
+
+  useEffect(() => {
+    if (isSolo || !session?.organizationId) return
+    sb.from('organizations').select('material_types, category').eq('id', session.organizationId).single()
+      .then(({ data }) => {
+        const catDefaults = CATEGORY_DEFAULT_TYPES[data?.category] || DEFAULT_TYPES
+        setOrgTypes(data?.material_types?.length ? data.material_types : catDefaults)
+      })
+  }, [session?.organizationId])
+
   const [form, setForm] = useState(material ? {
     name: material.name || '',
     material_type: material.material_type || '',
@@ -741,7 +775,7 @@ function MaterialModal({ projectId, projectName, material, onClose, onSaved }) {
           </>
         ) : (
           <>
-            <MaterialTypeForm form={form} setForm={setForm} />
+            <MaterialTypeForm form={form} setForm={setForm} orgTypes={orgTypes} />
             <SourceForm form={form} setForm={setForm} />
             <QtyForm form={form} setForm={setForm} />
             <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />

@@ -12,6 +12,56 @@ export const DEFAULT_TYPES = [
   { key: 'other',          label: 'Other' },
 ]
 
+// Category-appropriate defaults — used when org has no custom material_types saved
+export const CATEGORY_DEFAULT_TYPES = {
+  'Medical / Clinical': [
+    { key: 'tissue_sample', label: 'Tissue Sample' },
+    { key: 'blood_serum',   label: 'Blood / Serum' },
+    { key: 'reagent',       label: 'Reagent / Chemical' },
+    { key: 'cell_culture',  label: 'Cell Culture' },
+    { key: 'device',        label: 'Medical Device' },
+    { key: 'other',         label: 'Other' },
+  ],
+  'Research Institute': [
+    { key: 'chemical',    label: 'Chemical / Reagent' },
+    { key: 'biological',  label: 'Biological Sample' },
+    { key: 'polymer',     label: 'Polymer / Plastic' },
+    { key: 'metal',       label: 'Metal / Alloy' },
+    { key: 'composite',   label: 'Composite' },
+    { key: 'other',       label: 'Other' },
+  ],
+  'University / Academic': [
+    { key: 'chemical',    label: 'Chemical / Reagent' },
+    { key: 'biological',  label: 'Biological Sample' },
+    { key: 'aggregate',   label: 'Aggregate' },
+    { key: 'polymer',     label: 'Polymer / Plastic' },
+    { key: 'metal',       label: 'Metal / Alloy' },
+    { key: 'other',       label: 'Other' },
+  ],
+  'Industrial / Manufacturing': [
+    { key: 'raw_material', label: 'Raw Material' },
+    { key: 'metal',        label: 'Metal / Alloy' },
+    { key: 'polymer',      label: 'Polymer / Plastic' },
+    { key: 'composite',    label: 'Composite' },
+    { key: 'liquid',       label: 'Liquid / Solvent' },
+    { key: 'other',        label: 'Other' },
+  ],
+  'Government / Defense': [
+    { key: 'metal',      label: 'Metal / Alloy' },
+    { key: 'composite',  label: 'Composite' },
+    { key: 'chemical',   label: 'Chemical' },
+    { key: 'aggregate',  label: 'Aggregate' },
+    { key: 'other',      label: 'Other' },
+  ],
+  'Teaching / Training': [
+    { key: 'chemical',   label: 'Chemical / Reagent' },
+    { key: 'aggregate',  label: 'Aggregate' },
+    { key: 'metal',      label: 'Metal / Alloy' },
+    { key: 'polymer',    label: 'Polymer / Plastic' },
+    { key: 'other',      label: 'Other' },
+  ],
+}
+
 const COLOR_PALETTE = [
   { bg: '#fef3c7', color: '#92400e' },
   { bg: '#e0f2fe', color: '#0369a1' },
@@ -528,6 +578,7 @@ function SummaryTab({ typeLabels, typeColors }) {
 // ── Material Types Manager ────────────────────────────────────────────────────
 export function MaterialTypesManager({ session }) {
   const [types, setTypes] = useState(null)
+  const [orgCategory, setOrgCategory] = useState(null)
   const [newLabel, setNewLabel] = useState('')
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -537,8 +588,15 @@ export function MaterialTypesManager({ session }) {
 
   async function load() {
     if (!session?.organizationId) return
-    const { data } = await sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
-    setTypes(data?.material_types?.length ? data.material_types : DEFAULT_TYPES)
+    const { data } = await sb.from('organizations').select('material_types, category').eq('id', session.organizationId).single()
+    const cat = data?.category || null
+    setOrgCategory(cat)
+    const catDefaults = CATEGORY_DEFAULT_TYPES[cat] || DEFAULT_TYPES
+    setTypes(data?.material_types?.length ? data.material_types : catDefaults)
+  }
+
+  function categoryDefaults() {
+    return CATEGORY_DEFAULT_TYPES[orgCategory] || DEFAULT_TYPES
   }
 
   async function save(newTypes) {
@@ -583,8 +641,9 @@ export function MaterialTypesManager({ session }) {
   }
 
   function resetToDefaults() {
-    if (!confirm('Reset to default types? All custom types will be removed.')) return
-    save(DEFAULT_TYPES)
+    const label = orgCategory ? `category defaults for "${orgCategory}"` : 'default types'
+    if (!confirm(`Reset to ${label}? All custom types will be removed.`)) return
+    save(categoryDefaults())
   }
 
   const { colors: typeColors } = buildTypeMap(types || DEFAULT_TYPES)
@@ -594,9 +653,12 @@ export function MaterialTypesManager({ session }) {
   return (
     <div style={{ maxWidth: 520 }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Material Types</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Material Types</div>
+          {orgCategory && <span style={{ fontSize: 11, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontWeight: 600 }}>{orgCategory}</span>}
+        </div>
         <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.5 }}>
-          These types appear in the "All Materials" type filter. Customize the list for your organization — changes apply immediately to all users.
+          Customize the material type list for your organization. The defaults are based on your org's category. Changes apply immediately to all users.
         </div>
       </div>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
