@@ -19,6 +19,7 @@ async function notifyOrgManagers(organizationId, message, type = 'info', exclude
 }
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
+const ICT_ORG_ID = '5bab5b33-fff9-4a4a-b617-3dac179f9678'
 const DEGREES = ['MS', 'PhD', 'BS', 'Other']
 const SEMESTERS = ['Fall', 'Spring', 'Summer']
 const YEARS = Array.from({ length: 15 }, (_, i) => String(new Date().getFullYear() - i))
@@ -1266,7 +1267,7 @@ export function StudentsPanel({ toast, session }) {
       if (!actualEmail) { toast('Email is required for student login.'); return }
     }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
-    const payload = { name: form.lastName.trim(), email: form.firstName.trim() || null, phone: actualEmail || null, degree: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nickname: form.nickname || null, organization_id: session?.organizationId || null, role: 'student', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password }
+    const payload = { name: form.lastName.trim(), email: form.firstName.trim() || null, phone: actualEmail || null, degree: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nickname: form.nickname || null, organization_id: session?.organizationId || null, role: 'student', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
     if (!id && form.password && actualEmail) {
       try {
         const authUser = await createAuthUser(actualEmail, form.password)
@@ -1323,7 +1324,7 @@ export function StudentsPanel({ toast, session }) {
     setImporting(true)
     let added = 0
     for (const s of importPreview) {
-      const { error } = await sb.from('users').insert({ ...s, pin: '', role: 'student', is_active: true, admin_level: 0, must_change_password: true })
+      const { error } = await sb.from('users').insert({ ...s, pin: '', role: 'student', is_active: true, admin_level: 0, must_change_password: true, terms_accepted_version: null })
       if (!error) added++
     }
     setImportPreview(null); setImporting(false); load(); toast(`${added} students imported. Set their passwords individually to activate login.`)
@@ -1434,12 +1435,14 @@ function StudentModal({ student, session, onClose, onSave }) {
           <input type="text" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={student ? 'Leave blank to keep unchanged' : 'Min. 6 chars'} />
         </div>
         <div className="grid-2">
-          <div className="field"><label>Supervisor</label><input value={form.supervisor} onChange={e=>setForm(f=>({...f,supervisor:e.target.value}))} placeholder="e.g. Prof. Imad Al-Qadi" /></div>
-          <div className="field"><label>Project Group</label>
-            <select value={form.project_group} onChange={e=>setForm(f=>({...f,project_group:e.target.value}))}>
-              <option value="">— Select —</option>{PROJECT_GROUPS.map(g=><option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
+          <div className="field"><label>Supervisor</label><input value={form.supervisor} onChange={e=>setForm(f=>({...f,supervisor:e.target.value}))} placeholder="e.g. Prof. James Carter" /></div>
+          {session?.organizationId === ICT_ORG_ID && (
+            <div className="field"><label>Project Group</label>
+              <select value={form.project_group} onChange={e=>setForm(f=>({...f,project_group:e.target.value}))}>
+                <option value="">— Select —</option>{PROJECT_GROUPS.map(g=><option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         {orgProjects.length > 0 && (
           <div className="field">
@@ -1502,7 +1505,7 @@ function StaffListPanel({ toast, session }) {
       if (!form.password) { toast('Password is required.'); return }
       if (!actualEmail) { toast('Email is required for staff login.'); return }
     }
-    const payload = { name: form.name.trim(), email: actualEmail || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null, must_change_password: !id && !!form.password }
+    const payload = { name: form.name.trim(), email: actualEmail || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null, must_change_password: !id && !!form.password, terms_accepted_version: null }
     if (!id && form.password && actualEmail) {
       try {
         const authUser = await createAuthUser(actualEmail, form.password)
@@ -2005,13 +2008,15 @@ function UserProfileForm({ session, toast }) {
                 ? <input value={form.supervisor || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
                 : <SupervisorSelect value={form.supervisor} onChange={v => setForm(f => ({ ...f, supervisor: v }))} />}
             </div>
-            <div className="field"><label>Project Group</label>
-              {isStudent
-                ? <input value={form.project_group || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
-                : <select value={form.project_group} onChange={e => setForm(f => ({ ...f, project_group: e.target.value }))}>
-                    <option value="">— Select —</option>{PROJECT_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>}
-            </div>
+            {session?.organizationId === ICT_ORG_ID && (
+              <div className="field"><label>Project Group</label>
+                {isStudent
+                  ? <input value={form.project_group || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
+                  : <select value={form.project_group} onChange={e => setForm(f => ({ ...f, project_group: e.target.value }))}>
+                      <option value="">— Select —</option>{PROJECT_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>}
+              </div>
+            )}
           </div>
           <button className="btn btn-primary" onClick={saveInfo} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
         </div>

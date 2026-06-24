@@ -14,15 +14,43 @@ function canEdit(session) {
   return session?.role === 'admin' || session?.role === 'user'
 }
 
-// Returns first name — stored in last_name column, fallback to name
-function firstName(u) {
-  return u?.last_name || u?.name || ''
+// Students: DB name=lastName, email=firstName (legacy schema)
+function fullName(u) {
+  const first = (u?.email || '').includes('@') ? '' : (u?.email || '')
+  const last = u?.last_name || u?.name || ''
+  return [first, last].filter(Boolean).join(' ') || '—'
 }
+// kept for compatibility in non-display contexts
+function firstName(u) { return fullName(u) }
 
 function StatusBadge({ done }) {
   return (
     <span className={`badge ${done ? 'badge-ok' : 'badge-low'}`}>
       {done ? '✓ Complete' : '✗ Pending'}
+    </span>
+  )
+}
+
+function ApprovalChip({ approved, approvedBy, onClick, editable }) {
+  const base = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, cursor: editable ? 'pointer' : 'default', userSelect: 'none', transition: 'opacity 0.15s' }
+  if (approved) return (
+    <span style={{ ...base, background: '#dcfce7', color: '#16a34a' }} onClick={onClick} title={approvedBy ? `Approved by ${approvedBy}` : 'Approved'}>
+      ✓ Approved{approvedBy ? ` · ${approvedBy}` : ''}
+    </span>
+  )
+  return (
+    <span style={{ ...base, background: '#fef3c7', color: '#d97706' }} onClick={onClick} title={editable ? 'Click to approve' : 'Pending admin approval'}>
+      ⏳ Pending
+    </span>
+  )
+}
+
+function CompletionBadge({ approved, total }) {
+  if (total === 0) return <span style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>No certs</span>
+  const all = approved === total
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 12, background: all ? '#dcfce7' : '#fef3c7', color: all ? '#16a34a' : '#d97706' }}>
+      {approved}/{total} approved
     </span>
   )
 }
@@ -54,6 +82,7 @@ function FreshTraining({ students, session }) {
   const [addingLabel, setAddingLabel] = useState('')
   const addFileRef = useRef(null)
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
@@ -182,53 +211,110 @@ function FreshTraining({ students, session }) {
 
   // ── TEAM layout: per-user cards with cert list ────────────────
   const editable = canEdit(session)
-  const filteredStudents = search.trim()
-    ? students.filter(u => firstName(u).toLowerCase().includes(search.toLowerCase()))
+
+  const allFiltered = search.trim()
+    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
     : students
+
+  const filteredStudents = allFiltered.filter(u => {
+    const userRecs = records.filter(r => r.user_id === u.id)
+    if (statusFilter === 'none')     return userRecs.length === 0
+    if (statusFilter === 'pending')  return userRecs.some(r => !r.admin_approved)
+    if (statusFilter === 'approved') return userRecs.length > 0 && userRecs.every(r => r.admin_approved)
+    return true
+  })
+
+  const filterCounts = {
+    all:      allFiltered.length,
+    pending:  allFiltered.filter(u => records.filter(r => r.user_id === u.id).some(r => !r.admin_approved)).length,
+    none:     allFiltered.filter(u => records.filter(r => r.user_id === u.id).length === 0).length,
+    approved: allFiltered.filter(u => { const r = records.filter(x => x.user_id === u.id); return r.length > 0 && r.every(x => x.admin_approved) }).length,
+  }
+
+  const filterPills = [
+    { key: 'all',      label: 'All',          color: 'var(--text2)' },
+    { key: 'pending',  label: '⏳ Pending',    color: '#d97706' },
+    { key: 'none',     label: '📭 No uploads', color: 'var(--text3)' },
+    { key: 'approved', label: '✓ All approved',color: '#16a34a' },
+  ]
+
   return (
     <div>
       <SectionHeader title="Lab User Documents" count={students.length} />
       {editable && (
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name…"
-          style={{ marginBottom: 16, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
-        />
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name…"
+            style={{ maxWidth: 240, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
+          />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {filterPills.map(p => (
+              <button key={p.key} onClick={() => setStatusFilter(p.key)}
+                style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${statusFilter === p.key ? p.color : 'var(--border)'}`, background: statusFilter === p.key ? (p.key === 'pending' ? '#fef3c7' : p.key === 'approved' ? '#dcfce7' : 'var(--surface2)') : 'var(--surface)', color: statusFilter === p.key ? p.color : 'var(--text2)', fontWeight: statusFilter === p.key ? 600 : 400, cursor: 'pointer', transition: 'all 0.15s' }}>
+                {p.label} <span style={{ opacity: 0.6 }}>({filterCounts[p.key]})</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
-      {filteredStudents.length === 0 && search.trim() && (
-        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No users match "{search}".</div>
+      {filteredStudents.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12, padding: '24px 0', textAlign: 'center' }}>
+          {search.trim() ? `No users match "${search}".` : 'No users in this category.'}
+        </div>
       )}
-      {filteredStudents.map(u => {
+      {filteredStudents.map((u, idx) => {
         const isOwn = session.userId === u.id || session.username === u.name
         const canAdd = editable || isOwn
         const userRecs = records.filter(r => r.user_id === u.id)
         const masterRec = getRecord(u.id)
+        const approvedCount = userRecs.filter(r => r.admin_approved).length
+        const pct = userRecs.length ? Math.round((approvedCount / userRecs.length) * 100) : 0
+        const rowBg = idx % 2 === 0 ? '#f8faff' : '#f5f7f2'
         return (
-          <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', background: 'var(--surface2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-              <div>
-                <div style={{ fontWeight: 600 }}>{firstName(u)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.project_group || ''}{u.supervisor ? ` · ${u.supervisor}` : ''}</div>
+          <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden', background: rowBg }}>
+            {/* Card header */}
+            <div style={{ padding: '12px 16px', background: idx % 2 === 0 ? '#eef2ff' : '#edf5ea', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{fullName(u)}</div>
+                  <CompletionBadge approved={approvedCount} total={userRecs.length} />
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                  {u.degree ? `Supervisor: ${u.degree}` : ''}{u.year_semester ? ` · ${u.year_semester}` : ''}
+                </div>
+                {userRecs.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', maxWidth: 120 }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#16a34a' : '#d97706', borderRadius: 99, transition: 'width 0.4s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text3)' }}>{pct}%</span>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 {editable ? (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}
+                    title="Lab user has read all provided lab documents and files (beyond uploaded certificates)">
                     <input type="checkbox" checked={masterRec?.instructions_read || false} onChange={() => toggleInstructions(u)} style={{ width: 'auto' }} />
-                    <span>Confirmed reading given files <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(other than certificates)</span></span>
+                    <span style={{ color: masterRec?.instructions_read ? '#16a34a' : 'var(--text2)', fontWeight: masterRec?.instructions_read ? 600 : 400 }}>
+                      {masterRec?.instructions_read ? '✓ File review confirmed' : 'Confirm file review'}
+                    </span>
                   </label>
                 ) : isOwn && (
                   <span style={{ fontSize: 13, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    Reading confirmed: <StatusBadge done={masterRec?.instructions_read} />
+                    File review: <StatusBadge done={masterRec?.instructions_read} />
                   </span>
                 )}
                 {canAdd && (
-                  <button className="btn btn-sm" onClick={() => { setAddingFor(u.id); setAddingLabel('') }}>+ Add cert</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => { setAddingFor(u.id); setAddingLabel('') }}>+ Add cert</button>
                 )}
               </div>
             </div>
+            {/* Cert rows */}
             {userRecs.length === 0 ? (
-              <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>No certifications uploaded yet.</div>
+              <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)', fontStyle: 'italic' }}>No certifications uploaded yet.</div>
             ) : (
               <table style={{ fontSize: 13 }}>
                 <thead>
@@ -236,31 +322,29 @@ function FreshTraining({ students, session }) {
                     <th>Certification</th>
                     <th>File</th>
                     <th>Uploaded</th>
-                    <th>Admin Approval</th>
+                    <th>Status</th>
                     {editable && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
                   {userRecs.map(certRec => (
-                    <tr key={certRec.id}>
+                    <tr key={certRec.id} style={{ background: certRec.admin_approved ? 'rgba(220,252,231,0.3)' : certRec.certificate_url ? 'rgba(254,243,199,0.3)' : 'transparent' }}>
                       <td style={{ fontWeight: 500 }}>{certRec.certificate_name || 'Certificate'}</td>
                       <td>
                         {certRec.certificate_url
-                          ? <a href={certRec.certificate_url} target="_blank" rel="noopener" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>📕 View</a>
-                          : '—'}
+                          ? <a href={certRec.certificate_url} target="_blank" rel="noopener" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>📄 View</a>
+                          : <span style={{ color: 'var(--text3)' }}>—</span>}
                       </td>
                       <td style={{ fontFamily: 'var(--mono)', color: 'var(--text3)', fontSize: 12 }}>
                         {certRec.certificate_uploaded_at ? new Date(certRec.certificate_uploaded_at).toLocaleDateString() : '—'}
                       </td>
                       <td>
-                        {editable && certRec.certificate_url ? (
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
-                            <input type="checkbox" checked={certRec.admin_approved || false} onChange={() => toggleApprove(certRec)} style={{ width: 'auto' }} />
-                            <span style={{ color: certRec.admin_approved ? 'var(--accent)' : 'var(--text3)' }}>
-                              {certRec.admin_approved ? `✓ ${certRec.admin_approved_by || ''}` : 'Pending'}
-                            </span>
-                          </label>
-                        ) : <StatusBadge done={certRec.admin_approved} />}
+                        <ApprovalChip
+                          approved={certRec.admin_approved}
+                          approvedBy={certRec.admin_approved_by}
+                          editable={editable && !!certRec.certificate_url}
+                          onClick={editable && certRec.certificate_url ? () => toggleApprove(certRec) : undefined}
+                        />
                       </td>
                       {editable && (
                         <td><button className="btn btn-sm btn-danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => deleteCert(certRec.id)}>✕</button></td>
@@ -307,6 +391,7 @@ function GolfCarTraining({ students, session }) {
   const [search, setSearch] = useState('')
   const [addingFor, setAddingFor] = useState(null)
   const [form, setForm] = useState({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
@@ -362,35 +447,60 @@ function GolfCarTraining({ students, session }) {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
-  const filteredStudents = search.trim()
-    ? students.filter(u => firstName(u).toLowerCase().includes(search.toLowerCase()))
+  const searchFiltered = search.trim()
+    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
     : students
+  const trainedCountMap = students.reduce((acc, u) => { acc[u.id] = getRecordsForUser(u.id).filter(r => r.trained).length; return acc }, {})
+  const totalTrained = students.filter(u => trainedCountMap[u.id] > 0).length
+  const filteredStudents = statusFilter === 'all' ? searchFiltered
+    : statusFilter === 'trained' ? searchFiltered.filter(u => trainedCountMap[u.id] > 0)
+    : searchFiltered.filter(u => trainedCountMap[u.id] === 0)
 
   return (
     <div>
       <SectionHeader title="Training Records" count={students.length} />
       {canEdit(session) && (
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
-          style={{ marginBottom: 16, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
+          style={{ marginBottom: 12, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
       )}
-      {filteredStudents.length === 0 && search.trim() && (
-        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match "{search}".</div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {[
+          { key: 'all', label: `All (${students.length})` },
+          { key: 'trained', label: `✓ Trained (${totalTrained})` },
+          { key: 'none', label: `⚠ No training (${students.length - totalTrained})` },
+        ].map(f => (
+          <button key={f.key} onClick={() => setStatusFilter(f.key)}
+            style={{ padding: '5px 13px', borderRadius: 20, border: '1px solid', fontSize: 12, cursor: 'pointer', fontWeight: statusFilter === f.key ? 700 : 400, background: statusFilter === f.key ? 'var(--accent)' : 'transparent', color: statusFilter === f.key ? '#fff' : 'var(--text2)', borderColor: statusFilter === f.key ? 'var(--accent)' : 'var(--border)' }}
+          >{f.label}</button>
+        ))}
+      </div>
+      {filteredStudents.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
       )}
-      {filteredStudents.map(u => {
+      {filteredStudents.map((u, idx) => {
         const userRecs = getRecordsForUser(u.id)
+        const trainedCount = userRecs.filter(r => r.trained).length
+        const headerBg = idx % 2 === 0 ? '#eef2ff' : '#edf5ea'
         return (
           <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', background: 'var(--surface2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ padding: '12px 16px', background: headerBg, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <div>
-                <div style={{ fontWeight: 600 }}>{firstName(u)}</div>
+                <div style={{ fontWeight: 600 }}>{fullName(u)}</div>
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.project_group || ''}{u.supervisor ? ` · ${u.supervisor}` : ''}</div>
               </div>
-              {canEdit(session) && (
-                <button className="btn btn-sm" onClick={() => {
-                  setAddingFor(u.id)
-                  setForm({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
-                }}>+ Add vehicle</button>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {userRecs.length > 0 && (
+                  <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: trainedCount === userRecs.length ? '#d1fae5' : '#fef3c7', color: trainedCount === userRecs.length ? '#065f46' : '#92400e' }}>
+                    {trainedCount}/{userRecs.length} trained
+                  </span>
+                )}
+                {canEdit(session) && (
+                  <button className="btn btn-sm" onClick={() => {
+                    setAddingFor(u.id)
+                    setForm({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
+                  }}>+ Add vehicle</button>
+                )}
+              </div>
             </div>
             {userRecs.length === 0 ? (
               <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>No vehicle training records yet.</div>
@@ -400,7 +510,7 @@ function GolfCarTraining({ students, session }) {
                   <tr>
                     <th>Vehicle</th>
                     <th>Group</th>
-                    <th>Trained</th>
+                    <th>Status</th>
                     <th>Date</th>
                     <th>Trained By</th>
                     {canEdit(session) && <th></th>}
@@ -412,10 +522,14 @@ function GolfCarTraining({ students, session }) {
                       <td style={{ fontWeight: 500 }}>{rec.vehicle_name || '—'}</td>
                       <td><span style={{ fontSize: 12, color: 'var(--text2)' }}>{u.project_group || '—'}</span></td>
                       <td>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: canEdit(session) ? 'pointer' : 'default', marginBottom: 0 }}>
-                          <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} disabled={!canEdit(session)} style={{ width: 'auto' }} />
-                          <span style={{ fontSize: 13, color: rec.trained ? 'var(--accent)' : 'var(--text3)' }}>{rec.trained ? 'Yes' : 'No'}</span>
-                        </label>
+                        {canEdit(session) ? (
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
+                            <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} style={{ width: 'auto' }} />
+                            <span style={{ fontSize: 12, padding: '2px 9px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
+                          </label>
+                        ) : (
+                          <span style={{ fontSize: 12, padding: '2px 9px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
+                        )}
                       </td>
                       <td>
                         {canEdit(session) && rec.trained ? (
@@ -487,6 +601,7 @@ function EquipmentTraining({ students, session }) {
   const [equipSubTab, setEquipSubTab] = useState('training')
   const [search, setSearch] = useState('')
   const [searchHistory, setSearchHistory] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
@@ -708,22 +823,57 @@ function EquipmentTraining({ students, session }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by name…"
-              style={{ marginBottom: 16, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
+              style={{ marginBottom: 12, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
             />
           )}
-          {canEdit(session) && search.trim() && students.filter(u => firstName(u).toLowerCase().includes(search.toLowerCase())).length === 0 && (
-            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match "{search}".</div>
-          )}
-          {(canEdit(session) && search.trim() ? students.filter(u => firstName(u).toLowerCase().includes(search.toLowerCase())) : students).map(u => {
+          {(() => {
+            const searchBase = search.trim() ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase())) : students
+            const passedMap = students.reduce((acc, u) => { acc[u.id] = getRecords(u.id).filter(r => r.passed_exam).length; return acc }, {})
+            const totalMap = students.reduce((acc, u) => { acc[u.id] = getRecords(u.id).length; return acc }, {})
+            const withRecords = students.filter(u => totalMap[u.id] > 0).length
+            const allPassed = students.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id]).length
+            const pending = students.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id]).length
+            const noRecs = students.filter(u => totalMap[u.id] === 0).length
+            const displayStudents = statusFilter === 'all' ? searchBase
+              : statusFilter === 'approved' ? searchBase.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id])
+              : statusFilter === 'pending' ? searchBase.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id])
+              : searchBase.filter(u => totalMap[u.id] === 0)
+            return (
+              <>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'all', label: `All (${students.length})` },
+                    { key: 'approved', label: `✓ All passed (${allPassed})` },
+                    { key: 'pending', label: `⏳ Pending (${pending})` },
+                    { key: 'none', label: `📭 No records (${noRecs})` },
+                  ].map(f => (
+                    <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                      style={{ padding: '5px 13px', borderRadius: 20, border: '1px solid', fontSize: 12, cursor: 'pointer', fontWeight: statusFilter === f.key ? 700 : 400, background: statusFilter === f.key ? 'var(--accent)' : 'transparent', color: statusFilter === f.key ? '#fff' : 'var(--text2)', borderColor: statusFilter === f.key ? 'var(--accent)' : 'var(--border)' }}
+                    >{f.label}</button>
+                  ))}
+                </div>
+                {displayStudents.length === 0 && (
+                  <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
+                )}
+                {displayStudents.map((u, idx) => {
             const recs = getRecords(u.id)
+            const passedCount = recs.filter(r => r.passed_exam).length
+            const headerBg = idx % 2 === 0 ? '#eef2ff' : '#edf5ea'
             return (
               <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 16px', background: 'var(--surface2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '12px 16px', background: headerBg, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{firstName(u)}</div>
+                    <div style={{ fontWeight: 600 }}>{fullName(u)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.project_group || ''}{u.supervisor ? ` · ${u.supervisor}` : ''}</div>
                   </div>
-                  {canManage && <button className="btn btn-sm" onClick={() => setAddingRecord({ userId: u.id })}>+ Add training</button>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {recs.length > 0 && (
+                      <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: passedCount === recs.length ? '#d1fae5' : '#fef3c7', color: passedCount === recs.length ? '#065f46' : '#92400e' }}>
+                        {passedCount}/{recs.length} passed
+                      </span>
+                    )}
+                    {canManage && <button className="btn btn-sm" onClick={() => setAddingRecord({ userId: u.id })}>+ Add training</button>}
+                  </div>
                 </div>
                 {recs.length === 0 ? (
                   <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>No equipment training records yet.</div>
@@ -779,6 +929,9 @@ function EquipmentTraining({ students, session }) {
               </div>
             )
           })}
+              </>
+            )
+          })()}
           {addingRecord && (
             <AddTrainingRecord userId={addingRecord.userId} equipment={equipment} existingRecords={getRecords(addingRecord.userId)} session={session} onSave={addTrainingRecord} onClose={() => setAddingRecord(null)} defaultEquipmentId={addingRecord.equipmentId} defaultIsRetraining={addingRecord.isRetraining} />
           )}
@@ -868,6 +1021,7 @@ function BuildingAlarm({ students, session }) {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
@@ -909,58 +1063,88 @@ function BuildingAlarm({ students, session }) {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
-  const filteredStudents = search.trim()
-    ? students.filter(u => firstName(u).toLowerCase().includes(search.toLowerCase()))
+  const searchFiltered = search.trim()
+    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
     : students
+  const totalTrained = students.filter(u => getRecord(u.id)?.trained).length
+  const filteredStudents = statusFilter === 'all' ? searchFiltered
+    : statusFilter === 'trained' ? searchFiltered.filter(u => getRecord(u.id)?.trained)
+    : searchFiltered.filter(u => !getRecord(u.id)?.trained)
 
   return (
     <div>
       <SectionHeader title="Building Alarm Training" count={students.length} />
-      <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Admin/RE enters the lab user's 4-digit alarm PIN and confirms training completion.</p>
+      <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>Admin/RE enters the lab user's 4-digit alarm PIN and confirms training completion.</p>
       {canEdit(session) && (
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by name…"
-          style={{ marginBottom: 16, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
+          style={{ marginBottom: 12, maxWidth: 280, fontSize: 13, padding: '7px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }}
         />
       )}
-      {canEdit(session) && search.trim() && filteredStudents.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match "{search}".</div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {[
+          { key: 'all', label: `All (${students.length})` },
+          { key: 'trained', label: `✓ Trained (${totalTrained})` },
+          { key: 'none', label: `⚠ Not trained (${students.length - totalTrained})` },
+        ].map(f => (
+          <button key={f.key} onClick={() => setStatusFilter(f.key)}
+            style={{ padding: '5px 13px', borderRadius: 20, border: '1px solid', fontSize: 12, cursor: 'pointer', fontWeight: statusFilter === f.key ? 700 : 400, background: statusFilter === f.key ? 'var(--accent)' : 'transparent', color: statusFilter === f.key ? '#fff' : 'var(--text2)', borderColor: statusFilter === f.key ? 'var(--accent)' : 'var(--border)' }}
+          >{f.label}</button>
+        ))}
+      </div>
+      {filteredStudents.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
       )}
-      <table>
-        <thead>
-          <tr><th>Lab User</th><th>Group</th><th>Alarm PIN</th><th>Training Complete</th><th>Date</th><th>Confirmed By</th></tr>
-        </thead>
-        <tbody>
-          {filteredStudents.map(u => {
-            const rec = getRecord(u.id)
-            return (
-              <tr key={u.id}>
-                <td><div style={{ fontWeight: 600 }}>{firstName(u)}</div></td>
-                <td><span style={{ fontSize: 12, color: 'var(--text2)' }}>{u.project_group || '—'}</span></td>
-                <td>
-                  {canEdit(session) ? (
-                    <input type="password" maxLength={4} value={rec?.alarm_pin || ''} onChange={e => updateRecord(u, 'alarm_pin', e.target.value)} placeholder="····" style={{ width: 80, fontFamily: 'var(--mono)', fontSize: 16, padding: '4px 8px', textAlign: 'center' }} />
-                  ) : <span style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{rec?.alarm_pin ? '••••' : '—'}</span>}
-                </td>
-                <td>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: canEdit(session) ? 'pointer' : 'default', marginBottom: 0 }}>
-                    <input type="checkbox" checked={rec?.trained || false} onChange={() => toggleTrained(u)} disabled={!canEdit(session)} style={{ width: 'auto' }} />
-                    <span style={{ fontSize: 13, color: rec?.trained ? 'var(--accent)' : 'var(--text3)' }}>{rec?.trained ? 'Yes' : 'No'}</span>
+      {filteredStudents.map((u, idx) => {
+        const rec = getRecord(u.id)
+        const headerBg = idx % 2 === 0 ? '#eef2ff' : '#edf5ea'
+        return (
+          <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', background: headerBg, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>{fullName(u)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.project_group || ''}{u.supervisor ? ` · ${u.supervisor}` : ''}</div>
+              </div>
+              <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: rec?.trained ? '#d1fae5' : '#fef3c7', color: rec?.trained ? '#065f46' : '#92400e' }}>
+                {rec?.trained ? 'Trained' : 'Not trained'}
+              </span>
+            </div>
+            <div style={{ padding: '10px 16px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--text3)', fontSize: 12 }}>Alarm PIN:</span>
+                {canEdit(session) ? (
+                  <input type="password" maxLength={4} value={rec?.alarm_pin || ''} onChange={e => updateRecord(u, 'alarm_pin', e.target.value)} placeholder="····" style={{ width: 70, fontFamily: 'var(--mono)', fontSize: 15, padding: '3px 8px', textAlign: 'center', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} />
+                ) : <span style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{rec?.alarm_pin ? '••••' : '—'}</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--text3)', fontSize: 12 }}>Training:</span>
+                {canEdit(session) ? (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
+                    <input type="checkbox" checked={rec?.trained || false} onChange={() => toggleTrained(u)} style={{ width: 'auto' }} />
+                    <span style={{ fontSize: 12, padding: '2px 9px', borderRadius: 10, fontWeight: 600, background: rec?.trained ? '#d1fae5' : '#fef3c7', color: rec?.trained ? '#065f46' : '#92400e' }}>{rec?.trained ? 'Complete' : 'Pending'}</span>
                   </label>
-                </td>
-                <td>
-                  {canEdit(session) && rec?.trained ? (
-                    <input type="date" value={rec.trained_date || ''} onChange={e => updateRecord(u, 'trained_date', e.target.value)} style={{ width: 140, fontSize: 13, padding: '4px 8px' }} />
-                  ) : <span style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec?.trained_date || '—'}</span>}
-                </td>
-                <td style={{ fontSize: 13, color: 'var(--text2)' }}>{rec?.trained_by || '—'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                ) : (
+                  <span style={{ fontSize: 12, padding: '2px 9px', borderRadius: 10, fontWeight: 600, background: rec?.trained ? '#d1fae5' : '#fef3c7', color: rec?.trained ? '#065f46' : '#92400e' }}>{rec?.trained ? 'Complete' : 'Pending'}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--text3)', fontSize: 12 }}>Date:</span>
+                {canEdit(session) && rec?.trained ? (
+                  <input type="date" value={rec.trained_date || ''} onChange={e => updateRecord(u, 'trained_date', e.target.value)} style={{ fontSize: 13, padding: '3px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} />
+                ) : <span style={{ fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec?.trained_date || '—'}</span>}
+              </div>
+              {rec?.trained_by && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>Confirmed by:</span>
+                  <span style={{ color: 'var(--text2)' }}>{rec.trained_by}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

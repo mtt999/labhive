@@ -1,10 +1,27 @@
-// StorageService — Mode B hybrid router
+// StorageService — storage routing with three modes per data category
 //
-// personal: false  → always Supabase (shared org files: SOPs, equipment photos, module images)
-// personal: true   → user's chosen provider (training certs, project records, personal uploads)
+// MODES:
+//   website_only        — LabHive Cloud only (default, recommended ⭐)
+//   website_plus_copy   — LabHive Cloud primary + silent backup to external provider
+//   external_only       — external provider only (account basics always stay on LabHive)
 //
-// External file refs are stored as "ext:provider:id" strings in the DB instead of URLs.
-// Call StorageService.resolveUrl(storedValue) to get a usable URL for display.
+// CATEGORIES:
+//   'a' — Core Platform Data (SOPs, equipment, calibration, bookings, training, messages…)
+//   'b' — Activity & Workspace Data (test results, project files, QR, inspection results…)
+//
+// TEAM USERS:
+//   Category A → org admin sets the mode (ilab_org_storage_mode) + provider (ilab_org_cloud_copy)
+//   Category B → always website_only or website_plus_copy (LabHive always keeps a copy);
+//               individual user can add their own secondary (ilab_team_b_provider)
+//
+// SOLO USERS:
+//   Category A → ilab_solo_mode_a + ilab_storage_provider
+//   Category B → ilab_solo_mode_b + ilab_storage_provider
+//   Group workspace → ilab_group_storage ('website' | provider key)
+//
+// BACKWARD COMPAT: { personal: false } → category 'a', { personal: true } → category 'b'
+//
+// Legacy "ext:provider:id" refs in the DB are still resolved via resolveUrl/useStorageUrl.
 
 import { SupabaseProvider } from './SupabaseProvider'
 import { FilesystemProvider } from './FilesystemProvider'
@@ -12,14 +29,27 @@ import { GoogleDriveProvider } from './GoogleDriveProvider'
 import { OneDriveProvider } from './OneDriveProvider'
 import { LocalFolderProvider } from './LocalFolderProvider'
 
-export const PROVIDER_KEY = 'ilab_storage_provider'
+// ── localStorage keys ──────────────────────────────────────────────────────
+export const PROVIDER_KEY      = 'ilab_storage_provider'    // external provider for solo
+export const ORG_MODE_KEY      = 'ilab_org_storage_mode'    // team org storage mode
+export const ORG_COPY_KEY      = 'ilab_org_cloud_copy'      // team org backup provider
+export const TEAM_B_KEY        = 'ilab_team_b_provider'     // team user secondary for Category B
+export const SOLO_MODE_A_KEY   = 'ilab_solo_mode_a'         // solo Category A mode
+export const SOLO_MODE_B_KEY   = 'ilab_solo_mode_b'         // solo Category B mode
+export const GROUP_STORAGE_KEY = 'ilab_group_storage'       // solo group workspace provider
 
+// ── Mode constants ─────────────────────────────────────────────────────────
+export const MODE_WEBSITE_ONLY      = 'website_only'
+export const MODE_WEBSITE_PLUS_COPY = 'website_plus_copy'
+export const MODE_EXTERNAL_ONLY     = 'external_only'
+
+// ── Provider instances ─────────────────────────────────────────────────────
 export const providers = {
-  supabase:     new SupabaseProvider(),
-  filesystem:   new FilesystemProvider(),
-  gdrive:       new GoogleDriveProvider(),
-  onedrive:     new OneDriveProvider(),
-  localfolder:  new LocalFolderProvider(),
+  supabase:    new SupabaseProvider(),
+  filesystem:  new FilesystemProvider(),
+  gdrive:      new GoogleDriveProvider(),
+  onedrive:    new OneDriveProvider(),
+  localfolder: new LocalFolderProvider(),
 }
 
 export function getActiveProviderKey() {
@@ -34,45 +64,103 @@ export function getActiveProvider() {
   return providers[getActiveProviderKey()] || providers.supabase
 }
 
-// Returns true if the stored value is an external ref (not a plain URL)
 export function isExternalRef(value) {
   return typeof value === 'string' && value.startsWith('ext:')
 }
 
-// Parses "ext:gdrive:FILE_ID" → { providerKey: 'gdrive', ref: 'FILE_ID' }
 function parseRef(extRef) {
   const parts = extRef.split(':')
-  // ext : providerKey : ...rest (ref may contain colons e.g. webdav paths)
-  const providerKey = parts[1]
-  const ref = parts.slice(2).join(':')
-  return { providerKey, ref }
+  return { providerKey: parts[1], ref: parts.slice(2).join(':') }
 }
+
+function getLoginMode() {
+  return localStorage.getItem('ilab_login_mode') || 'team'
+}
+
+// ── Strategy resolvers ─────────────────────────────────────────────────────
+
+function teamStrategy(category) {
+  const orgMode = localStorage.getItem(ORG_MODE_KEY) || MODE_WEBSITE_ONLY
+  const orgProvider = localStorage.getItem(ORG_COPY_KEY) || null
+
+  if (category === 'a') {
+    return { mode: orgMode, providerKey: orgProvider }
+  }
+
+  // Category B for team: LabHive always keeps a copy — no external_only
+  if (orgMode === MODE_EXTERNAL_ONLY) {
+    // Org went external-only; B follows org provider as backup, website primary
+    return { mode: MODE_WEBSITE_PLUS_COPY, providerKey: orgProvider }
+  }
+  const userSecondary = localStorage.getItem(TEAM_B_KEY) || null
+  if (userSecondary) return { mode: MODE_WEBSITE_PLUS_COPY, providerKey: userSecondary }
+  return { mode: MODE_WEBSITE_ONLY, providerKey: null }
+}
+
+function soloStrategy(category) {
+  const modeKey = category === 'a' ? SOLO_MODE_A_KEY : SOLO_MODE_B_KEY
+  const mode = localStorage.getItem(modeKey) || MODE_WEBSITE_ONLY
+  const providerKey = getActiveProviderKey()
+  return { mode, providerKey: providerKey !== 'supabase' ? providerKey : null }
+}
+
+function groupStrategy() {
+  const gp = localStorage.getItem(GROUP_STORAGE_KEY) || 'website'
+  if (gp === 'website') return { mode: MODE_WEBSITE_ONLY, providerKey: null }
+  return { mode: MODE_EXTERNAL_ONLY, providerKey: gp }
+}
+
+// ── Core upload executor ───────────────────────────────────────────────────
+
+async function executeUpload(bucket, path, file, mode, providerKey) {
+  const hasProvider = providerKey && providers[providerKey]
+
+  if (mode === MODE_EXTERNAL_ONLY && hasProvider) {
+    return providers[providerKey].upload(bucket, path, file)
+  }
+
+  if (mode === MODE_WEBSITE_PLUS_COPY) {
+    const result = await providers.supabase.upload(bucket, path, file)
+    if (hasProvider) {
+      providers[providerKey].upload(bucket, path, file).catch(e =>
+        console.warn(`[StorageService] Backup copy to ${providerKey} failed:`, e)
+      )
+    }
+    return result
+  }
+
+  // website_only (or external_only fallback when no provider configured)
+  return providers.supabase.upload(bucket, path, file)
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
 
 const StorageService = {
   // Upload a file.
-  // personal:true → route to user's chosen provider
-  // personal:false → always Supabase (shared org content)
-  async upload(bucket, path, file, { personal = false } = {}) {
-    const providerKey = getActiveProviderKey()
-    const result = (!personal || providerKey === 'supabase')
-      ? await providers.supabase.upload(bucket, path, file)
-      : await getActiveProvider().upload(bucket, path, file)
-
-    if (personal && providerKey === 'supabase' && !localStorage.getItem('ilab_storage_hint_shown')) {
-      localStorage.setItem('ilab_storage_hint_shown', '1')
-      setTimeout(() => {
-        import('../../store/useAppStore').then(({ useAppStore }) => {
-          useAppStore.getState().toast('File saved to LabHive Cloud. Go to Profile → Storage to use your local folder, Google Drive, or OneDrive instead.')
-        }).catch(() => {})
-      }, 900)
+  // Options:
+  //   category: 'a' | 'b'  — which data category (defaults to 'b')
+  //   isGroup: boolean      — group workspace data (solo only)
+  //   personal: boolean     — legacy: false→'a', true→'b'
+  async upload(bucket, path, file, { personal, category, isGroup = false } = {}) {
+    if (category === undefined) {
+      category = (personal === false) ? 'a' : 'b'
     }
 
-    return result
+    const loginMode = getLoginMode()
+    let strategy
+
+    if (isGroup) {
+      strategy = groupStrategy()
+    } else if (loginMode === 'solo') {
+      strategy = soloStrategy(category)
+    } else {
+      strategy = teamStrategy(category)
+    }
+
+    return executeUpload(bucket, path, file, strategy.mode, strategy.providerKey)
   },
 
-  // Resolve a stored value to a displayable URL.
-  // If it's a plain URL, returns it as-is.
-  // If it's "ext:...", fetches a blob URL from the correct provider.
+  // Resolve a stored value (plain URL or legacy ext: ref) to a usable URL.
   async resolveUrl(stored) {
     if (!stored) return null
     if (!isExternalRef(stored)) return stored
@@ -82,12 +170,10 @@ const StorageService = {
     return provider.resolveUrl(`ext:${providerKey}:${ref}`)
   },
 
-  // Remove a file. Works for both Supabase paths and external refs.
+  // Remove a file by its stored value (URL or ext: ref).
   async remove(bucket, stored) {
     if (!stored) return
-    if (!isExternalRef(stored)) {
-      return providers.supabase.remove(bucket, stored)
-    }
+    if (!isExternalRef(stored)) return providers.supabase.remove(bucket, stored)
     const { providerKey, ref } = parseRef(stored)
     const provider = providers[providerKey]
     if (provider) await provider.remove(bucket, `ext:${providerKey}:${ref}`)
@@ -98,8 +184,8 @@ const StorageService = {
 
 export default StorageService
 
-// React hook — resolves an external ref to a blob URL for use in <img> / <a>
-// Usage: const url = useStorageUrl(record.certificate_url)
+// ── React hook ─────────────────────────────────────────────────────────────
+// Resolves a stored value (URL or ext: ref) for use in <img> / <a>.
 import { useState, useEffect } from 'react'
 export function useStorageUrl(stored) {
   const [resolved, setResolved] = useState(() => isExternalRef(stored) ? null : stored)

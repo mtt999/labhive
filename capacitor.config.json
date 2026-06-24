@@ -1,6 +1,6 @@
 {
   "appId": "com.motlagh.ilab",
-  "appName": "iLab",
+  "appName": "LabHive",
   "webDir": "dist",
   "plugins": {
     "SplashScreen": {

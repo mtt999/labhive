@@ -1,6 +1,7 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
@@ -9,8 +10,6 @@ import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 import ProjectMaterials from './ProjectMaterials'
 import MaterialStorage from '../storage/MaterialStorage'
-import ProjectDatabase from './ProjectDatabase'
-import { MaterialTypesManager } from '../barcode/BarcodeScannerScreen'
 
 // ── Helpers ────────────────────────────────────────────────────
 function InfoCell({ label, value }) {
@@ -1095,6 +1094,13 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   const [postingCmt, setPostingCmt] = useState(false)
   const [filterDate, setFilterDate] = useState('')
   const [selectedRow, setSelectedRow] = useState(null)
+  const [mobile, setMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   // ── Inline add-result form ──
   const [showAddForm, setShowAddForm] = useState(false)
@@ -1234,13 +1240,14 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   const isOutlier = v => stats && Math.abs(parseFloat(v) - stats.avg) > 2 * stats.std
   const chartMax  = numericVals.length ? Math.max(...numericVals) : 1
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16, alignItems: 'start' }}>
-      {/* Left: equipment list */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search equipment…" style={{ width: '100%', fontSize: 13 }} />
-        </div>
+  const sidebarSlot = !mobile && document.getElementById('sidebar-portal-slot')
+
+  const equipPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search equipment…" style={{ width: '100%', fontSize: 13 }} />
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {loadingEq
           ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
           : !categories.length && session?.loginMode === 'solo'
@@ -1265,8 +1272,19 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
             })
         }
       </div>
+    </div>
+  )
 
-      {/* Right: analysis panel */}
+  return (
+    <div>
+      {sidebarSlot && createPortal(equipPanel, sidebarSlot)}
+      {mobile && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>
+          {equipPanel}
+        </div>
+      )}
+
+      {/* Analysis panel */}
       {!selected ? (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 48, textAlign: 'center', color: 'var(--text3)' }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>📊</div>
@@ -1674,18 +1692,18 @@ function RecordsPanel({ projects, allowedNames, session }) {
 
 // ── Workspace Tab (members / data analysis / links) ────────────
 function WorkspaceTab({ session, projects, isSolo, readOnly, allowedNames, userProjectGroup, userAssignedProjectIds }) {
-  const [wsTab, setWsTab] = useState('members')
+  const [wsTab, setWsTab] = useState('analysis')
 
   const isLabUser = !isSolo && session?.dbRole === 'student'
   const hasProjectAccess = !isLabUser || !!userAssignedProjectIds
 
   const wsTabs = [
-    { key: 'members',  label: '👥 Project Members' },
     ...(hasProjectAccess ? [
       { key: 'analysis', label: '📊 Data Analysis' },
       { key: 'records',  label: '📂 Records' },
       { key: 'links',    label: '🔗 Links' },
     ] : []),
+    { key: 'members',  label: '👥 Project Members' },
   ]
 
   return (
@@ -1781,7 +1799,6 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
     { key: 'info',      label: '1 · Project Info' },
     { key: 'materials', label: '2 · Project Materials' },
     { key: 'storage',   label: '3 · Material Storage' },
-    { key: 'database',  label: '4 · Database' },
   ]
 
   const viewingShared = isSolo && !!viewingWorkspaceOwnerId
@@ -1885,7 +1902,6 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                 {subTab === 'info'      && <ProjectInfo project={activeProject} users={users} onSaved={loadActiveProject} isSolo={isSolo} readOnly={viewingShared} />}
                 {subTab === 'materials' && <ProjectMaterials project={activeProject} />}
                 {subTab === 'storage'   && <MaterialStorage project={activeProject} />}
-                {subTab === 'database'  && <ProjectDatabase project={activeProject} />}
               </div>
             </div>
           )}
@@ -2011,8 +2027,6 @@ export default function ProjectMaterial() {
       {mainTab === 'workspace' && (
         <WorkspaceTab session={session} projects={assignedProjects} isSolo={isSolo} readOnly={viewingShared} allowedNames={allowedNames} userProjectGroup={userProjectGroup} userAssignedProjectIds={userAssignedProjectIds} />
       )}
-
-      {mainTab === 'types' && <MaterialTypesManager session={session} />}
     </div>
   )
 }

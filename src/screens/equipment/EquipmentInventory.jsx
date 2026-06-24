@@ -1,9 +1,9 @@
 import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import * as XLSX from 'xlsx'
-import ScrollTabs from '../../components/ScrollTabs'
 
 const CATEGORIES = [
   'Aggregate Testing Equipment',
@@ -206,7 +206,14 @@ function EquipmentList({ session }) {
   const [teamCats, setTeamCats] = useState([])
   const [teamLocs, setTeamLocs] = useState([])
   const [photoMap, setPhotoMap] = useState({})
+  const [mobile, setMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
   const fileRef = useRef(null)
+
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   useEffect(() => {
     load()
@@ -369,29 +376,36 @@ function EquipmentList({ session }) {
   // Running counter across all groups
   let rowNum = 0
 
+  const sidebarSlot = !mobile && document.getElementById('sidebar-portal-slot')
+
+  const filterPanel = (
+    <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, borderBottom: '1px solid var(--border)' }}>
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search equipment…" style={{ width: '100%' }} />
+      <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+        <option value="">All categories</option>
+        {(isSolo
+          ? [...new Set(items.map(i => i.category).filter(Boolean))].sort()
+          : teamCats.length ? teamCats : CATEGORIES
+        ).map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <select value={filterLoc} onChange={e => setFilterLoc(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+        <option value="">All locations</option>
+        {(teamLocs.length
+          ? teamLocs
+          : [...new Set(items.map(i => i.location).filter(Boolean))].sort()
+        ).map(l => <option key={l} value={l}>{l}</option>)}
+      </select>
+      <select value={filterCond} onChange={e => setFilterCond(e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+        <option value="">All conditions</option>
+        {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </div>
+  )
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search equipment…" style={{ flex: 1, minWidth: 180 }} />
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ width: 'auto' }}>
-          <option value="">All categories</option>
-          {(isSolo
-            ? [...new Set(items.map(i => i.category).filter(Boolean))].sort()
-            : teamCats.length ? teamCats : CATEGORIES
-          ).map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={filterLoc} onChange={e => setFilterLoc(e.target.value)} style={{ width: 'auto' }}>
-          <option value="">All locations</option>
-          {(teamLocs.length
-            ? teamLocs
-            : [...new Set(items.map(i => i.location).filter(Boolean))].sort()
-          ).map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-        <select value={filterCond} onChange={e => setFilterCond(e.target.value)} style={{ width: 'auto' }}>
-          <option value="">All conditions</option>
-          {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
+      {sidebarSlot && createPortal(filterPanel, sidebarSlot)}
+      {mobile && <div style={{ marginBottom: 16 }}>{filterPanel}</div>}
 
       {canEdit(session) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -1455,33 +1469,15 @@ function PaidFeatureGate({ featureName = 'This feature' }) {
 }
 
 export default function EquipmentInventory() {
-  const { session } = useAppStore()
-  const [tab, setTab] = useState('list')
+  const { session, sidebarSubTab } = useAppStore()
+  const tab = sidebarSubTab || 'list'
 
   const isSolo = session?.loginMode === 'solo'
   const canAccessCalibration = !isSolo || session?.isPaid
 
-  const tabs = [
-    { key: 'list', label: '📋 List of Equipment' },
-    ...(canEdit(session) ? [{ key: 'calibration', label: `🧪 Calibration${isSolo && !session?.isPaid ? ' 🔒' : ''}` }] : []),
-    ...(canEdit(session) ? [{ key: 'records', label: '📊 Maintenance Records' }] : []),
-    { key: 'settings', label: '⚙️ Settings' },
-  ]
-
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Equipment List</div>
-        <HelpPanel screen="equipment" />
-      </div>
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding: '10px 20px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: tab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${tab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
+      <HelpPanel screen="equipment" />
       {tab === 'list'        && <EquipmentList session={session} />}
       {tab === 'calibration' && (canAccessCalibration ? <CalibrationTab session={session} /> : <PaidFeatureGate featureName="Calibration Tracking" />)}
       {tab === 'records'     && <MaintenanceRecords session={session} />}

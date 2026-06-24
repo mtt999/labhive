@@ -458,12 +458,12 @@ function TaskGroupPanel({ userId, orgId, onGroupChange }) {
 
 // Requires: task_attachments table + task-files storage bucket in Supabase
 // SQL: CREATE TABLE task_attachments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), task_id uuid REFERENCES tasks(id) ON DELETE CASCADE, file_name text, file_url text, file_size bigint, uploaded_by text, created_at timestamptz DEFAULT now());
-function TaskAttachments({ taskId, userName }) {
+function TaskAttachments({ taskId, userName, refreshToken }) {
   const [attachments, setAttachments] = useState([])
   const [uploading, setUploading] = useState(false)
   const { toast } = useAppStore()
 
-  useEffect(() => { loadAttachments() }, [taskId])
+  useEffect(() => { loadAttachments() }, [taskId, refreshToken])
 
   async function loadAttachments() {
     const { data } = await sb.from('task_attachments').select('*').eq('task_id', taskId).order('created_at', { ascending: false })
@@ -515,17 +515,212 @@ function TaskAttachments({ taskId, userName }) {
       </div>
       {attachments.length === 0
         ? <div style={{ fontSize: 12, color: 'var(--text3)', textAlign: 'center', padding: '8px 0' }}>No attachments yet.</div>
-        : attachments.map(att => (
-          <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--surface2)', borderRadius: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>📄</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <a href={att.file_url} target="_blank" rel="noopener" style={{ fontSize: 12, fontWeight: 500, color: BLUE, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{att.file_name}</a>
-              <div style={{ fontSize: 10, color: 'var(--text3)' }}>{fmtSize(att.file_size)}{att.uploaded_by ? ` · ${att.uploaded_by}` : ''}</div>
+        : attachments.map(att => {
+          const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name || '')
+          const isDrawing = att.file_name?.startsWith('drawing_')
+          return (
+            <div key={att.id} style={{ background: 'var(--surface2)', borderRadius: 10, marginBottom: 8, overflow: 'hidden', border: isDrawing ? '1px solid #bfdbfe' : '1px solid transparent' }}>
+              {isImage && (
+                <a href={att.file_url} target="_blank" rel="noopener">
+                  <img src={att.file_url} alt={att.file_name} style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block', background: '#f8faff', borderBottom: '1px solid var(--border)' }} />
+                </a>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px' }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>{isDrawing ? '🎨' : isImage ? '🖼' : '📄'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <a href={att.file_url} target="_blank" rel="noopener" style={{ fontSize: 12, fontWeight: 500, color: BLUE, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                    {isDrawing ? `Drawing — ${new Date(parseInt(att.file_name.replace('drawing_','').replace('.png',''))).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : att.file_name}
+                  </a>
+                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>{fmtSize(att.file_size)}{att.uploaded_by ? ` · ${att.uploaded_by}` : ''}</div>
+                </div>
+                <button onClick={() => deleteAttachment(att)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 16, flexShrink: 0, lineHeight: 1 }}>×</button>
+              </div>
             </div>
-            <button onClick={() => deleteAttachment(att)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 16, flexShrink: 0, lineHeight: 1 }}>×</button>
-          </div>
-        ))
+          )
+        })
       }
+    </div>
+  )
+}
+
+// ── Live Drawing Board ────────────────────────────────────────────────────────
+// Broadcasts strokes via Supabase Realtime (no DB writes until Save is clicked).
+// Discard → nothing persisted. Save → PNG uploaded to task-files, inserted into
+// task_attachments, then visible in the task's attachment list permanently.
+function DrawingBoard({ taskId, taskTitle, currentUserName, onClose, onAttachmentSaved }) {
+  const canvasRef = useRef(null)
+  const [tool, setTool] = useState('pen')
+  const [color, setColor] = useState('#1a1a2e')
+  const [lineWidth, setLineWidth] = useState(3)
+  const [saving, setSaving] = useState(false)
+  const [connectedCount, setConnectedCount] = useState(1)
+  const { toast } = useAppStore()
+  const channelRef = useRef(null)
+  const isDrawingRef = useRef(false)
+  const currentPath = useRef([])
+  const allStrokes = useRef([])
+  const toolRef = useRef('pen')
+  const colorRef = useRef('#1a1a2e')
+  const lineWidthRef = useRef(3)
+
+  useEffect(() => { toolRef.current = tool }, [tool])
+  useEffect(() => { colorRef.current = color }, [color])
+  useEffect(() => { lineWidthRef.current = lineWidth }, [lineWidth])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.width = 800; canvas.height = 450
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    const channel = sb.channel(`drawing-${taskId}`, { config: { broadcast: { self: false }, presence: { key: currentUserName || 'user' } } })
+    channel
+      .on('broadcast', { event: 'stroke' }, ({ payload }) => {
+        renderStroke(canvas, payload); allStrokes.current.push(payload)
+      })
+      .on('broadcast', { event: 'clear' }, () => {
+        const c = canvas.getContext('2d'); c.fillStyle = '#ffffff'; c.fillRect(0, 0, canvas.width, canvas.height)
+        allStrokes.current = []
+      })
+      .on('broadcast', { event: 'sync_request' }, () => {
+        if (allStrokes.current.length > 0)
+          channel.send({ type: 'broadcast', event: 'sync_strokes', payload: { strokes: allStrokes.current } })
+      })
+      .on('broadcast', { event: 'sync_strokes' }, ({ payload }) => {
+        if (!payload?.strokes) return
+        const c = canvas.getContext('2d'); c.fillStyle = '#ffffff'; c.fillRect(0, 0, canvas.width, canvas.height)
+        payload.strokes.forEach(s => renderStroke(canvas, s))
+        allStrokes.current = payload.strokes
+      })
+      .on('presence', { event: 'sync' }, () => {
+        setConnectedCount(Object.keys(channel.presenceState()).length)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user: currentUserName || 'anonymous' })
+          channel.send({ type: 'broadcast', event: 'sync_request', payload: {} })
+        }
+      })
+    channelRef.current = channel
+    return () => { sb.removeChannel(channel) }
+  }, [taskId])
+
+  function renderStroke(canvas, { points, color, lineWidth, tool }) {
+    if (!points || points.length < 2) return
+    const ctx = canvas.getContext('2d')
+    ctx.save()
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over'
+    ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y)
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y)
+    ctx.stroke(); ctx.restore()
+  }
+
+  function getPos(e) {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) }
+  }
+
+  function onPointerDown(e) {
+    e.preventDefault(); isDrawingRef.current = true; currentPath.current = [getPos(e)]
+  }
+  function onPointerMove(e) {
+    if (!isDrawingRef.current) return; e.preventDefault()
+    const pos = getPos(e); currentPath.current.push(pos)
+    if (currentPath.current.length >= 2)
+      renderStroke(canvasRef.current, { points: currentPath.current.slice(-2), color: colorRef.current, lineWidth: lineWidthRef.current, tool: toolRef.current })
+  }
+  function onPointerUp(e) {
+    if (!isDrawingRef.current) return; isDrawingRef.current = false
+    const stroke = { points: currentPath.current, color: colorRef.current, lineWidth: lineWidthRef.current, tool: toolRef.current }
+    allStrokes.current.push(stroke)
+    channelRef.current?.send({ type: 'broadcast', event: 'stroke', payload: stroke })
+    currentPath.current = []
+  }
+
+  function clearBoard() {
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    allStrokes.current = []; channelRef.current?.send({ type: 'broadcast', event: 'clear', payload: {} })
+  }
+
+  async function saveDrawing() {
+    setSaving(true)
+    try {
+      const canvas = canvasRef.current
+      if (!canvas) throw new Error('Canvas not ready.')
+      const blob = await new Promise((res, rej) =>
+        canvas.toBlob(b => b ? res(b) : rej(new Error('Canvas export failed.')), 'image/png')
+      )
+      const fileName = `drawing_${Date.now()}.png`
+      const path = `${taskId}/${fileName}`
+      const { error: upErr } = await sb.storage.from('task-files').upload(path, blob, { contentType: 'image/png' })
+      if (upErr) throw new Error('Upload failed: ' + upErr.message)
+      const { data: { publicUrl } } = sb.storage.from('task-files').getPublicUrl(path)
+      const { data: att, error: insertErr } = await sb.from('task_attachments')
+        .insert({ task_id: taskId, file_name: fileName, file_url: publicUrl, file_size: blob.size, uploaded_by: currentUserName || 'Staff' })
+        .select().single()
+      if (insertErr) throw new Error('Could not link drawing: ' + insertErr.message)
+      toast('Drawing saved!')
+      onAttachmentSaved?.(att)
+      onClose()
+    } catch (err) {
+      toast(err.message || 'Save failed.')
+    }
+    setSaving(false)
+  }
+
+  const COLORS = ['#1a1a2e', '#1D9E75', '#0369a1', '#c84b2f', '#92400e', '#5b21b6', '#be185d', '#ffffff']
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 860, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
+        {/* Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>🎨 {taskTitle}</span>
+          {connectedCount > 1 && <span style={{ fontSize: 11, color: '#065f46', background: '#d1fae5', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>👥 {connectedCount} live</span>}
+          <div style={{ flex: 1 }} />
+          {[{ k: 'pen', l: '✏️ Pen' }, { k: 'eraser', l: '🧹 Eraser' }].map(t => (
+            <button key={t.k} onClick={() => setTool(t.k)} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid', cursor: 'pointer', background: tool === t.k ? (t.k === 'pen' ? 'var(--accent)' : '#e5e7eb') : 'transparent', color: tool === t.k ? (t.k === 'pen' ? '#fff' : '#374151') : 'var(--text2)', borderColor: tool === t.k ? (t.k === 'pen' ? 'var(--accent)' : '#9ca3af') : 'var(--border)' }}>{t.l}</button>
+          ))}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {COLORS.map(c => (
+              <button key={c} onClick={() => { setColor(c); setTool('pen') }}
+                style={{ width: 20, height: 20, borderRadius: '50%', background: c, border: color === c && tool === 'pen' ? '3px solid var(--accent)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
+            ))}
+            <input type="color" value={color} onChange={e => { setColor(e.target.value); setTool('pen') }} style={{ width: 24, height: 22, padding: 0, border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer' }} title="Custom color" />
+          </div>
+          <select value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))} style={{ fontSize: 12, padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}>
+            <option value={2}>Thin</option>
+            <option value={4}>Medium</option>
+            <option value={8}>Thick</option>
+            <option value={16}>Bold</option>
+          </select>
+          <button onClick={clearBoard} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: 'transparent', color: '#c84b2f', cursor: 'pointer' }}>🗑 Clear</button>
+        </div>
+        {/* Canvas */}
+        <canvas ref={canvasRef}
+          style={{ width: '100%', height: 450, cursor: tool === 'eraser' ? 'cell' : 'crosshair', display: 'block', touchAction: 'none', background: '#fff' }}
+          onMouseDown={onPointerDown} onMouseMove={onPointerMove} onMouseUp={onPointerUp} onMouseLeave={onPointerUp}
+          onTouchStart={onPointerDown} onTouchMove={onPointerMove} onTouchEnd={onPointerUp}
+        />
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', borderTop: '1px solid var(--border)', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text3)', flex: 1 }}>Live — all participants see your strokes in real time. Save attaches a PNG to this task permanently.</span>
+          <button onClick={onClose} disabled={saving}
+            style={{ fontSize: 13, padding: '7px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff5f5', color: '#c84b2f', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            🗑 Discard
+          </button>
+          <button onClick={saveDrawing} disabled={saving}
+            style={{ fontSize: 13, padding: '7px 20px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+            {saving ? 'Saving…' : '💾 Save'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -535,6 +730,9 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
   const [saving, setSaving] = useState(false)
   const [creatorName, setCreatorName] = useState(null)
   const [meetingDate, setMeetingDate] = useState(null)
+  const [iconUploading, setIconUploading] = useState(false)
+  const [showDrawing, setShowDrawing] = useState(false)
+  const [attachmentRefresh, setAttachmentRefresh] = useState(0)
   const { toast } = useAppStore()
 
   useEffect(() => {
@@ -570,8 +768,23 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
   }
   const saveDetails = async () => {
     setSaving(true)
-    await sb.from('tasks').update({ notes: localTask.notes, start_date: localTask.start_date || null, start_time: localTask.start_time || null, deadline: localTask.deadline || null, deadline_time: localTask.deadline_time || null }).eq('id', localTask.id)
+    await sb.from('tasks').update({ notes: localTask.notes, start_date: localTask.start_date || null, start_time: localTask.start_time || null, deadline: localTask.deadline || null, deadline_time: localTask.deadline_time || null, reference_url: localTask.reference_url || null, icon_url: localTask.icon_url || null }).eq('id', localTask.id)
     onUpdate(localTask); setSaving(false); toast('Task details saved!')
+  }
+  const changeIcon = async (file) => {
+    if (!file) return
+    setIconUploading(true)
+    const ext = file.name.split('.').pop().toLowerCase()
+    const iconPath = `icons/${localTask.id}_${Date.now()}.${ext}`
+    const { error } = await sb.storage.from('task-files').upload(iconPath, file, { upsert: true })
+    if (!error) {
+      const { data: { publicUrl } } = sb.storage.from('task-files').getPublicUrl(iconPath)
+      await sb.from('tasks').update({ icon_url: publicUrl }).eq('id', localTask.id)
+      const updated = { ...localTask, icon_url: publicUrl }
+      setLocalTask(updated); onUpdate(updated)
+      toast('Icon updated!')
+    } else { toast('Upload failed.') }
+    setIconUploading(false)
   }
   const color = progressColor(localTask.progress || 0)
   const pData = PRIORITY[localTask.priority || 'medium']
@@ -579,7 +792,17 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--border)', width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', padding: 26 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
-          <div style={{ fontWeight: 700, fontSize: 17, flex: 1, paddingRight: 12, lineHeight: 1.3 }}>{localTask.title}</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1, paddingRight: 12 }}>
+            <label style={{ cursor: 'pointer', flexShrink: 0 }} title={localTask.icon_url ? 'Change icon' : 'Add icon'}>
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { changeIcon(e.target.files[0]); e.target.value = '' }} disabled={iconUploading} />
+              <div style={{ width: 44, height: 44, borderRadius: 10, border: '1px dashed var(--border)', background: 'var(--surface2)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 0.15s', opacity: iconUploading ? 0.5 : 1 }}>
+                {localTask.icon_url
+                  ? <img src={localTask.icon_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 18 }}>🖼</span>}
+              </div>
+            </label>
+            <div style={{ fontWeight: 700, fontSize: 17, lineHeight: 1.3, paddingTop: 4 }}>{localTask.title}</div>
+          </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: (creatorName || meetingDate) ? 10 : 18, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -611,7 +834,13 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
           </div>
         </div>
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>📋 Task detail</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>📋 Task detail</div>
+            <button onClick={() => setShowDrawing(true)}
+              style={{ fontSize: 13, padding: '5px 14px', borderRadius: 8, border: '1.5px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              🎨 Drawing board
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Start date</label>
@@ -630,6 +859,15 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
               <input type="time" value={localTask.deadline_time || ''} onChange={e => setLocalTask({ ...localTask, deadline_time: e.target.value })} />
             </div>
           </div>
+          <div className="field" style={{ marginBottom: 10 }}>
+            <label>Reference URL <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(optional)</span></label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input value={localTask.reference_url || ''} onChange={e => setLocalTask({ ...localTask, reference_url: e.target.value })} placeholder="https://…" style={{ flex: 1, fontSize: 13 }} />
+              {localTask.reference_url && (
+                <a href={localTask.reference_url} target="_blank" rel="noopener" style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: '#e0f2fe', color: '#0369a1', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>Open →</a>
+              )}
+            </div>
+          </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Notes</label>
             <textarea rows={3} style={{ resize: 'vertical', width: '100%', boxSizing: 'border-box', fontSize: 13 }}
@@ -640,7 +878,16 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
         <div style={{ borderTop: '1px solid var(--border)', marginBottom: 16 }} />
         <TaskComments taskId={localTask.id} currentUserId={currentUserId} currentUserName={currentUserName} assignedTo={localTask.assigned_to} />
         <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} />
-        <TaskAttachments taskId={localTask.id} userName={currentUserName} />
+        {showDrawing && (
+          <DrawingBoard
+            taskId={localTask.id}
+            taskTitle={localTask.title}
+            currentUserName={currentUserName}
+            onClose={() => setShowDrawing(false)}
+            onAttachmentSaved={() => setAttachmentRefresh(n => n + 1)}
+          />
+        )}
+        <TaskAttachments taskId={localTask.id} userName={currentUserName} refreshToken={attachmentRefresh} />
         {onDelete && (
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={() => { if (confirm(`Delete "${localTask.title}"?`)) { onDelete(localTask.id); onClose() } }}
@@ -983,19 +1230,45 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  useEffect(() => { load(); loadOutOfLab() }, [userId, isOwnerAdmin])
+  useEffect(() => { load(); loadOutOfLab() }, [userId, isOwnerAdmin, orgId, isSolo])
 
   async function load() {
     try {
-      let query = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team').order('deadline', { ascending: true, nullsFirst: false })
-      if (!isSolo) query = query.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-      if (!isOwnerAdmin && userId) query = query.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-      const usersQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
-      const [{ data, error }, { data: users }] = await Promise.all([query, usersQ])
-      if (error) console.error('Load tasks error:', error)
-      const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
-      setStaffMap(map)
-      const sorted = (data || []).sort((a, b) => {
+      const mode = isSolo ? 'solo' : 'team'
+      const orgFilter = orgId || '00000000-0000-0000-0000-000000000000'
+      const baseQ = () => {
+        let q = sb.from('tasks').select('*').eq('login_mode', mode)
+        if (!isSolo) q = q.eq('organization_id', orgFilter)
+        return q
+      }
+      const usersQ = isSolo
+        ? Promise.resolve({ data: [] })
+        : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
+
+      let rawTasks
+      if (isOwnerAdmin || !userId) {
+        const [{ data, error }, { data: users }] = await Promise.all([baseQ(), usersQ])
+        if (error) console.error('Load tasks error:', error)
+        const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
+        setStaffMap(map)
+        rawTasks = data || []
+      } else {
+        // Two explicit queries avoid any .or() ambiguity with UUIDs
+        const [assignedRes, createdRes, { data: users }] = await Promise.all([
+          baseQ().eq('assigned_to', userId),
+          baseQ().eq('created_by', userId),
+          usersQ,
+        ])
+        const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
+        setStaffMap(map)
+        const seen = new Set()
+        rawTasks = [...(assignedRes.data || []), ...(createdRes.data || [])].filter(t => {
+          if (seen.has(t.id)) return false
+          seen.add(t.id)
+          return true
+        })
+      }
+      const sorted = (rawTasks || []).sort((a, b) => {
         if (!a.deadline && !b.deadline) return 0
         if (!a.deadline) return 1
         if (!b.deadline) return -1
@@ -1461,6 +1734,107 @@ function StudentTeamView({ userId, groupId, orgId }) {
   )
 }
 
+function MultiAssignSelect({ users, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const selectedNames = selected.map(id => users.find(u => u.id === id)?.name).filter(Boolean)
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: selected.length ? 'var(--text)' : 'var(--text3)', fontSize: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {selected.length === 0 ? '— Select staff member(s) —' : selectedNames.join(', ')}
+        </span>
+        <span style={{ color: 'var(--text3)', marginLeft: 8, flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 200, maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
+          {users.length === 0 && <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text3)' }}>No staff users.</div>}
+          {users.map(u => (
+            <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer', fontSize: 13, background: selected.includes(u.id) ? '#e0f2fe' : 'transparent', marginBottom: 0 }}>
+              <input type="checkbox" checked={selected.includes(u.id)}
+                onChange={() => onChange(selected.includes(u.id) ? selected.filter(id => id !== u.id) : [...selected, u.id])}
+                style={{ width: 'auto', cursor: 'pointer' }} />
+              {u.name}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DateRangePicker({ startDate, endDate, onStartChange, onEndChange }) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const [view, setView] = useState(() => {
+    const ref = startDate ? new Date(startDate + 'T12:00:00') : new Date()
+    return { year: ref.getFullYear(), month: ref.getMonth() }
+  })
+  const [hovered, setHovered] = useState(null)
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+  function prevMonth() { setView(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { ...v, month: v.month - 1 }) }
+  function nextMonth() { setView(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { ...v, month: v.month + 1 }) }
+  function toStr(y, m, d) { return `${y}-${String(m + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
+  function handleDay(ds) {
+    if (!startDate || (startDate && endDate)) { onStartChange(ds); onEndChange('') }
+    else if (ds < startDate) { onStartChange(ds) }
+    else if (ds === startDate) { onStartChange(''); onEndChange('') }
+    else { onEndChange(ds) }
+  }
+  const effEnd = endDate || hovered
+  function dayStyle(ds) {
+    const isStart = ds === startDate
+    const isEnd = ds === endDate
+    const inRange = startDate && effEnd && ds > (startDate <= effEnd ? startDate : effEnd) && ds < (startDate <= effEnd ? effEnd : startDate)
+    const isToday = ds === todayStr
+    let bg = 'transparent', color = 'var(--text)', fw = 400, br = '6px', outline = 'none'
+    if (isStart || isEnd) { bg = 'var(--accent)'; color = '#fff'; fw = 700; br = isStart && endDate ? '6px 0 0 6px' : isEnd ? '0 6px 6px 0' : '6px' }
+    else if (inRange) { bg = '#dbeafe'; br = '0' }
+    else if (isToday) { color = 'var(--accent)'; fw = 700; outline = '1px dashed var(--accent)' }
+    return { textAlign: 'center', padding: '6px 0', borderRadius: br, background: bg, color, fontWeight: fw, cursor: 'pointer', fontSize: 13, outline, transition: 'background 0.1s' }
+  }
+  const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
+  const firstDay = new Date(view.year, view.month, 1).getDay()
+  const cells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', display: 'inline-block', userSelect: 'none', minWidth: 260 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <button type="button" onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text2)', padding: '0 8px', lineHeight: 1 }}>‹</button>
+        <span style={{ fontWeight: 600, fontSize: 13 }}>{MONTHS[view.month]} {view.year}</span>
+        <button type="button" onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text2)', padding: '0 8px', lineHeight: 1 }}>›</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+        {DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text3)', padding: '2px 0', marginBottom: 2 }}>{d}</div>)}
+        {cells.map((day, i) => day === null ? <div key={`e${i}`} /> : (
+          <div key={day} onClick={() => handleDay(toStr(view.year, view.month, day))}
+            onMouseEnter={() => !endDate && startDate && setHovered(toStr(view.year, view.month, day))}
+            onMouseLeave={() => setHovered(null)}
+            style={dayStyle(toStr(view.year, view.month, day))}>
+            {day}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text2)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: 'var(--text3)' }}>Start:</span>
+        <strong style={{ color: startDate ? 'var(--text)' : 'var(--text3)' }}>{startDate || '—'}</strong>
+        <span style={{ color: 'var(--text3)', margin: '0 2px' }}>→</span>
+        <span style={{ color: 'var(--text3)' }}>End:</span>
+        <strong style={{ color: endDate ? 'var(--text)' : 'var(--text3)' }}>{endDate || (startDate ? '← pick end' : '—')}</strong>
+        {(startDate || endDate) && (
+          <button type="button" onClick={() => { onStartChange(''); onEndChange('') }}
+            style={{ marginLeft: 'auto', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)' }}>Clear</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Meetings({ userId, isAdmin, userName, orgId }) {
   const [meetings, setMeetings] = useState([])
   const [tasks, setTasks] = useState([])
@@ -1469,8 +1843,19 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
   const [loading, setLoading] = useState(true)
   const [activeMeeting, setActiveMeeting] = useState(null)
   const [showNewTask, setShowNewTask] = useState(false)
-  const [newTask, setNewTask] = useState({ title: '', assigned_to: '', start_date: '', deadline: '' })
+  const [newTask, setNewTask] = useState({ title: '', assigned_to: [], start_date: '', deadline: '', reference_url: '', icon_url: '', notes: '' })
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [iconFile, setIconFile] = useState(null)
+  const [iconPreview, setIconPreview] = useState(null)
+  const [iconUploading, setIconUploading] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [drawingNewTask, setDrawingNewTask] = useState(null)
+  const [filterPriority, setFilterPriority] = useState('all')
+  const [filterUser, setFilterUser] = useState('all')
+  const [filterDeadline, setFilterDeadline] = useState('all')
+  const [sortBy, setSortBy] = useState('default')
+  const [filterYear, setFilterYear] = useState('all')
+  const [newMeetingDate, setNewMeetingDate] = useState(() => new Date().toISOString().split('T')[0])
   useEffect(() => {
     async function load() {
       let usersQ = sb.from('users').select('id, name, role').eq('is_active', true).order('name')
@@ -1483,17 +1868,10 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
       if (orgId) tasksQ = tasksQ.eq('organization_id', orgId)
       const { data: t } = await tasksQ
       setTasks(t || [])
-      const orgUserIds = allUsers.map(x => x.id)
-      let meetingsData
-      if (orgId && orgUserIds.length > 0) {
-        const { data: m } = await sb.from('meetings').select('*').in('created_by', orgUserIds).order('date', { ascending: false })
-        meetingsData = m || []
-      } else if (!orgId) {
-        const { data: m } = await sb.from('meetings').select('*').order('date', { ascending: false })
-        meetingsData = m || []
-      } else {
-        meetingsData = []
-      }
+      let meetingsQ = sb.from('meetings').select('*').order('date', { ascending: false })
+      if (orgId) meetingsQ = meetingsQ.eq('organization_id', orgId)
+      const { data: m } = await meetingsQ
+      const meetingsData = m || []
       setMeetings(meetingsData)
       if (meetingsData.length) setActiveMeeting(meetingsData[0])
       setLoading(false)
@@ -1502,21 +1880,76 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
   }, [orgId])
   const staffMap = {}; staffUsers.forEach(u => { staffMap[u.id] = u.name })
   const createMeeting = async () => {
-    const payload = { date: new Date().toISOString().split('T')[0], notes: '', organization_id: orgId || null }
+    const payload = { date: newMeetingDate || new Date().toISOString().split('T')[0], notes: '', organization_id: orgId || null }
     if (userId) payload.created_by = userId
     const { data } = await sb.from('meetings').insert(payload).select().single()
-    if (data) { setMeetings([data, ...meetings]); setActiveMeeting(data) }
+    if (data) {
+      const updated = [data, ...meetings].sort((a, b) => (b.date || '') < (a.date || '') ? -1 : 1)
+      setMeetings(updated)
+      setActiveMeeting(data)
+      setNewMeetingDate(new Date().toISOString().split('T')[0])
+    }
   }
   const addTask = async (e) => {
     e.preventDefault()
-    const payload = { ...newTask, meeting_id: activeMeeting.id, is_meeting_task: true, status: 'todo', login_mode: 'team', organization_id: orgId || null }
+    let iconUrl = null
+    if (iconFile) {
+      setIconUploading(true)
+      const ext = iconFile.name.split('.').pop().toLowerCase()
+      const iconPath = `icons/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: upErr } = await sb.storage.from('task-files').upload(iconPath, iconFile)
+      if (!upErr) {
+        const { data: { publicUrl } } = sb.storage.from('task-files').getPublicUrl(iconPath)
+        iconUrl = publicUrl
+      }
+      setIconUploading(false)
+    }
+    const assignees = newTask.assigned_to.length > 0 ? newTask.assigned_to : [null]
+    const newRows = []
+    for (const assigneeId of assignees) {
+      const payload = { title: newTask.title, notes: newTask.notes || null, assigned_to: assigneeId || null, start_date: newTask.start_date || null, deadline: newTask.deadline || null, reference_url: newTask.reference_url || null, icon_url: iconUrl, meeting_id: activeMeeting.id, is_meeting_task: true, status: 'todo', login_mode: 'team', organization_id: orgId || null }
+      if (userId) payload.created_by = userId
+      const { data } = await sb.from('tasks').insert(payload).select().single()
+      if (data) {
+        newRows.push(data)
+        if (assigneeId) await sendNotification(assigneeId, 'meeting_added', 'New meeting task assigned', `Task: ${newTask.title}`, data.id)
+      }
+    }
+    setTasks(prev => [...prev, ...newRows])
+    setNewTask({ title: '', assigned_to: [], start_date: '', deadline: '', reference_url: '', icon_url: '', notes: '' })
+    setIconFile(null); setIconPreview(null); setShowNewTask(false); setShowCalendar(false)
+  }
+  const addTaskAndDraw = async () => {
+    if (!newTask.title.trim()) { alert('Please enter a task title first.'); return }
+    let iconUrl = null
+    if (iconFile) {
+      setIconUploading(true)
+      const ext = iconFile.name.split('.').pop().toLowerCase()
+      const iconPath = `icons/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: upErr } = await sb.storage.from('task-files').upload(iconPath, iconFile)
+      if (!upErr) {
+        const { data: { publicUrl } } = sb.storage.from('task-files').getPublicUrl(iconPath)
+        iconUrl = publicUrl
+      }
+      setIconUploading(false)
+    }
+    const assigneeId = newTask.assigned_to[0] || null
+    const payload = { title: newTask.title, notes: newTask.notes || null, assigned_to: assigneeId, start_date: newTask.start_date || null, deadline: newTask.deadline || null, reference_url: newTask.reference_url || null, icon_url: iconUrl, meeting_id: activeMeeting.id, is_meeting_task: true, status: 'todo', login_mode: 'team', organization_id: orgId || null }
     if (userId) payload.created_by = userId
     const { data } = await sb.from('tasks').insert(payload).select().single()
     if (data) {
-      setTasks([...tasks, data])
-      if (newTask.assigned_to) await sendNotification(newTask.assigned_to, 'meeting_added', 'New meeting task assigned', `Task: ${newTask.title}`, data.id)
+      setTasks(prev => [...prev, data])
+      setNewTask({ title: '', assigned_to: [], start_date: '', deadline: '', reference_url: '', icon_url: '', notes: '' })
+      setIconFile(null); setIconPreview(null); setShowNewTask(false); setShowCalendar(false)
+      setDrawingNewTask(data)
     }
-    setNewTask({ title: '', assigned_to: '', start_date: '', deadline: '' }); setShowNewTask(false)
+  }
+  const deleteMeeting = async (m) => {
+    if (!window.confirm(`Delete meeting "${meetingDate(m)?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) ?? 'this meeting'}"?\n\nTasks linked to this meeting will not be deleted.`)) return
+    await sb.from('meetings').delete().eq('id', m.id)
+    const updated = meetings.filter(x => x.id !== m.id)
+    setMeetings(updated)
+    if (activeMeeting?.id === m.id) setActiveMeeting(updated[0] ?? null)
   }
   const toggleStatus = async (task) => {
     const next = { todo: 'in_progress', in_progress: 'done', done: 'todo' }
@@ -1525,66 +1958,287 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
     setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
   }
   const meetingTasks = (mid) => tasks.filter(t => t.meeting_id === mid)
+  const filteredMeetingTasks = (mid) => {
+    const today = new Date().toISOString().split('T')[0]
+    const in7 = new Date(Date.now() + 7 * 864e5).toISOString().split('T')[0]
+    let list = meetingTasks(mid)
+    if (filterPriority !== 'all') list = list.filter(t => (t.priority || 'medium') === filterPriority)
+    if (filterUser !== 'all') list = list.filter(t => t.assigned_to === filterUser)
+    if (filterDeadline === 'overdue') list = list.filter(t => t.deadline && t.deadline < today && t.status !== 'done')
+    else if (filterDeadline === 'this_week') list = list.filter(t => t.deadline && t.deadline >= today && t.deadline <= in7)
+    else if (filterDeadline === 'no_deadline') list = list.filter(t => !t.deadline)
+    if (sortBy === 'deadline') list = [...list].sort((a, b) => (a.deadline || '9999') < (b.deadline || '9999') ? -1 : 1)
+    else if (sortBy === 'priority') { const order = { high: 0, medium: 1, low: 2 }; list = [...list].sort((a, b) => (order[a.priority || 'medium'] || 1) - (order[b.priority || 'medium'] || 1)) }
+    return list
+  }
+  const activeFilters = [filterPriority !== 'all', filterUser !== 'all', filterDeadline !== 'all'].filter(Boolean).length
+  const meetingDate = (m) => {
+    if (!m?.date) return null
+    const dateOnly = String(m.date).split('T')[0]   // strip any time/tz suffix Supabase may return
+    const d = new Date(dateOnly + 'T12:00:00')
+    return !isNaN(d.getTime()) ? d : null
+  }
+  const availableYears = [...new Set(meetings.map(m => meetingDate(m)?.getFullYear()).filter(y => y != null))].sort((a, b) => b - a)
+  const displayedMeetings = filterYear === 'all' ? meetings : meetings.filter(m => meetingDate(m)?.getFullYear() === Number(filterYear))
   const statusStyle = (s) => ({ todo: { background: '#f1f1f1', color: '#555' }, in_progress: { background: ORANGE_LIGHT, color: ORANGE }, done: { background: '#e8f5e9', color: '#2e7d32' } }[s] || {})
   if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
   return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updated => { setTasks(tasks.map(t => t.id === updated.id ? updated : t)); setSelectedTask(updated) }} onDelete={isAdmin ? id => { setTasks(tasks.filter(t => t.id !== id)); sb.from('tasks').delete().eq('id', id) } : undefined} currentUserId={userId} currentUserName={userName} />}
-      <div style={{ width: 160, flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Meetings</div>
-          {isAdmin && <button className="btn btn-sm" onClick={createMeeting} style={{ padding: '2px 8px', fontSize: 11 }}>+ New</button>}
+    <div>
+      {drawingNewTask && <DrawingBoard taskId={drawingNewTask.id} taskTitle={drawingNewTask.title} currentUserName={userName} onClose={() => setDrawingNewTask(null)} onAttachmentSaved={() => setDrawingNewTask(null)} />}
+      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updated => { setTasks(tasks.map(t => t.id === updated.id ? updated : t)); setSelectedTask(updated) }} onDelete={selectedTask?.created_by === userId ? id => { setTasks(tasks.filter(t => t.id !== id)); sb.from('tasks').delete().eq('id', id) } : undefined} currentUserId={userId} currentUserName={userName} />}
+
+      {/* ── Step 1: Meeting selector card ─────────────────────────────────── */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+          Step 1 — Select or schedule a meeting
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {meetings.length === 0 && <div style={{ fontSize: 12, color: 'var(--text3)' }}>No meetings yet.</div>}
-          {meetings.map(m => (
-            <button key={m.id} onClick={() => setActiveMeeting(m)}
-              style={{ textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeMeeting?.id === m.id ? 600 : 400, background: activeMeeting?.id === m.id ? BLUE : 'transparent', color: activeMeeting?.id === m.id ? 'white' : 'var(--text2)', transition: 'all 0.15s' }}>
-              {new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ flex: 1 }}>
-        {!activeMeeting ? <div style={{ fontSize: 14, color: 'var(--text3)' }}>Select or create a meeting.</div> : (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{new Date(activeMeeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
-              {isAdmin && <button className="btn btn-sm btn-primary" onClick={() => setShowNewTask(!showNewTask)}>+ Add task</button>}
+
+        {/* Row A: existing meeting picker */}
+        {meetings.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>Pick an existing meeting</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Year pills when needed */}
+              {availableYears.length > 1 && (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['all', ...availableYears].map(y => (
+                    <button key={y} onClick={() => setFilterYear(y)}
+                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: 'none', background: filterYear === y ? BLUE : 'var(--surface2)', color: filterYear === y ? 'white' : 'var(--text3)', cursor: 'pointer', fontWeight: 600 }}>
+                      {y === 'all' ? 'All' : y}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                <select
+                  value={activeMeeting?.id || ''}
+                  onChange={e => setActiveMeeting(displayedMeetings.find(m => m.id === e.target.value) || null)}
+                  style={{ width: '100%', appearance: 'none', padding: '8px 32px 8px 14px', borderRadius: 10, border: `2px solid ${activeMeeting ? BLUE : 'var(--border)'}`, background: activeMeeting ? `${BLUE}0d` : 'var(--surface)', color: activeMeeting ? BLUE : 'var(--text3)', fontSize: 14, fontWeight: activeMeeting ? 600 : 400, cursor: 'pointer', outline: 'none' }}>
+                  <option value="">— Choose a meeting date —</option>
+                  {displayedMeetings.map(m => {
+                    const d = meetingDate(m)
+                    const lbl = d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'
+                    return <option key={m.id} value={m.id}>{lbl}</option>
+                  })}
+                </select>
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, pointerEvents: 'none', color: 'var(--text3)' }}>▾</span>
+              </div>
+              {activeMeeting && isAdmin && (
+                <button onClick={() => deleteMeeting(activeMeeting)}
+                  style={{ fontSize: 12, padding: '7px 12px', borderRadius: 8, border: '1.5px solid #f87171', background: '#fef2f2', color: '#b91c1c', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+                  🗑 Delete
+                </button>
+              )}
             </div>
-            {showNewTask && (
+          </div>
+        )}
+
+        {/* Row B: schedule a new date (always visible for admins) */}
+        {isAdmin && (
+          <>
+            {meetings.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap' }}>or schedule a new meeting</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>
+                  {meetings.length === 0 ? 'Pick a date to schedule your first meeting' : 'New meeting date'}
+                </div>
+                <input type="date" value={newMeetingDate} onChange={e => setNewMeetingDate(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `2px solid ${BLUE}20`, fontSize: 14, outline: 'none' }}
+                  onFocus={e => e.target.style.borderColor = BLUE}
+                  onBlur={e => e.target.style.borderColor = `${BLUE}20`} />
+              </div>
+              <button onClick={createMeeting}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: BLUE, color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                📅 Schedule
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Step 2: Tasks ─────────────────────────────────────────────────── */}
+      {!activeMeeting ? (
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text3)', background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 12 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>☝</div>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Select a meeting above to view its tasks</div>
+          <div style={{ fontSize: 12 }}>or schedule a new meeting date to get started</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Step 2 — Tasks</div>
+              <div style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}>{meetingDate(activeMeeting)?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) ?? 'Meeting'}</div>
+            </div>
+            {isAdmin && (
+              <button className="btn btn-sm btn-primary" onClick={() => setShowNewTask(!showNewTask)}>
+                + Task for {meetingDate(activeMeeting)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) ?? 'meeting'}
+              </button>
+            )}
+          </div>
+          {showNewTask && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                <div className="field"><label>Task title</label><input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title" required /></div>
-                <div className="field"><label>Assign to (staff)</label>
-                  <select value={newTask.assigned_to} onChange={e => setNewTask({ ...newTask, assigned_to: e.target.value })} required>
-                    <option value="">— Select staff member —</option>
-                    {staffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <label style={{ cursor: 'pointer', flexShrink: 0 }} title="Upload task icon">
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                      const f = e.target.files[0]; if (!f) return
+                      setIconFile(f); setIconPreview(URL.createObjectURL(f))
+                      e.target.value = ''
+                    }} />
+                    <div style={{ width: 48, height: 48, borderRadius: 10, border: '2px dashed var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', transition: 'border-color 0.15s' }}>
+                      {iconPreview
+                        ? <img src={iconPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 20 }}>🖼</span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', textAlign: 'center', marginTop: 3 }}>Icon</div>
+                  </label>
+                  <div style={{ flex: 1 }}>
+                    <div className="field" style={{ marginBottom: 8 }}><label>Task title</label><input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title" /></div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label>Reference URL <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(optional)</span></label>
+                      <input value={newTask.reference_url} onChange={e => setNewTask({ ...newTask, reference_url: e.target.value })} placeholder="https://…" style={{ fontSize: 13 }} />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid-2">
-                  <div className="field"><label>Start date</label><input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} required /></div>
-                  <div className="field"><label>Deadline</label><input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} required /></div>
+                <div className="field" style={{ marginTop: 8 }}>
+                  <label>Assign to (staff) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
+                  <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary" onClick={addTask}>Add task</button>
-                  <button className="btn" onClick={() => setShowNewTask(false)}>Cancel</button>
+                <div className="field">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ marginBottom: 0 }}>Date range (start → deadline)</label>
+                    <button type="button" onClick={() => setShowCalendar(c => !c)}
+                      style={{ fontSize: 12, background: showCalendar ? 'var(--accent)' : 'var(--surface2)', color: showCalendar ? '#fff' : 'var(--text2)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer' }}>
+                      📅 {showCalendar ? 'Hide calendar' : 'Calendar'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: showCalendar ? 12 : 0 }}>
+                    <input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} placeholder="Start date" style={{ flex: 1, padding: '7px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13 }} />
+                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)' }}>→</span>
+                    <input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} placeholder="Deadline" style={{ flex: 1, padding: '7px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13 }} />
+                  </div>
+                  {showCalendar && (
+                    <DateRangePicker
+                      startDate={newTask.start_date} endDate={newTask.deadline}
+                      onStartChange={v => setNewTask(t => ({ ...t, start_date: v }))}
+                      onEndChange={v => setNewTask(t => ({ ...t, deadline: v }))}
+                    />
+                  )}
+                </div>
+                <div className="field">
+                  <label>Notes <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(optional — longer description)</span></label>
+                  <textarea
+                    value={newTask.notes}
+                    onChange={e => setNewTask({ ...newTask, notes: e.target.value })}
+                    placeholder="Describe the task in more detail…"
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary" onClick={addTask} disabled={iconUploading}>{iconUploading ? 'Uploading…' : 'Add task'}</button>
+                  <button className="btn" onClick={() => { setShowNewTask(false); setShowCalendar(false); setIconFile(null); setIconPreview(null) }}>Cancel</button>
+                  <button onClick={addTaskAndDraw} disabled={iconUploading}
+                    style={{ fontSize: 13, padding: '7px 16px', borderRadius: 8, border: '1.5px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', cursor: iconUploading ? 'default' : 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    🎨 Add &amp; draw
+                  </button>
                 </div>
               </div>
             )}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-              {meetingTasks(activeMeeting.id).length === 0
-                ? <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>No tasks for this meeting yet.</div>
-                : meetingTasks(activeMeeting.id).map(task => (
-                  <div key={task.id} onClick={() => setSelectedTask(task)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', transition: 'background 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <button onClick={e => { e.stopPropagation(); toggleStatus(task) }} style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${task.status === 'done' ? '#2e7d32' : 'var(--border)'}`, background: task.status === 'done' ? '#2e7d32' : 'transparent', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {task.status === 'done' && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
+            {/* Filter bar */}
+            {(() => {
+              const pill = (active, activeColor, activeBg) => ({
+                appearance: 'none', fontSize: 12, padding: '5px 26px 5px 10px',
+                borderRadius: 20, cursor: 'pointer', outline: 'none', fontWeight: active ? 600 : 400,
+                border: `1.5px solid ${active ? activeColor : 'var(--border)'}`,
+                background: active ? activeBg : 'var(--surface)',
+                color: active ? activeColor : 'var(--text2)',
+                boxShadow: active ? `0 0 0 2px ${activeBg}` : 'none',
+                transition: 'all 0.15s',
+              })
+              const Wrap = ({ children }) => (
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  {children}
+                  <span style={{ position: 'absolute', right: 8, pointerEvents: 'none', fontSize: 9, color: 'var(--text3)' }}>▾</span>
+                </div>
+              )
+              return (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>Filter</span>
+                  <Wrap>
+                    <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={pill(filterPriority !== 'all', '#b45309', '#fef3c7')}>
+                      <option value="all">⚡ Priority</option>
+                      <option value="high">🔴 High</option>
+                      <option value="medium">🟡 Medium</option>
+                      <option value="low">🟢 Low</option>
+                    </select>
+                  </Wrap>
+                  <Wrap>
+                    <select value={filterUser} onChange={e => setFilterUser(e.target.value)} style={pill(filterUser !== 'all', '#1d4ed8', '#dbeafe')}>
+                      <option value="all">👤 Person</option>
+                      {staffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </Wrap>
+                  <Wrap>
+                    <select value={filterDeadline} onChange={e => setFilterDeadline(e.target.value)} style={pill(filterDeadline !== 'all', '#be185d', '#fce7f3')}>
+                      <option value="all">📅 Deadline</option>
+                      <option value="overdue">⚠ Overdue</option>
+                      <option value="this_week">This week</option>
+                      <option value="no_deadline">No deadline</option>
+                    </select>
+                  </Wrap>
+                  <Wrap>
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={pill(sortBy !== 'default', '#5b21b6', '#ede9fe')}>
+                      <option value="default">↕ Sort</option>
+                      <option value="deadline">By deadline</option>
+                      <option value="priority">By priority</option>
+                    </select>
+                  </Wrap>
+                  {activeFilters > 0 && (
+                    <button onClick={() => { setFilterPriority('all'); setFilterUser('all'); setFilterDeadline('all'); setSortBy('default') }}
+                      style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid #f87171', background: '#fef2f2', color: '#b91c1c', cursor: 'pointer', fontWeight: 600 }}>
+                      ✕ Clear {activeFilters > 1 ? `(${activeFilters})` : ''}
                     </button>
+                  )}
+                </div>
+              )
+            })()}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+              {filteredMeetingTasks(activeMeeting.id).length === 0
+                ? <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>{meetingTasks(activeMeeting.id).length === 0 ? 'No tasks for this meeting yet.' : 'No tasks match the current filters.'}</div>
+                : filteredMeetingTasks(activeMeeting.id).map((task, taskIdx) => {
+                  const rowBg = taskIdx % 2 === 0 ? 'var(--surface)' : '#f0f7ff'
+                  return (
+                  <div key={task.id} onClick={() => setSelectedTask(task)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s', background: rowBg }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#e8f4fd'}
+                    onMouseLeave={e => e.currentTarget.style.background = rowBg}>
+                    {task.icon_url
+                      ? <img src={task.icon_url} alt="" style={{ width: 32, height: 32, borderRadius: 7, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border)' }} />
+                      : <button onClick={e => { e.stopPropagation(); toggleStatus(task) }} style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${task.status === 'done' ? '#2e7d32' : 'var(--border)'}`, background: task.status === 'done' ? '#2e7d32' : 'transparent', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {task.status === 'done' && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
+                        </button>
+                    }
+                    {task.icon_url && (
+                      <button onClick={e => { e.stopPropagation(); toggleStatus(task) }} style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${task.status === 'done' ? '#2e7d32' : 'var(--border)'}`, background: task.status === 'done' ? '#2e7d32' : 'transparent', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {task.status === 'done' && <span style={{ color: 'white', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                      </button>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13 }}>{task.title}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{allUsersMap[task.assigned_to] || staffMap[task.assigned_to] || '—'} · {task.start_date} → {task.deadline}</div>
+                      <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {task.title}
+                        {task.reference_url && (
+                          <a href={task.reference_url} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}
+                            style={{ fontSize: 11, padding: '1px 7px', borderRadius: 10, background: '#e0f2fe', color: '#0369a1', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>🔗 Ref</a>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{allUsersMap[task.assigned_to] || staffMap[task.assigned_to] || 'Unassigned'} · {task.start_date || '—'} → {task.deadline || '—'}</div>
                       {task.created_by && task.created_by !== task.assigned_to && allUsersMap[task.created_by] && (
                         <div style={{ fontSize: 10, color: BLUE, marginTop: 2 }}>Assigned by {allUsersMap[task.created_by]} · decided in this meeting</div>
                       )}
@@ -1592,13 +2246,12 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
                     </div>
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500, flexShrink: 0, ...statusStyle(task.status) }}>{task.status.replace('_', ' ')}</span>
                   </div>
-                ))
-              }
+                  )
+                })}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Click a task to add notes, comments and attachments</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Click a task to view details, add notes, comments, and start a 🎨 live drawing</div>
           </>
         )}
-      </div>
     </div>
   )
 }
@@ -1607,7 +2260,11 @@ function AssignOthers({ userId, orgId }) {
   const [staffUsers, setStaffUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [newTask, setNewTask] = useState({ title: '', assigned_to: '', start_date: '', deadline: '', priority: 'medium', is_meeting_task: false })
+  const [newTask, setNewTask] = useState({ title: '', assigned_to: [], start_date: '', deadline: '', priority: 'medium', is_meeting_task: false, reference_url: '', icon_url: '' })
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [iconFile, setIconFile] = useState(null)
+  const [iconPreview, setIconPreview] = useState(null)
+  const [iconUploading, setIconUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
   useEffect(() => {
@@ -1621,15 +2278,33 @@ function AssignOthers({ userId, orgId }) {
   const createTask = async (e) => {
     e.preventDefault(); setSaving(true)
     try {
-      const payload = { ...newTask, status: 'todo', progress: 0, login_mode: 'team', organization_id: orgId || null }
-      if (userId) payload.created_by = userId
-      const { data, error } = await sb.from('tasks').insert(payload).select().single()
-      if (error) throw error
-      if (data) {
-        setTasks([data, ...tasks])
-        if (newTask.assigned_to) await sendNotification(newTask.assigned_to, 'task_assigned', 'You have a new task', `Task: ${newTask.title}`, data.id)
+      let iconUrl = null
+      if (iconFile) {
+        setIconUploading(true)
+        const ext = iconFile.name.split('.').pop().toLowerCase()
+        const iconPath = `icons/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+        const { error: upErr } = await sb.storage.from('task-files').upload(iconPath, iconFile)
+        if (!upErr) {
+          const { data: { publicUrl } } = sb.storage.from('task-files').getPublicUrl(iconPath)
+          iconUrl = publicUrl
+        }
+        setIconUploading(false)
       }
-      setNewTask({ title: '', assigned_to: '', start_date: '', deadline: '', priority: 'medium', is_meeting_task: false })
+      const assignees = newTask.assigned_to.length > 0 ? newTask.assigned_to : [null]
+      const newRows = []
+      for (const assigneeId of assignees) {
+        const payload = { title: newTask.title, assigned_to: assigneeId || null, start_date: newTask.start_date || null, deadline: newTask.deadline || null, priority: newTask.priority, is_meeting_task: newTask.is_meeting_task, reference_url: newTask.reference_url || null, icon_url: iconUrl, status: 'todo', progress: 0, login_mode: 'team', organization_id: orgId || null }
+        if (userId) payload.created_by = userId
+        const { data, error } = await sb.from('tasks').insert(payload).select().single()
+        if (error) throw error
+        if (data) {
+          newRows.push(data)
+          if (assigneeId) await sendNotification(assigneeId, 'task_assigned', 'You have a new task', `Task: ${newTask.title}`, data.id)
+        }
+      }
+      setTasks(prev => [...newRows, ...prev])
+      setNewTask({ title: '', assigned_to: [], start_date: '', deadline: '', priority: 'medium', is_meeting_task: false, reference_url: '', icon_url: '' })
+      setIconFile(null); setIconPreview(null); setShowCalendar(false)
       toast('Task created!')
     } catch(err) { toast('Error: ' + (err?.message || 'Could not create task')) }
     setSaving(false)
@@ -1645,13 +2320,29 @@ function AssignOthers({ userId, orgId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>Create & assign a task</div>
-        <div className="field"><label>Task title</label><input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title" required /></div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+          <label style={{ cursor: 'pointer', flexShrink: 0 }} title="Upload task icon">
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+              const f = e.target.files[0]; if (!f) return
+              setIconFile(f); setIconPreview(URL.createObjectURL(f)); e.target.value = ''
+            }} />
+            <div style={{ width: 48, height: 48, borderRadius: 10, border: '2px dashed var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {iconPreview ? <img src={iconPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 20 }}>🖼</span>}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', textAlign: 'center', marginTop: 3 }}>Icon</div>
+          </label>
+          <div style={{ flex: 1 }}>
+            <div className="field" style={{ marginBottom: 8 }}><label>Task title</label><input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title" /></div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Reference URL <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(optional)</span></label>
+              <input value={newTask.reference_url} onChange={e => setNewTask({ ...newTask, reference_url: e.target.value })} placeholder="https://…" style={{ fontSize: 13 }} />
+            </div>
+          </div>
+        </div>
         <div className="grid-2">
-          <div className="field"><label>Assign to (staff)</label>
-            <select value={newTask.assigned_to} onChange={e => setNewTask({ ...newTask, assigned_to: e.target.value })} required>
-              <option value="">— Select staff member —</option>
-              {staffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+          <div className="field">
+            <label>Assign to (staff) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
+            <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
           </div>
           <div className="field"><label>Priority</label>
             <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
@@ -1661,14 +2352,31 @@ function AssignOthers({ userId, orgId }) {
             </select>
           </div>
         </div>
-        <div className="grid-2">
-          <div className="field"><label>Start date</label><input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} required /></div>
-          <div className="field"><label>Deadline</label><input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} required /></div>
+        <div className="field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <label style={{ marginBottom: 0 }}>Date range (start → deadline)</label>
+            <button type="button" onClick={() => setShowCalendar(c => !c)}
+              style={{ fontSize: 12, background: showCalendar ? 'var(--accent)' : 'var(--surface2)', color: showCalendar ? '#fff' : 'var(--text2)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer' }}>
+              📅 {showCalendar ? 'Hide calendar' : 'Calendar'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: showCalendar ? 12 : 0 }}>
+            <input type="date" value={newTask.start_date} onChange={e => setNewTask({ ...newTask, start_date: e.target.value })} style={{ flex: 1, padding: '7px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13 }} />
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)' }}>→</span>
+            <input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} style={{ flex: 1, padding: '7px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13 }} />
+          </div>
+          {showCalendar && (
+            <DateRangePicker
+              startDate={newTask.start_date} endDate={newTask.deadline}
+              onStartChange={v => setNewTask(t => ({ ...t, start_date: v }))}
+              onEndChange={v => setNewTask(t => ({ ...t, deadline: v }))}
+            />
+          )}
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)', marginBottom: 16, cursor: 'pointer' }}>
           <input type="checkbox" checked={newTask.is_meeting_task} onChange={e => setNewTask({ ...newTask, is_meeting_task: e.target.checked })} /> This is a meeting task
         </label>
-        <button className="btn btn-primary" onClick={createTask} disabled={saving}>{saving ? 'Creating…' : 'Create & assign task'}</button>
+        <button className="btn btn-primary" onClick={createTask} disabled={saving || iconUploading}>{iconUploading ? 'Uploading icon…' : saving ? 'Creating…' : 'Create & assign task'}</button>
       </div>
       <div>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>All tasks ({tasks.length})</div>
@@ -2045,7 +2753,6 @@ export default function PM() {
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>Task Board</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{isStudent ? 'Personal workspace' : 'Staff workspace'}</div>
         </div>
         <HelpPanel screen="pm" />
       </div>

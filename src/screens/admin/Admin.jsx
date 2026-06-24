@@ -539,7 +539,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       // Plain insert — don't use .single() which fails under RLS
       const { error } = await sb.from('users').insert({
         name: name.trim(), email: emailLC, auth_id, role,
-        organization_id: orgId, is_active: true, must_change_password: true,
+        organization_id: orgId, is_active: true, must_change_password: true, terms_accepted_version: null,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
 

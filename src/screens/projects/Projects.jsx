@@ -918,7 +918,7 @@ export default function Projects() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">Project & Material</div>
+        <div className="section-title">Project Workspace</div>
         <HelpPanel screen="projects" />
       </div>
 

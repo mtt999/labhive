@@ -412,7 +412,7 @@ export default function Login() {
                   <label>Email address</label>
                   <input type="text" value={identifier}
                     onChange={e => { setIdentifier(e.target.value); setError('') }}
-                    placeholder={mode === 'solo' ? 'your@email.com' : 'name or netid@illinois.edu'}
+                    placeholder={mode === 'solo' ? 'your@email.com' : 'name or alex.smith@email.com'}
                     autoComplete="username" disabled={!mode} />
                 </div>
                 <div className="field" style={{ opacity: mode ? 1 : 0.35, pointerEvents: mode ? 'auto' : 'none', transition: 'opacity 0.2s' }}>

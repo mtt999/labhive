@@ -61,6 +61,15 @@ function getScreenTabs(screen, session) {
     ...(!isSolo ? [{ key: 'locker', icon: '🗄️', label: 'Lab User Locker' }] : []),
   ]
 
+  if (screen === 'equipment') return [
+    { key: 'list',        icon: '📋', label: 'List of Equipment' },
+    ...((isAdmin || isStaff) ? [
+      { key: 'calibration', icon: '🧪', label: 'Calibration' },
+      { key: 'records',     icon: '📊', label: 'Maintenance Records' },
+    ] : []),
+    { key: 'settings',    icon: '⚙️', label: 'Settings' },
+  ]
+
   if (screen === 'projects') {
     const hasProjectAccess = isSolo || !isStudent
     return [
@@ -69,7 +78,6 @@ function getScreenTabs(screen, session) {
         { key: 'results',   icon: '✏️',  label: 'Project Test Results' },
         { key: 'workspace', icon: '📋', label: 'Workspace' },
       ] : []),
-      { key: 'types', icon: '🏷️', label: 'Material Types' },
     ]
   }
 
