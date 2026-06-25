@@ -152,10 +152,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
               const m = MODULE_META[key]
               if (!m) return null
               return (
-                <button key={key} onClick={() => setScreen(key)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text2)', fontSize: 13, fontWeight: 400, cursor: 'pointer', textAlign: 'left', marginBottom: 1, transition: 'all 0.12s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)' }}>
+                <button key={key} className="sidebar-item" onClick={() => setScreen(key)}>
                   <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
                   <span>{m.label}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>›</span>
@@ -168,10 +165,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
         /* ── Module page: back + sub-tabs ── */
         <>
           {/* Back to dashboard */}
-          <button onClick={() => setScreen('dashboard')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', border: 'none', borderBottom: '1px solid #f3f4f6', background: 'transparent', color: 'var(--text3)', fontSize: 12, cursor: 'pointer', fontWeight: 500, textAlign: 'left', transition: 'background 0.12s', flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text3)' }}>
+          <button className="sidebar-back" onClick={() => setScreen('dashboard')}>
             <span>←</span><span>Dashboard</span>
           </button>
 
@@ -191,10 +185,10 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
               {tabs.map(t => {
                 const active = activeTab === t.key
                 return (
-                  <button key={t.key} onClick={() => setSidebarSubTab(t.key)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: 'none', background: active ? accentLight : 'transparent', color: active ? accentColor : 'var(--text2)', fontSize: 13, fontWeight: active ? 600 : 400, cursor: 'pointer', textAlign: 'left', marginBottom: 2, transition: 'all 0.12s' }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' } }}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)' } }}>
+                  <button key={t.key}
+                    className={`sidebar-item${active ? ' active' : ''}`}
+                    onClick={() => setSidebarSubTab(t.key)}
+                    style={active ? { background: accentLight, color: accentColor } : {}}>
                     <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{t.icon}</span>
                     <span style={{ lineHeight: 1.3, flex: 1 }}>{t.label}</span>
                     {active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: accentColor, flexShrink: 0 }} />}

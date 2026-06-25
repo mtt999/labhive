@@ -219,3 +219,59 @@ tr:last-child td { border-bottom: none; }
   .msg-back-btn { display: flex !important; }
   .msg-header-hide-mobile { display: none !important; }
 }
+
+/* ── Sidebar navigation items ── */
+.sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: 2px;
+  transition: background 0.13s, color 0.13s, transform 0.1s;
+  user-select: none;
+}
+.sidebar-item:hover {
+  background: var(--surface2);
+  color: var(--text);
+  transform: translateX(2px);
+}
+.sidebar-item:active {
+  transform: translateX(3px) scale(0.98);
+}
+.sidebar-item.active {
+  font-weight: 600;
+  /* accent color applied inline since it varies by login mode */
+}
+.sidebar-item.active:hover {
+  transform: translateX(2px);
+}
+.sidebar-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  background: transparent;
+  color: var(--text3);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.13s, color 0.13s;
+  flex-shrink: 0;
+  width: 100%;
+}
+.sidebar-back:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
