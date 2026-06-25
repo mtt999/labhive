@@ -1545,6 +1545,26 @@ export default function Admin() {
     loadOrgs()
   }
 
+  async function uploadOrgLogo(org, file) {
+    if (!file) return
+    if (!file.type.includes('svg') && !file.type.startsWith('image/')) { toast('Please upload an SVG or image file.'); return }
+    const ext  = file.name.split('.').pop()
+    const path = `org-logos/${org.id}.${ext}`
+    const { error: upErr } = await sb.storage.from('project-files').upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) { toast('Upload failed: ' + upErr.message); return }
+    const { data: { publicUrl } } = sb.storage.from('project-files').getPublicUrl(path)
+    const { error: dbErr } = await sb.from('organizations').update({ logo_url: publicUrl }).eq('id', org.id)
+    if (dbErr) { toast('Save failed: ' + dbErr.message); return }
+    toast(`Logo saved for ${org.name}`)
+    loadOrgs()
+  }
+
+  async function removeOrgLogo(org) {
+    await sb.from('organizations').update({ logo_url: null }).eq('id', org.id)
+    toast('Logo removed.')
+    loadOrgs()
+  }
+
   async function togglePhotoRequired(org) {
     const newVal = !org.require_equipment_photos
     const { error } = await sb.from('organizations').update({ require_equipment_photos: newVal }).eq('id', org.id)
@@ -1786,6 +1806,14 @@ export default function Admin() {
                     >
                       📸 {o.require_equipment_photos ? 'Photos On' : 'Photos Off'}
                     </button>
+                    {/* Org logo upload */}
+                    <label title="Upload SVG/image logo shown in the header for this org's users" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, border: o.logo_url ? '1.5px solid #1D9E75' : '1px solid var(--border)', background: o.logo_url ? '#e6f7f2' : 'var(--surface)', color: o.logo_url ? '#1D9E75' : 'var(--text2)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      <input type="file" accept=".svg,image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadOrgLogo(o, f); e.target.value = '' }} />
+                      🏷 {o.logo_url ? 'Logo ✓' : 'Logo'}
+                    </label>
+                    {o.logo_url && (
+                      <button className="btn btn-sm" title="Remove org logo" onClick={() => removeOrgLogo(o)} style={{ padding: '4px 8px', color: '#ef4444', borderColor: '#fca5a5' }}>✕ Logo</button>
+                    )}
                     <button className="btn btn-sm" onClick={() => setOrgModulesModal(o)}>Icons</button>
                     <button className="btn btn-sm" onClick={() => setOrgModal(o)}>Edit</button>
                     <button className="btn btn-sm btn-danger" onClick={() => deleteOrg(o.id)}>Delete</button>

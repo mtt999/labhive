@@ -232,11 +232,26 @@ export default function Layout({ children }) {
 
   const showSidebar = !isMobile && !isProto && !!session
 
+  const [orgLogoUrl, setOrgLogoUrl] = useState(null)
+  useEffect(() => {
+    const orgId = session?.organizationId
+    if (!orgId || session?.loginMode !== 'team') { setOrgLogoUrl(null); return }
+    sb.from('organizations').select('logo_url').eq('id', orgId).single()
+      .then(({ data }) => setOrgLogoUrl(data?.logo_url || null))
+  }, [session?.organizationId, session?.loginMode])
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
 
       {/* ── Header ── */}
-      <header style={{ background: '#0d47a1', borderBottom: '1px solid #0a3d91', paddingLeft: 16, paddingRight: 16, paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 0, height: 'calc(56px + env(safe-area-inset-top, 0px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, zIndex: 100 }}>
+      <header style={{ background: '#0d47a1', borderBottom: '1px solid #0a3d91', paddingLeft: 16, paddingRight: 16, paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 0, height: 'calc(56px + env(safe-area-inset-top, 0px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, zIndex: 100, position: 'relative' }}>
+        {/* Org logo — centered in header, only for team users */}
+        {orgLogoUrl && !isMobile && (
+          <div style={{ position: 'absolute', left: '50%', top: 'env(safe-area-inset-top, 0px)', bottom: 0, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+            <img src={orgLogoUrl} alt="Organization logo" style={{ height: 38, maxWidth: 200, objectFit: 'contain' }} />
+          </div>
+        )}
+
         <div onClick={() => setScreen('dashboard')} style={{ cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ marginTop: 20 }}><LabHiveLogo size={79} /></div>
           {!isMobile && (
