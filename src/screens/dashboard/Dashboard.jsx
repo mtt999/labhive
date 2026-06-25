@@ -77,6 +77,7 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
   return (
     <a
       href="#"
+      className="module-card-link"
       onClick={e => { e.preventDefault(); onClick?.() }}
       onTouchEnd={e => { e.preventDefault(); onClick?.() }}
       style={{
@@ -85,7 +86,6 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
         overflow: 'hidden',
         cursor: 'pointer',
         border: isAdminManage ? '1px dashed var(--border)' : '1px solid var(--border)',
-        transition: 'box-shadow 0.15s',
         position: 'relative',
         backgroundColor: m.bg,
         backgroundImage: imgUrl ? `url(${imgUrl})` : 'none',
@@ -94,12 +94,9 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
         backgroundRepeat: 'no-repeat',
         touchAction: 'manipulation',
         WebkitTapHighlightColor: 'transparent',
-        userSelect: 'none',
         WebkitUserSelect: 'none',
         textDecoration: 'none',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)' }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
+      }}>
       <div style={{ position: 'absolute', inset: 0, background: imgUrl ? 'linear-gradient(to top, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.15) 100%)' : 'linear-gradient(to top, rgba(0,0,0,0.15) 0%, transparent 100%)', pointerEvents: 'none' }} />
       {m.external && <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 10, borderRadius: 4, padding: '2px 6px', pointerEvents: 'none' }}>↗ External</div>}
       {isAdminManage && <div style={{ position: 'absolute', top: 10, right: 10, background: m.color, color: '#fff', fontSize: 10, borderRadius: 4, padding: '2px 8px', fontWeight: 600, pointerEvents: 'none' }}>⚙ Edit</div>}

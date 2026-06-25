@@ -221,6 +221,21 @@ tr:last-child td { border-bottom: none; }
   .msg-header-hide-mobile { display: none !important; }
 }
 
+/* ── Dashboard module icon cards ── */
+.module-card-link {
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s !important;
+  user-select: none;
+}
+.module-card-link:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.16);
+  border-color: rgba(255,255,255,0.35) !important;
+}
+.module-card-link:active {
+  transform: translateY(-2px) scale(0.99);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+
 /* ── Sidebar navigation items ── */
 .sidebar-item {
   width: 100%;
