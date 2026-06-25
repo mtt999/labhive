@@ -663,7 +663,7 @@ function ImportTab() {
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
           const roomsData = {}; let currentRoom = null
           for (const row of rows) {
-            const [numVal, nameVal, minVal, qtyVal] = row
+            const [numVal, nameVal, minVal, qtyVal, unitVal] = row
             if (!nameVal || String(nameVal).trim() === '') continue
             const nameStr = String(nameVal).trim().toLowerCase()
             if (nameStr === 'item name' || nameStr === 'item') continue
@@ -673,7 +673,8 @@ function ImportTab() {
             const num = parseInt(numVal)
             if (!isNaN(num) && nameVal) {
               if (!currentRoom) { currentRoom = DEFAULT_ROOM_NAME; if (!roomsData[currentRoom]) roomsData[currentRoom] = [] }
-              roomsData[currentRoom].push({ name: String(nameVal).trim(), unit: 'pcs', min_qty: parseFloat(minVal) || 1, qty: (qtyVal !== null && !isNaN(parseFloat(qtyVal))) ? parseFloat(qtyVal) : (parseFloat(minVal) || 1) })
+              const unit = (unitVal && String(unitVal).trim()) ? String(unitVal).trim() : 'pcs'
+              roomsData[currentRoom].push({ name: String(nameVal).trim(), unit, min_qty: parseFloat(minVal) || 1, qty: (qtyVal !== null && !isNaN(parseFloat(qtyVal))) ? parseFloat(qtyVal) : (parseFloat(minVal) || 1) })
             }
           }
           resolve(roomsData)
@@ -716,20 +717,130 @@ function ImportTab() {
   }
 
   function downloadTemplate() {
-    const data = [['Item No.', 'Item Name', 'Min Qty', 'Unit']]
-    rooms.forEach(r => { data.push(['', r.name, '', '']); supplies.filter(s => s.room_id === r.id).forEach((s, i) => data.push([i + 1, s.name, s.min_qty, s.unit])); data.push(['', '', '', '']) })
-    const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{ wch: 10 }, { wch: 40 }, { wch: 10 }, { wch: 15 }]
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Inventory'); XLSX.writeFile(wb, 'ICT-Lab_template.xlsx')
+    const EXAMPLES = [
+      {
+        room: 'Chemistry Lab',
+        items: [
+          ['Acetone (500 mL)', 5, 10, 'bottle'],
+          ['Ethanol (1 L)', 3, 6, 'bottle'],
+          ['Safety goggles', 10, 20, 'pair'],
+        ],
+      },
+      {
+        room: 'Storage Room',
+        items: [
+          ['Paper towels', 20, 40, 'roll'],
+          ['Nitrile gloves (M)', 50, 100, 'pair'],
+          ['First aid kit', 1, 2, 'set'],
+        ],
+      },
+      {
+        room: 'Equipment Room',
+        items: [
+          ['Safety helmet', 5, 10, 'piece'],
+          ['Work gloves', 10, 20, 'pair'],
+          ['Safety harness', 3, 6, 'piece'],
+        ],
+      },
+    ]
+
+    const rows = []
+    // Title block
+    rows.push(['LabHive — Supply Inventory Import Template'])
+    rows.push(['Replace the example rooms and items below with your own data. Do not change column order.'])
+    rows.push([])
+    // Column headers
+    rows.push(['No.', 'Item Name', 'Min Qty', 'Current Qty', 'Unit'])
+
+    EXAMPLES.forEach(({ room, items }) => {
+      rows.push(['', room, '', '', ''])
+      items.forEach(([name, min, qty, unit], i) => rows.push([i + 1, name, min, qty, unit]))
+      rows.push([])
+    })
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 8 }, { wch: 38 }, { wch: 12 }, { wch: 14 }, { wch: 12 }]
+
+    // Style every cell
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      const rowData = rows[R]
+      const isTitle   = R === 0
+      const isSubtitle = R === 1
+      const isColHdr  = R === 3
+      const isBlank   = !rowData || rowData.every(c => c === '' || c == null)
+      // Room header: col A is empty, col B is a non-empty string, col C empty
+      const isRoomHdr = !isTitle && !isSubtitle && !isColHdr && !isBlank &&
+                        (rowData[0] === '' || rowData[0] == null) &&
+                        typeof rowData[1] === 'string' && rowData[1].trim() !== '' &&
+                        (rowData[2] === '' || rowData[2] == null)
+
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C })
+        if (!ws[addr]) ws[addr] = { v: '', t: 's' }
+        if (isTitle) {
+          ws[addr].s = { fill: { fgColor: { rgb: '0C1140' } }, font: { bold: true, sz: 13, color: { rgb: 'FFFFFF' } }, alignment: { horizontal: 'left', vertical: 'center' } }
+        } else if (isSubtitle) {
+          ws[addr].s = { fill: { fgColor: { rgb: 'E8ECF8' } }, font: { italic: true, sz: 10, color: { rgb: '3B4A7A' } }, alignment: { horizontal: 'left' } }
+        } else if (isColHdr) {
+          ws[addr].s = { fill: { fgColor: { rgb: 'BBDEFB' } }, font: { bold: true, color: { rgb: '0D47A1' } }, alignment: { horizontal: C >= 2 ? 'center' : 'left', vertical: 'center' } }
+        } else if (isRoomHdr) {
+          ws[addr].s = { fill: { fgColor: { rgb: '1D9E75' } }, font: { bold: true, color: { rgb: 'FFFFFF' } }, alignment: { horizontal: 'left', vertical: 'center' } }
+        } else if (!isBlank) {
+          // Example item rows — light yellow tint to signal "example"
+          ws[addr].s = { fill: { fgColor: { rgb: 'FFFDE7' } }, font: { color: { rgb: '555555' } }, alignment: { horizontal: C >= 2 && C <= 3 ? 'center' : 'left' } }
+        }
+      }
+    }
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },   // title spans all columns
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },   // subtitle spans all columns
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Import Template')
+    XLSX.writeFile(wb, 'LabHive_Import_Template.xlsx')
+    toast('Template downloaded!')
   }
 
   return (
     <div>
-      <div className="card">
-        <div className="card-title">Import from Excel</div>
-        <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>Upload an Excel file to add rooms and supplies. Existing data is <strong>kept</strong> — new items are added, existing items have their minimum quantity updated.</p>
-        <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text2)' }}>
-          <strong>Expected format:</strong> Column A = item number, Column B = item name. Room names appear as header rows. Column C = Min Qty (optional).
+      {/* ── Step 1: Download template ── */}
+      <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--accent)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div className="card-title" style={{ marginBottom: 6 }}>Step 1 — Download the import template</div>
+            <p style={{ fontSize: 13, color: 'var(--text2)', margin: 0, lineHeight: 1.7 }}>
+              Download the LabHive template, fill in your rooms and supplies, then upload it below.
+              The file includes 3 example rooms to show the required format — replace them with your own data.
+            </p>
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[
+                ['Col A', 'Item number (1, 2, 3…)'],
+                ['Col B', 'Room name (header) or item name'],
+                ['Col C', 'Minimum quantity'],
+                ['Col D', 'Current quantity'],
+                ['Col E', 'Unit (pcs, bottle, pair…)'],
+              ].map(([col, desc]) => (
+                <div key={col} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: 'var(--surface2)', color: 'var(--text2)' }}>
+                  <strong style={{ color: 'var(--accent)' }}>{col}</strong> — {desc}
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={downloadTemplate}>
+            📥 Download template
+          </button>
         </div>
+      </div>
+
+      {/* ── Step 2: Upload and import ── */}
+      <div className="card">
+        <div className="card-title" style={{ marginBottom: 6 }}>Step 2 — Upload your completed file</div>
+        <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
+          Existing rooms and supplies are <strong>kept</strong> — new items are added, existing items have their minimum quantity updated.
+        </p>
         <div className="field">
           <label>Select Excel file (.xlsx)</label>
           <input type="file" accept=".xlsx" onChange={async e => { if (!e.target.files[0]) return; try { setImportData(await parseExcelFile(e.target.files[0])) } catch { toast('Error reading file.') } }} style={{ padding: 8 }} />
@@ -752,11 +863,6 @@ function ImportTab() {
             </div>
           </>
         )}
-      </div>
-      <div className="card">
-        <div className="card-title">Download template</div>
-        <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>Download a template with your current items.</p>
-        <button className="btn btn-sm" onClick={downloadTemplate}>Download template</button>
       </div>
     </div>
   )
