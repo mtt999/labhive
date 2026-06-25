@@ -30,7 +30,7 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in LabHive →', 
           <td style="background:#0d47a1;padding:28px 32px 24px;text-align:center;">
             <img src="${LOGO_URL}" width="72" height="72" alt="LabHive logo" style="display:block;margin:0 auto 12px;border:0;">
             <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;line-height:1;">LabHive</div>
-            <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;margin-top:5px;">intelligent laboratory</div>
+            <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;margin-top:5px;">The All-in-One Research Lab Platform</div>
           </td>
         </tr>
 

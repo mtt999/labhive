@@ -241,7 +241,7 @@ export default function Layout({ children }) {
           <div style={{ marginTop: 20 }}><LabHiveLogo size={79} /></div>
           {!isMobile && (
             <div>
-              <div style={{ fontFamily: 'var(--sans)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.3px', color: '#ffffff', lineHeight: 1.1 }}>LabHive - Intelligent Lab</div>
+              <div style={{ fontFamily: 'var(--sans)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.3px', color: '#ffffff', lineHeight: 1.1 }}>LabHive</div>
               <div style={{ fontSize: 10, color: '#ffb380', fontWeight: 400, letterSpacing: '0.02em', lineHeight: 1.2 }}>The All-in-One Research Lab Platform</div>
             </div>
           )}
