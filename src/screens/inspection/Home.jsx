@@ -356,7 +356,6 @@ function ExportData() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [exportTab, setExportTab] = useState('dates')
-  const [selectedDate, setSelectedDate] = useState('')
   const [selectedInspDate, setSelectedInspDate] = useState('')
 
   const canDelete = session?.role === 'admin' || session?.role === 'user'
@@ -382,7 +381,31 @@ function ExportData() {
     if (data) { useAppStore.getState().setLastRecord(data); useAppStore.getState().setScreen('results') }
   }
 
-  // ── Export for a specific date: 1 tab, all rooms stacked ──
+  // ── Export a single room's inspection record ──
+  function exportSingleRecord(rec) {
+    const dateStr = new Date(rec.inspected_at).toLocaleDateString('en-CA')
+    const timeStr = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const rows = []
+    rows.push([`ICT-Lab Inspection Report`])
+    rows.push([`Room: ${rec.room_name}`])
+    rows.push([`Date: ${dateStr}  —  Time: ${timeStr}`])
+    rows.push([`Inspector: ${rec.inspector}`])
+    rows.push([`Exported: ${new Date().toLocaleString()}`])
+    rows.push([])
+    rows.push([`ROOM: ${rec.room_name}  —  Inspector: ${rec.inspector}  —  ${timeStr}`])
+    rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
+    ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 30 }]
+    styleSheet(ws)
+    const safeRoom = rec.room_name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 20)
+    XLSX.utils.book_append_sheet(wb, ws, safeRoom.substring(0, 31))
+    XLSX.writeFile(wb, `ICT-Lab_${safeRoom}_${dateStr}.xlsx`)
+    toast('Exported!')
+  }
+
+  // ── Export for a specific date: all rooms stacked ──
   async function exportByDate(dateStr) {
     if (!dateStr) { toast('Please select a date.'); return }
     toast('Loading…')
@@ -509,11 +532,10 @@ function ExportData() {
 
   return (
     <div>
-      {/* 3 sub-tabs */}
+      {/* 2 sub-tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-        <button style={subTabStyle(exportTab === 'dates')}    onClick={() => setExportTab('dates')}>📋 Inspection Dates</button>
-        <button style={subTabStyle(exportTab === 'specific')} onClick={() => setExportTab('specific')}>📅 Specific Date</button>
-        <button style={subTabStyle(exportTab === 'all')}      onClick={() => setExportTab('all')}>📊 All Records</button>
+        <button style={subTabStyle(exportTab === 'dates')} onClick={() => setExportTab('dates')}>📋 Inspection Dates</button>
+        <button style={subTabStyle(exportTab === 'all')}   onClick={() => setExportTab('all')}>📊 All Records</button>
       </div>
 
       {/* ── TAB 1: Inspection Dates ── */}
@@ -553,8 +575,14 @@ function ExportData() {
                 )}
                 {selectedInspDate && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                      {roomsForDate.length} room{roomsForDate.length !== 1 ? 's' : ''} inspected
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {roomsForDate.length} room{roomsForDate.length !== 1 ? 's' : ''} inspected
+                      </div>
+                      <button className="btn btn-sm btn-primary" onClick={() => exportByDate(selectedInspDate)}
+                        title="Download Excel report for all rooms on this date">
+                        📥 Download full day
+                      </button>
                     </div>
                     {roomsForDate.map((rec, i) => (
                       <div key={rec.id}
@@ -571,8 +599,8 @@ function ExportData() {
                           {rec.flag_count > 0
                             ? <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>{rec.flag_count} low</span>
                             : <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>All OK</span>}
-                          <button className="btn btn-sm" title="Export this date" style={{ flexShrink: 0 }}
-                            onClick={() => exportByDate(selectedInspDate)}>📥</button>
+                          <button className="btn btn-sm" title="Download this room's report" style={{ flexShrink: 0 }}
+                            onClick={() => exportSingleRecord(rec)}>📥</button>
                           {canDelete && (
                             <button className="btn btn-sm btn-danger" title="Delete record" style={{ flexShrink: 0 }}
                               onClick={() => deleteRecord(rec.id)}>🗑️</button>
@@ -588,45 +616,7 @@ function ExportData() {
         </div>
       )}
 
-      {/* ── TAB 2: Specific Date ── */}
-      {exportTab === 'specific' && (
-        <div style={{ maxWidth: 420 }}>
-          <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>
-            Select a date to download the full inspection report for all rooms on that day.
-          </div>
-          <div className="card" style={{ padding: 24 }}>
-            <div className="field">
-              <label>Select inspection date</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                max={new Date().toLocaleDateString('en-CA')}
-                style={{ fontSize: 15 }}
-              />
-            </div>
-            {selectedDate && !inspectionDates.includes(selectedDate) && (
-              <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8 }}>
-                ⚠️ No inspections recorded on this date. The report will show current supply quantities for all rooms marked as "Not inspected".
-              </div>
-            )}
-            {selectedDate && inspectionDates.includes(selectedDate) && (
-              <div style={{ fontSize: 13, color: 'var(--accent)', marginBottom: 12, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 8 }}>
-                ✓ Inspections found for this date.
-              </div>
-            )}
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', justifyContent: 'center' }}
-              disabled={!selectedDate}
-              onClick={() => exportByDate(selectedDate)}>
-              📥 Download report for {selectedDate || '…'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: All Records ── */}
+      {/* ── TAB 2: All Records ── */}
       {exportTab === 'all' && (
         <div style={{ maxWidth: 420 }}>
           <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>
@@ -636,7 +626,7 @@ function ExportData() {
             <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
               <div>📋 <strong>Summary</strong> tab — overview of all inspections</div>
               <div>📅 <strong>One tab per date</strong> — all rooms stacked in each tab</div>
-              <div>🔢 <strong>{data.length}</strong> total inspections across <strong>{Object.keys(months).length}</strong> month{Object.keys(months).length !== 1 ? 's' : ''}</div>
+              <div>🔢 <strong>{data.length}</strong> total inspections across <strong>{uniqueDates.length}</strong> date{uniqueDates.length !== 1 ? 's' : ''}</div>
             </div>
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={exportAll}>
               📊 Download all records
