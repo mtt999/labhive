@@ -348,6 +348,20 @@ function SuppliesTab() {
 // ══════════════════════════════════════════════════════════════
 // EXPORT DATA TAB
 // ══════════════════════════════════════════════════════════════
+
+// Convert any image URL to a PNG base64 string via canvas (for embedding in PDF/Excel)
+async function imgUrlToBase64(url) {
+  try {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now() })
+    const canvas = document.createElement('canvas')
+    canvas.width = 300; canvas.height = 300
+    canvas.getContext('2d').drawImage(img, 0, 0, 300, 300)
+    return canvas.toDataURL('image/png').split(',')[1]
+  } catch { return null }
+}
+
 function ExportData() {
   const { toast, session } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
@@ -357,10 +371,19 @@ function ExportData() {
   const [loading, setLoading] = useState(true)
   const [exportTab, setExportTab] = useState('dates')
   const [selectedInspDate, setSelectedInspDate] = useState('')
+  const [exportFormat, setExportFormat] = useState('excel')   // 'excel' | 'pdf'
+  const [orgName, setOrgName] = useState('')
+  const [orgLogoSrc, setOrgLogoSrc] = useState(null)
 
   const canDelete = session?.role === 'admin' || session?.role === 'user'
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (!isSolo && orgId) {
+      sb.from('organizations').select('name, logo_url').eq('id', orgId).single()
+        .then(({ data: od }) => { setOrgName(od?.name || ''); setOrgLogoSrc(od?.logo_url || null) })
+    }
+  }, [orgId])
 
   async function load() {
     let q = sb.from('inspections').select('*').eq('login_mode', loginMode).order('inspected_at', { ascending: false }).limit(200)
@@ -381,31 +404,223 @@ function ExportData() {
     if (data) { useAppStore.getState().setLastRecord(data); useAppStore.getState().setScreen('results') }
   }
 
-  // ── Export a single room's inspection record ──
-  function exportSingleRecord(rec) {
-    const dateStr = new Date(rec.inspected_at).toLocaleDateString('en-CA')
-    const timeStr = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    const rows = []
-    rows.push([`ICT-Lab Inspection Report`])
-    rows.push([`Room: ${rec.room_name}`])
-    rows.push([`Date: ${dateStr}  —  Time: ${timeStr}`])
-    rows.push([`Inspector: ${rec.inspector}`])
-    rows.push([`Exported: ${new Date().toLocaleString()}`])
-    rows.push([])
-    rows.push([`ROOM: ${rec.room_name}  —  Inspector: ${rec.inspector}  —  ${timeStr}`])
-    rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
-    ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 30 }]
-    styleSheet(ws)
-    const safeRoom = rec.room_name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 20)
-    XLSX.utils.book_append_sheet(wb, ws, safeRoom.substring(0, 31))
-    XLSX.writeFile(wb, `ICT-Lab_${safeRoom}_${dateStr}.xlsx`)
-    toast('Exported!')
+  // ── PDF: professional report for any set of room records ──
+  async function exportPDF(roomRecords, fileTitle, reportTitle) {
+    toast('Preparing PDF…')
+    const { jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const PW = doc.internal.pageSize.getWidth()
+    const PH = doc.internal.pageSize.getHeight()
+    const ML = 14, MR = 14
+
+    const labhiveB64 = await imgUrlToBase64(window.location.origin + '/labhive_logo.svg')
+    const orgB64     = orgLogoSrc ? await imgUrlToBase64(orgLogoSrc) : null
+
+    function drawHeader(isFirst) {
+      if (labhiveB64) doc.addImage(labhiveB64, 'PNG', ML, 7, 18, 18)
+      if (orgB64)     doc.addImage(orgB64,     'PNG', PW - MR - 36, 7, 36, 18)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(12, 17, 64)
+      doc.text('SUPPLY INVENTORY INSPECTION REPORT', PW / 2, 14, { align: 'center' })
+      if (isFirst && orgName) {
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80)
+        doc.text(orgName, PW / 2, 20, { align: 'center' })
+      }
+      doc.setTextColor(0)
+      doc.setDrawColor(29, 158, 117); doc.setLineWidth(0.8)
+      doc.line(ML, 28, PW - MR, 28)
+      return 33
+    }
+
+    let y = drawHeader(true)
+
+    // Info block
+    const allResults   = roomRecords.flatMap(r => r.results || [])
+    const totalItems   = allResults.length
+    const lowItems     = allResults.filter(i => i.low).length
+    const okItems      = totalItems - lowItems
+    const firstRec     = roomRecords[0]
+    const reportDate   = firstRec
+      ? new Date(firstRec.inspected_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      : ''
+    const inspector    = firstRec?.inspector || ''
+    const C1 = ML, C2 = ML + 35, C3 = PW / 2 + 4, C4 = PW / 2 + 38
+    const infoRows = [
+      [['Organization:', orgName || '—'], ['Report to:', '________________________']],
+      [['Date:', reportDate],              ['Items Inspected:', String(totalItems)]],
+      [['Inspector:', inspector],          ['Items OK:', String(okItems)]],
+      [['Title:', 'Lab Manager'],          ['Items Low:', String(lowItems)]],
+    ]
+    doc.setFontSize(9.5)
+    infoRows.forEach(([L, R], i) => {
+      const ry = y + i * 7
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(60)
+      doc.text(L[0], C1, ry)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(0)
+      doc.text(L[1], C2, ry)
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(60)
+      doc.text(R[0], C3, ry)
+      const isLow = R[0] === 'Items Low:'
+      doc.setFont('helvetica', isLow && lowItems > 0 ? 'bold' : 'normal')
+      doc.setTextColor(isLow && lowItems > 0 ? 180 : 0, 0, 0)
+      doc.text(R[1], C4, ry)
+      doc.setTextColor(0)
+    })
+    y += 34
+    doc.setDrawColor(220); doc.setLineWidth(0.3); doc.line(ML, y, PW - MR, y); y += 5
+
+    // Room sections
+    for (const rec of roomRecords) {
+      const timeStr = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      if (y > PH - 55) { doc.addPage(); y = drawHeader(false) + 4 }
+
+      doc.setFillColor(12, 17, 64)
+      doc.rect(ML, y, PW - ML - MR, 7, 'F')
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255)
+      doc.text(`Room: ${rec.room_name}`, ML + 3, y + 5)
+      doc.text(`${rec.inspector}  ·  ${timeStr}`, PW - MR - 2, y + 5, { align: 'right' })
+      doc.setTextColor(0); y += 9
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: ML, right: MR },
+        head: [['#', 'Item Name', 'Unit', 'Count', 'Min', 'Status', 'To Order', 'Notes']],
+        body: (rec.results || []).map((r, idx) => [
+          idx + 1, r.name || '', r.unit || '', r.qty ?? '', r.min_qty ?? '',
+          r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '',
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [29, 158, 117], textColor: [255,255,255], fontSize: 8, fontStyle: 'bold', halign: 'center' },
+        bodyStyles: { fontSize: 7.5, cellPadding: 1.5 },
+        alternateRowStyles: { fillColor: [240, 250, 245] },
+        columnStyles: {
+          0: { cellWidth: 7,  halign: 'center' },
+          1: { cellWidth: 44 },
+          2: { cellWidth: 12, halign: 'center' },
+          3: { cellWidth: 13, halign: 'center' },
+          4: { cellWidth: 12, halign: 'center' },
+          5: { cellWidth: 14, halign: 'center' },
+          6: { cellWidth: 16, halign: 'center' },
+          7: { cellWidth: 'auto' },
+        },
+        willDrawCell: data => {
+          if (data.section === 'body' && data.column.index === 5 && data.cell.raw === 'LOW') {
+            data.cell.styles.fillColor = [254, 243, 199]
+            data.cell.styles.textColor = [146, 64, 14]
+            data.cell.styles.fontStyle = 'bold'
+          }
+        },
+      })
+      y = doc.lastAutoTable.finalY + 6
+    }
+
+    // Footer on every page
+    const total = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= total; p++) {
+      doc.setPage(p)
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150)
+      doc.setDrawColor(200); doc.setLineWidth(0.3); doc.line(ML, PH - 12, PW - MR, PH - 12)
+      doc.text(`Generated by LabHive  ·  ${new Date().toLocaleString()}`, ML, PH - 8)
+      if (orgName) doc.text(orgName, PW / 2, PH - 8, { align: 'center' })
+      doc.text(`Page ${p} of ${total}`, PW - MR, PH - 8, { align: 'right' })
+      doc.setTextColor(0)
+    }
+
+    doc.save(`${fileTitle}.pdf`)
+    toast('PDF exported!')
   }
 
-  // ── Export for a specific date: all rooms stacked ──
+  // ── Excel: all rooms stacked, with logos via ExcelJS ──
+  async function exportExcel(rows, fileName, sheetTitle) {
+    const { default: ExcelJS } = await import('exceljs')
+    const wb  = new ExcelJS.Workbook()
+    const ws  = wb.addWorksheet(sheetTitle.substring(0, 31))
+
+    const labhiveB64 = await imgUrlToBase64(window.location.origin + '/labhive_logo.svg')
+    const orgB64     = orgLogoSrc ? await imgUrlToBase64(orgLogoSrc) : null
+
+    let dataStartRow = 1
+    if (labhiveB64 || orgB64) {
+      // 4-row logo header
+      dataStartRow = 5
+      ws.getRow(1).height = 15; ws.getRow(2).height = 40; ws.getRow(3).height = 15; ws.getRow(4).height = 8
+      if (labhiveB64) {
+        const id = wb.addImage({ base64: labhiveB64, extension: 'png' })
+        ws.addImage(id, { tl: { col: 0, row: 0 }, br: { col: 1, row: 3 } })
+      }
+      if (orgB64) {
+        const id = wb.addImage({ base64: orgB64, extension: 'png' })
+        ws.addImage(id, { tl: { col: 5, row: 0 }, br: { col: 7, row: 3 } })
+      }
+      // Title centred in middle columns
+      const titleCell = ws.getRow(2).getCell(3)
+      titleCell.value = sheetTitle
+      titleCell.font  = { bold: true, size: 14, color: { argb: 'FF0C1140' } }
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws.mergeCells(2, 3, 3, 5)
+    }
+
+    // Data rows
+    rows.forEach((row, ri) => {
+      const wsRow = ws.getRow(dataStartRow + ri)
+      row.forEach((val, ci) => {
+        const cell = wsRow.getCell(ci + 1)
+        cell.value = val
+        // Style room-header rows (single-cell rows)
+        if (row.length === 1 && val) {
+          cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0C1140' } }
+        }
+        // Style column-header rows
+        if (['Item', 'Item Name'].includes(String(val))) {
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D9E75' } }
+        }
+        if (String(val) === 'LOW') {
+          cell.font = { bold: true, color: { argb: 'FF92400E' } }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
+        }
+      })
+      wsRow.commit()
+    })
+
+    ws.columns = [
+      { width: 36 }, { width: 10 }, { width: 10 },
+      { width: 10 }, { width: 12 }, { width: 16 }, { width: 30 },
+    ]
+
+    const buf  = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a'); a.href = url; a.download = fileName + '.xlsx'; a.click()
+    URL.revokeObjectURL(url)
+    toast('Excel exported!')
+  }
+
+  // ── Single room export ──
+  async function exportSingleRecord(rec) {
+    const dateStr = new Date(rec.inspected_at).toLocaleDateString('en-CA')
+    const timeStr = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const safeRoom = rec.room_name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 20)
+    if (exportFormat === 'pdf') {
+      await exportPDF([rec], `LabHive_${safeRoom}_${dateStr}`, `Inspection Report — ${rec.room_name}`)
+    } else {
+      const rows = []
+      rows.push([`Inspection Report — ${rec.room_name}`])
+      rows.push([`Date: ${dateStr}   Time: ${timeStr}`])
+      rows.push([`Inspector: ${rec.inspector}`])
+      rows.push([])
+      rows.push([`ROOM: ${rec.room_name}  —  ${rec.inspector}  —  ${timeStr}`])
+      rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
+      ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
+      await exportExcel(rows, `LabHive_${safeRoom}_${dateStr}`, rec.room_name.substring(0, 31))
+    }
+  }
+
+  // ── Full day export ──
   async function exportByDate(dateStr) {
     if (!dateStr) { toast('Please select a date.'); return }
     toast('Loading…')
@@ -413,49 +628,44 @@ function ExportData() {
     if (!isSolo) rq = rq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     const { data: allRecs } = await rq
     const dateRecs = (allRecs || []).filter(r => new Date(r.inspected_at).toLocaleDateString('en-CA') === dateStr)
+
+    if (exportFormat === 'pdf') {
+      await exportPDF(dateRecs, `LabHive_${dateStr}`, `Inspection Report — ${dateStr}`)
+      return
+    }
+
     let roomQ = sb.from('rooms').select('*').eq('login_mode', loginMode).order('name')
     if (!isSolo) roomQ = roomQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-    let supQ = sb.from('supplies').select('*').eq('login_mode', loginMode)
-    if (!isSolo) supQ = supQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-    const { data: allRooms } = await roomQ
+    let supQ  = sb.from('supplies').select('*').eq('login_mode', loginMode)
+    if (!isSolo) supQ  = supQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    const { data: allRooms }    = await roomQ
     const { data: allSupplies } = await supQ
-
-    const wb = XLSX.utils.book_new()
+    const inspectedRoomNames    = new Set(dateRecs.map(r => r.room_name))
     const rows = []
-    rows.push([`ICT-Lab Inspection Report — ${dateStr}`])
+    rows.push([`Inspection Report — ${dateStr}`])
     rows.push([`Exported: ${new Date().toLocaleString()}`])
     rows.push([])
-
-    const inspectedRoomNames = new Set(dateRecs.map(r => r.room_name))
-
     dateRecs.forEach(rec => {
       const d = new Date(rec.inspected_at)
-      const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      rows.push([`ROOM: ${rec.room_name}  —  Inspector: ${rec.inspector}  —  ${timeStr}`])
+      const t = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      rows.push([`ROOM: ${rec.room_name}  —  ${rec.inspector}  —  ${t}`])
       rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
       ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
       rows.push([])
     })
-
     ;(allRooms || []).forEach(room => {
       if (inspectedRoomNames.has(room.name)) return
-      const roomSupplies = (allSupplies || []).filter(s => s.room_id === room.id)
-      if (!roomSupplies.length) return
+      const items = (allSupplies || []).filter(s => s.room_id === room.id)
+      if (!items.length) return
       rows.push([`ROOM: ${room.name}  —  NOT INSPECTED ON ${dateStr}`])
       rows.push(['Item', 'Unit', 'Current Min Qty', '', 'Status', 'Needs to Order', 'Notes'])
-      roomSupplies.forEach(s => rows.push([s.name, s.unit, s.min_qty, '', 'Not inspected', '', s.notes || '']))
+      items.forEach(s => rows.push([s.name, s.unit, s.min_qty, '', 'Not inspected', '', s.notes || '']))
       rows.push([])
     })
-
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 30 }]
-    styleSheet(ws)
-    XLSX.utils.book_append_sheet(wb, ws, dateStr.substring(0, 31))
-    XLSX.writeFile(wb, `ICT-Lab_${dateStr}.xlsx`)
-    toast('Exported!')
+    await exportExcel(rows, `LabHive_${dateStr}`, dateStr.substring(0, 31))
   }
 
-  // ── All-time export: Summary tab + 1 tab per date ──
+  // ── All-records export ──
   async function exportAll() {
     toast('Loading…')
     let aq = sb.from('inspections').select('*').eq('login_mode', loginMode).order('inspected_at', { ascending: true })
@@ -463,55 +673,60 @@ function ExportData() {
     const { data: allRecs } = await aq
     if (!allRecs?.length) { toast('No records found.'); return }
 
-    const wb = XLSX.utils.book_new()
+    if (exportFormat === 'pdf') {
+      await exportPDF(allRecs, `LabHive_AllRecords_${new Date().toLocaleDateString('en-CA')}`, 'All Inspection Records')
+      return
+    }
 
+    // Excel: Summary sheet + one sheet per date
+    const { default: ExcelJS } = await import('exceljs')
+    const wb = new ExcelJS.Workbook()
+    const labhiveB64 = await imgUrlToBase64(window.location.origin + '/labhive_logo.svg')
+    const orgB64     = orgLogoSrc ? await imgUrlToBase64(orgLogoSrc) : null
+
+    function makeSheet(name) {
+      const ws = wb.addWorksheet(name.substring(0, 31))
+      if (labhiveB64 || orgB64) {
+        ws.getRow(1).height = 15; ws.getRow(2).height = 40; ws.getRow(3).height = 15; ws.getRow(4).height = 8
+        if (labhiveB64) { const id = wb.addImage({ base64: labhiveB64, extension: 'png' }); ws.addImage(id, { tl: { col: 0, row: 0 }, br: { col: 1, row: 3 } }) }
+        if (orgB64)     { const id = wb.addImage({ base64: orgB64, extension: 'png' }); ws.addImage(id, { tl: { col: 5, row: 0 }, br: { col: 7, row: 3 } }) }
+        const tc = ws.getRow(2).getCell(3); tc.value = name; tc.font = { bold: true, size: 13, color: { argb: 'FF0C1140' } }; tc.alignment = { horizontal: 'center', vertical: 'middle' }; ws.mergeCells(2, 3, 3, 5)
+      }
+      ws.columns = [{ width: 22 }, { width: 22 }, { width: 16 }, { width: 12 }, { width: 10 }, { width: 14 }]
+      return { ws, dataStart: (labhiveB64 || orgB64) ? 5 : 1 }
+    }
+
+    // Summary sheet
+    const { ws: sumWs, dataStart: sumStart } = makeSheet('All Inspections Summary')
     const sumRows = [
-      ['ICT-Lab — All Inspection Records'],
-      ['Exported:', new Date().toLocaleString()],
-      ['Total inspections:', allRecs.length],
-      [],
-      ['Date', 'Room', 'Inspector', 'Total Items', 'Low Items', 'Status']
-    ]
-    allRecs.forEach(rec => {
-      const d = new Date(rec.inspected_at)
-      sumRows.push([
-        d.toLocaleDateString('en-CA') + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        rec.room_name, rec.inspector,
-        (rec.results || []).length,
-        rec.flag_count || 0,
-        rec.flag_count > 0 ? 'Has low items' : 'All OK'
-      ])
-    })
-    const sumWs = XLSX.utils.aoa_to_sheet(sumRows)
-    sumWs['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 14 }]
-    XLSX.utils.book_append_sheet(wb, sumWs, 'Summary')
-
-    const byDate = {}
-    allRecs.forEach(rec => {
-      const dateStr = new Date(rec.inspected_at).toLocaleDateString('en-CA')
-      if (!byDate[dateStr]) byDate[dateStr] = []
-      byDate[dateStr].push(rec)
-    })
-
-    Object.entries(byDate).forEach(([dateStr, recs]) => {
-      const rows = []
-      rows.push([`ICT-Lab — ${dateStr} — All Rooms`])
-      rows.push([])
-      recs.forEach(rec => {
+      ['Date & Time', 'Room', 'Inspector', 'Total Items', 'Low Items', 'Status'],
+      ...allRecs.map(rec => {
         const d = new Date(rec.inspected_at)
-        const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        rows.push([`ROOM: ${rec.room_name}  —  Inspector: ${rec.inspector}  —  ${timeStr}`])
+        return [d.toLocaleDateString('en-CA') + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), rec.room_name, rec.inspector, (rec.results || []).length, rec.flag_count || 0, rec.flag_count > 0 ? 'Has low items' : 'All OK']
+      }),
+    ]
+    sumRows.forEach((row, ri) => { const r = sumWs.getRow(sumStart + ri); row.forEach((v, ci) => { r.getCell(ci + 1).value = v }); r.commit() })
+
+    // One sheet per date
+    const byDate = {}
+    allRecs.forEach(rec => { const d = new Date(rec.inspected_at).toLocaleDateString('en-CA'); if (!byDate[d]) byDate[d] = []; byDate[d].push(rec) })
+    for (const [dateStr, recs] of Object.entries(byDate)) {
+      const { ws, dataStart } = makeSheet(dateStr)
+      const rows = []
+      recs.forEach(rec => {
+        const t = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        rows.push([`ROOM: ${rec.room_name}  —  ${rec.inspector}  —  ${t}`])
         rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
         ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
         rows.push([])
       })
-      const ws = XLSX.utils.aoa_to_sheet(rows)
-      ws['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 30 }]
-      styleSheet(ws)
-      XLSX.utils.book_append_sheet(wb, ws, dateStr.substring(0, 31))
-    })
+      rows.forEach((row, ri) => { const wsRow = ws.getRow(dataStart + ri); row.forEach((v, ci) => { wsRow.getCell(ci + 1).value = v }); wsRow.commit() })
+      ws.columns = [{ width: 36 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 16 }, { width: 30 }]
+    }
 
-    XLSX.writeFile(wb, `ICT-Lab_AllRecords_${new Date().toLocaleDateString('en-CA')}.xlsx`)
+    const buf  = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url  = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `LabHive_AllRecords_${new Date().toLocaleDateString('en-CA')}.xlsx`; a.click(); URL.revokeObjectURL(url)
     toast(`Exported ${allRecs.length} inspections!`)
   }
 
@@ -532,10 +747,19 @@ function ExportData() {
 
   return (
     <div>
-      {/* 2 sub-tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+      {/* Sub-tabs + format toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: 20, gap: 0 }}>
         <button style={subTabStyle(exportTab === 'dates')} onClick={() => setExportTab('dates')}>📋 Inspection Dates</button>
         <button style={subTabStyle(exportTab === 'all')}   onClick={() => setExportTab('all')}>📊 All Records</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Format:</span>
+          {[['excel', '📊 Excel'], ['pdf', '📄 PDF']].map(([fmt, label]) => (
+            <button key={fmt} onClick={() => setExportFormat(fmt)}
+              style={{ padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 600, border: `1.5px solid ${exportFormat === fmt ? 'var(--accent)' : 'var(--border)'}`, background: exportFormat === fmt ? 'var(--accent-light)' : 'var(--surface)', color: exportFormat === fmt ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer', transition: 'all 0.13s' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── TAB 1: Inspection Dates ── */}
@@ -579,9 +803,8 @@ function ExportData() {
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {roomsForDate.length} room{roomsForDate.length !== 1 ? 's' : ''} inspected
                       </div>
-                      <button className="btn btn-sm btn-primary" onClick={() => exportByDate(selectedInspDate)}
-                        title="Download Excel report for all rooms on this date">
-                        📥 Download full day
+                      <button className="btn btn-sm btn-primary" onClick={() => exportByDate(selectedInspDate)}>
+                        {exportFormat === 'pdf' ? '📄' : '📊'} Download full day
                       </button>
                     </div>
                     {roomsForDate.map((rec, i) => (
@@ -599,8 +822,8 @@ function ExportData() {
                           {rec.flag_count > 0
                             ? <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>{rec.flag_count} low</span>
                             : <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>All OK</span>}
-                          <button className="btn btn-sm" title="Download this room's report" style={{ flexShrink: 0 }}
-                            onClick={() => exportSingleRecord(rec)}>📥</button>
+                          <button className="btn btn-sm" title={`Download ${exportFormat === 'pdf' ? 'PDF' : 'Excel'} report`} style={{ flexShrink: 0 }}
+                            onClick={() => exportSingleRecord(rec)}>{exportFormat === 'pdf' ? '📄' : '📊'}</button>
                           {canDelete && (
                             <button className="btn btn-sm btn-danger" title="Delete record" style={{ flexShrink: 0 }}
                               onClick={() => deleteRecord(rec.id)}>🗑️</button>
@@ -629,7 +852,7 @@ function ExportData() {
               <div>🔢 <strong>{data.length}</strong> total inspections across <strong>{uniqueDates.length}</strong> date{uniqueDates.length !== 1 ? 's' : ''}</div>
             </div>
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={exportAll}>
-              📊 Download all records
+              {exportFormat === 'pdf' ? '📄' : '📊'} Download all records
             </button>
           </div>
         </div>
