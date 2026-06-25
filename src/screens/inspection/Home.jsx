@@ -869,30 +869,88 @@ function ImportTab() {
 }
 
 function SettingsTab() {
-  const { settings, refreshCache, toast } = useAppStore()
+  const { settings, refreshCache, toast, session } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
+  const orgId = session?.organizationId || null
+  // Per-org key prefix: team users get org-scoped keys, solo users get a solo-scoped key
+  const sfx = !isSolo && orgId ? `_${orgId}` : isSolo ? '_solo' : ''
 
-  async function saveDueDay(val) {
-    await sb.from('settings').upsert({ key: 'due_day', value: val })
-    await refreshCache(); toast('Reminder day saved.')
+  const getS = key => settings[`${key}${sfx}`] ?? settings[key] ?? null
+
+  const [frequency, setFrequency] = useState(getS('reminder_frequency') || 'weekly')
+  const [dueDay, setDueDay]       = useState(getS('due_day') || '5')
+  const [customDays, setCustomDays] = useState(getS('custom_days') || '30')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    await Promise.all([
+      sb.from('settings').upsert({ key: `reminder_frequency${sfx}`, value: frequency }),
+      sb.from('settings').upsert({ key: `due_day${sfx}`, value: String(dueDay) }),
+      sb.from('settings').upsert({ key: `custom_days${sfx}`, value: String(customDays) }),
+    ])
+    await refreshCache()
+    setSaving(false)
+    toast('Reminder settings saved.')
   }
+
+  const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+  const ordinal = n => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th')
 
   return (
     <div>
       <div className="card">
-        <div className="card-title">Weekly reminder</div>
+        <div className="card-title">Inspection reminder</div>
+
         <div className="field">
-          <label>Inspection due day</label>
-          <select defaultValue={settings['due_day'] || '5'} onChange={e => saveDueDay(e.target.value)}>
-            {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((d, i) => (
-              <option key={d} value={(i + 1) % 7}>{d}</option>
-            ))}
+          <label>Reminder frequency</label>
+          <select value={frequency} onChange={e => { setFrequency(e.target.value); setDueDay(e.target.value === 'monthly' ? '1' : '5') }}>
+            <option value="weekly">Every week</option>
+            <option value="monthly">Every month</option>
+            <option value="custom">Every X days (custom)</option>
           </select>
         </div>
-        <div className="text-muted">Users see a reminder banner the day before this day.</div>
-      </div>
-      <div className="card">
-        <div className="card-title">Account & password</div>
-        <div className="text-muted">To change your password or email, go to your <strong>Profile</strong> page.</div>
+
+        {frequency === 'weekly' && (
+          <div className="field">
+            <label>Inspection due on</label>
+            <select value={dueDay} onChange={e => setDueDay(e.target.value)}>
+              {WEEKDAYS.map((d, i) => <option key={d} value={(i + 1) % 7}>{d}</option>)}
+            </select>
+            <div className="text-muted" style={{ marginTop: 6 }}>Reminder banner appears the day before.</div>
+          </div>
+        )}
+
+        {frequency === 'monthly' && (
+          <div className="field">
+            <label>Inspection due on day</label>
+            <select value={dueDay} onChange={e => setDueDay(e.target.value)}>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                <option key={d} value={d}>{ordinal(d)} of each month</option>
+              ))}
+            </select>
+            <div className="text-muted" style={{ marginTop: 6 }}>Reminder banner appears the day before.</div>
+          </div>
+        )}
+
+        {frequency === 'custom' && (
+          <div className="field">
+            <label>Inspect every</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="number" min={1} max={365} value={customDays}
+                onChange={e => setCustomDays(e.target.value)}
+                style={{ width: 80, fontSize: 15, padding: '7px 10px' }} />
+              <span style={{ fontSize: 14, color: 'var(--text2)' }}>days</span>
+            </div>
+            <div className="text-muted" style={{ marginTop: 6 }}>
+              Reminder shows when the interval is nearly due, based on the last inspection date.
+            </div>
+          </div>
+        )}
+
+        <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save settings'}
+        </button>
       </div>
     </div>
   )
@@ -902,11 +960,47 @@ export default function Home() {
   const { rooms, supplies, setScreen, setInspection, settings, toast, session, sidebarSubTab } = useAppStore()
   const subTab = sidebarSubTab || 'inspect'
 
-  const today = new Date().getDay()
-  const due = parseInt(settings['due_day'] || 5)
-  const dayBefore = (due - 1 + 7) % 7
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const showReminder = today === dayBefore
+  const isSolo = session?.loginMode === 'solo'
+  const orgId  = session?.organizationId || null
+  const sfx    = !isSolo && orgId ? `_${orgId}` : isSolo ? '_solo' : ''
+  const getS   = key => settings[`${key}${sfx}`] ?? settings[key] ?? null
+
+  const frequency         = getS('reminder_frequency') || 'weekly'
+  const reminderDueDay    = parseInt(getS('due_day') || 5)
+  const customIntervalDays = parseInt(getS('custom_days') || 30)
+
+  const [lastInspDate, setLastInspDate] = useState(null)
+  useEffect(() => {
+    if (frequency !== 'custom') return
+    let q = sb.from('inspections').select('inspected_at').order('inspected_at', { ascending: false }).limit(1)
+    if (!isSolo && orgId) q = q.eq('organization_id', orgId)
+    else if (isSolo && session?.userId) q = q.eq('solo_owner_id', session.userId)
+    q.then(({ data }) => { if (data?.[0]) setLastInspDate(new Date(data[0].inspected_at)) })
+  }, [frequency, orgId, isSolo, session?.userId])
+
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const ordinal = n => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th')
+  const now = new Date()
+  let showReminder = false
+  let reminderMsg  = ''
+
+  if (frequency === 'weekly') {
+    const dayBefore = (reminderDueDay - 1 + 7) % 7
+    showReminder = now.getDay() === dayBefore
+    reminderMsg  = `Supply inspection is due tomorrow (${DAYS[reminderDueDay]}). Please complete your inspection today.`
+  } else if (frequency === 'monthly') {
+    const todayDate    = now.getDate()
+    const lastDayOfMth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const dayBefore    = reminderDueDay === 1 ? lastDayOfMth : reminderDueDay - 1
+    showReminder = todayDate === dayBefore
+    reminderMsg  = `Monthly inspection is due tomorrow (${ordinal(reminderDueDay)} of the month). Please complete your inspection today.`
+  } else if (frequency === 'custom') {
+    if (lastInspDate) {
+      const daysSince = Math.floor((now - lastInspDate) / 86400000)
+      showReminder = daysSince >= customIntervalDays - 1
+      reminderMsg  = `Inspection is due — it has been ${daysSince} day${daysSince !== 1 ? 's' : ''} since the last one (schedule: every ${customIntervalDays} days).`
+    }
+  }
 
   function startInspection(roomId) {
     const room = rooms.find(r => r.id === roomId)
@@ -927,7 +1021,7 @@ export default function Home() {
       {showReminder && (
         <div style={{ background: 'var(--warn-light)', border: '1px solid #fcd34d', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#92400e' }}>
           <span style={{ fontSize: 16 }}>🔔</span>
-          Reminder: Supply inventory is due tomorrow ({days[due]}). Please complete your inspection today.
+          {reminderMsg}
         </div>
       )}
 
