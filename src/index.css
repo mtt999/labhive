@@ -270,24 +270,3 @@ tr:last-child td { border-bottom: none; }
 .sidebar-item.active:hover {
   transform: translateX(2px);
 }
-.sidebar-back {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
-  border: none;
-  border-bottom: 1px solid #f3f4f6;
-  background: transparent;
-  color: var(--text3);
-  font-size: 12px;
-  cursor: pointer;
-  font-weight: 500;
-  text-align: left;
-  transition: background 0.13s, color 0.13s;
-  flex-shrink: 0;
-  width: 100%;
-}
-.sidebar-back:hover {
-  background: var(--surface2);
-  color: var(--text);
-}

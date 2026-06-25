@@ -162,13 +162,8 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
           </nav>
         </>
       ) : (
-        /* ── Module page: back + sub-tabs ── */
+        /* ── Module page: title + sub-tabs + pinned home footer ── */
         <>
-          {/* Back to dashboard */}
-          <button className="sidebar-back" onClick={() => setScreen('dashboard')}>
-            <span>←</span><span>Dashboard</span>
-          </button>
-
           {/* Module title */}
           {mod && (
             <div style={{ padding: '11px 14px 9px', borderBottom: '1px solid #f3f4f6', flexShrink: 0 }}>
@@ -197,8 +192,28 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
               })}
             </nav>
           ) : null}
+
           {/* Portal slot — screens inject custom sidebar content here via createPortal */}
           <div id="sidebar-portal-slot" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }} />
+
+          {/* Pinned Home button */}
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
+            <button
+              onClick={() => setScreen('dashboard')}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${accentColor}`,
+                background: accentLight, color: accentColor,
+                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                transition: 'background 0.13s, transform 0.1s, box-shadow 0.13s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = accentColor; e.currentTarget.style.color = '#fff'; e.currentTarget.style.boxShadow = `0 4px 12px ${accentColor}40` }}
+              onMouseLeave={e => { e.currentTarget.style.background = accentLight; e.currentTarget.style.color = accentColor; e.currentTarget.style.boxShadow = 'none' }}
+              onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+              onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }}>
+              🏠 <span>Home</span>
+            </button>
+          </div>
         </>
       )}
     </aside>
