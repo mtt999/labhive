@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { sb } from '../lib/supabase'
 import NotificationBell from './NotificationBell'
 import SuperAdminBell from './SuperAdminBell'
 
