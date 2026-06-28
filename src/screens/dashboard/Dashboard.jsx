@@ -572,6 +572,12 @@ export default function Dashboard() {
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
+      // Always fetch the solo pool for render-time filtering — this must happen before the
+      // early-return below so soloPoolFilter is correct even after Dashboard remounts.
+      if (isSolo && session?.userId) {
+        sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle()
+          .then(({ data }) => { try { setSoloPoolFilter(data?.value ? JSON.parse(data.value) : null) } catch {} })
+      }
       // If activeModules is already set (e.g., just saved from Profile), don't overwrite it
       // with a DB re-fetch. Only fetch when null (initial load, page reload, or after logout).
       if (activeModules !== null) return
