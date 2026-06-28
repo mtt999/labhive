@@ -3,6 +3,27 @@ import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
 import NotificationBell from './NotificationBell'
 import SuperAdminBell from './SuperAdminBell'
+import { ALL_MODULES_META } from './DashboardIconPicker'
+import AboutModal from './AboutModal'
+import CustomerServiceModal from './CustomerServiceModal'
+import SaraChat from './SaraChat'
+
+function ExternalLinkModal({ url, onConfirm, onCancel }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onCancel}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: '28px 28px 22px', maxWidth: 380, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 10, color: 'var(--text)' }}>Opening external link</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 18 }}>You are being redirected to an external website:<br /><span style={{ color: '#0369a1', wordBreak: 'break-all' }}>{url}</span></div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Open ↗</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768)
@@ -124,18 +145,61 @@ function LabHiveLogo({ size = 40 }) {
 
 // ── Sidebar ────────────────────────────────────────────────────
 function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubTab, setScreen, accentColor, accentLight }) {
-  const isDash = screen === 'dashboard'
-  const tabs   = getScreenTabs(screen, session)
-  const mod    = MODULE_META[screen]
-  const activeTab = sidebarSubTab || (tabs?.[0]?.key ?? null)
+  const isDash      = screen === 'dashboard'
+  const tabs        = getScreenTabs(screen, session)
+  const mod         = MODULE_META[screen]
+  const activeTab   = sidebarSubTab || (tabs?.[0]?.key ?? null)
+  const loginMode   = session?.loginMode || 'team'
+  const roleKey     = loginMode === 'solo' ? 'solo' : 'team'
+  const isStaff     = session?.role === 'admin' || session?.role === 'user'
 
-  // Build module list for dashboard state
-  const allModuleKeys = ['home', 'equipment', 'equipmenthub', 'booking', 'training', 'projects', 'remessages', 'pm', 'barcodeqr', 'labmanagement']
-  const visibleKeys = activeModules
-    ? activeModules.filter(k => allModuleKeys.includes(k))
-    : allModuleKeys
+  // External URL state for mileage / labsafety links
+  const [extUrls, setExtUrls]     = useState({})
+  const [extConfirm, setExtConfirm] = useState(null)
+
+  useEffect(() => {
+    sb.from('settings').select('key, value').in('key', ['mileage_url', 'labsafety_url'])
+      .then(({ data }) => {
+        const map = {}
+        data?.forEach(r => { map[r.key] = r.value })
+        setExtUrls(map)
+      })
+  }, [])
+
+  // Navigable modules — same role-based filter as dashboard getModules,
+  // but also includes external modules (mileage, labsafety) for the full icon count.
+  const navigable = ALL_MODULES_META.filter(m => {
+    if (!m.screen && !m.external) return false          // no way to navigate
+    if (!m.roles || !m.roles.includes(roleKey)) return false  // wrong role group
+    if (m.soloLocked && loginMode === 'solo') return false     // locked for solo
+    if (m.staffOnly && !isStaff) return false                  // staff-only
+    return true
+  })
+  const visibleMeta = activeModules
+    ? activeModules.map(key => navigable.find(m => m.key === key)).filter(Boolean)
+    : navigable
+
+  const handleModuleClick = (m) => {
+    if (m.external) {
+      const url = m.key === 'mileage' ? extUrls.mileage_url : extUrls.labsafety_url
+      if (url) setExtConfirm(url)
+    } else {
+      setScreen(m.screen)
+    }
+  }
+
+  // Collapse state for the Modules section — persisted in localStorage
+  const [modulesOpen, setModulesOpen] = useState(
+    () => localStorage.getItem('ilab_sidebar_modules_open') !== 'false'
+  )
+  const toggleModules = () => setModulesOpen(prev => {
+    const next = !prev
+    localStorage.setItem('ilab_sidebar_modules_open', String(next))
+    return next
+  })
 
   return (
+    <>
     <aside style={{
       width: 220, flexShrink: 0, background: '#fff',
       borderRight: '1px solid var(--border)',
@@ -149,21 +213,19 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Modules</div>
           </div>
           <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
-            {visibleKeys.map(key => {
-              const m = MODULE_META[key]
-              if (!m) return null
-              return (
-                <button key={key} className="sidebar-item" onClick={() => setScreen(key)}>
-                  <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
-                  <span>{m.label}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>›</span>
-                </button>
-              )
-            })}
+            {visibleMeta.map(m => (
+              <button key={m.key} className="sidebar-item" onClick={() => handleModuleClick(m)}>
+                <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
+                <span style={{ flex: 1 }}>{m.label}</span>
+                {m.external
+                  ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
+                  : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
+              </button>
+            ))}
           </nav>
         </>
       ) : (
-        /* ── Module page: title + sub-tabs + pinned home footer ── */
+        /* ── Module page: title + sub-tabs + [middle: portal + modules] + home ── */
         <>
           {/* Module title */}
           {mod && (
@@ -175,9 +237,9 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
             </div>
           )}
 
-          {/* Sub-tabs */}
-          {tabs ? (
-            <nav style={{ padding: '8px', overflowY: 'auto', flexShrink: 0 }}>
+          {/* Sub-tabs for current screen */}
+          {tabs && (
+            <nav style={{ padding: '8px', flexShrink: 0 }}>
               {tabs.map(t => {
                 const active = activeTab === t.key
                 return (
@@ -192,12 +254,49 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
                 )
               })}
             </nav>
-          ) : null}
+          )}
 
-          {/* Portal slot — screens inject custom sidebar content here via createPortal */}
-          <div id="sidebar-portal-slot" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }} />
+          {/* Middle section: portal + module nav — takes all remaining space so Home button is always pinned */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+            {/* Portal slot — screens inject full-height panels here */}
+            <div id="sidebar-portal-slot" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }} />
 
-          {/* Pinned Home button */}
+            {/* Module navigation */}
+            {visibleMeta.length > 0 && (
+              <div style={{ borderTop: '1px solid #f3f4f6', flexShrink: 0, maxHeight: modulesOpen ? 240 : 'none', overflowY: modulesOpen ? 'auto' : 'visible' }}>
+                <div style={{ padding: '7px 14px 3px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Modules</span>
+                  <button onClick={toggleModules} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--text3)', lineHeight: 1, padding: '0 2px' }} title={modulesOpen ? 'Collapse modules' : 'Expand modules'}>
+                    {modulesOpen ? '−' : '+'}
+                  </button>
+                </div>
+                {modulesOpen && <nav style={{ padding: '2px 8px 6px' }}>
+                  {visibleMeta.map(m => {
+                    const isCurrent = !m.external && (m.screen === screen ||
+                      (m.key === 'supply'       && ['inspection', 'results', 'history'].includes(screen)) ||
+                      (m.key === 'projects'     && screen === 'project-detail') ||
+                      (m.key === 'equipmenthub' && screen === 'equipmentscan'))
+                    return (
+                      <button key={m.key}
+                        className={`sidebar-item${isCurrent ? ' active' : ''}`}
+                        onClick={() => handleModuleClick(m)}
+                        style={isCurrent ? { background: accentLight, color: accentColor } : {}}>
+                        <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
+                        <span style={{ lineHeight: 1.3, flex: 1, fontSize: 13 }}>{m.label}</span>
+                        {isCurrent
+                          ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: accentColor, flexShrink: 0 }} />
+                          : m.external
+                            ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
+                            : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
+                      </button>
+                    )
+                  })}
+                </nav>}
+              </div>
+            )}
+          </div>
+
+          {/* Home button — always pinned at bottom, outside the flex:1 middle section */}
           <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
             <button
               onClick={() => setScreen('dashboard')}
@@ -218,6 +317,14 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
         </>
       )}
     </aside>
+    {extConfirm && (
+      <ExternalLinkModal
+        url={extConfirm}
+        onConfirm={() => { window.open(extConfirm, '_blank'); setExtConfirm(null) }}
+        onCancel={() => setExtConfirm(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -234,6 +341,9 @@ export default function Layout({ children }) {
   const showSidebar = !isMobile && !isProto && !!session
 
   const [orgLogoUrl, setOrgLogoUrl] = useState(null)
+  const [showAbout,   setShowAbout]   = useState(false)
+  const [showContact, setShowContact] = useState(false)
+
   useEffect(() => {
     const orgId = session?.organizationId
     if (!orgId || session?.loginMode !== 'team') { setOrgLogoUrl(null); return }
@@ -263,6 +373,17 @@ export default function Layout({ children }) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* About button */}
+          <button
+            onClick={() => setShowAbout(true)}
+            title="About LabHive"
+            style={{ height: 30, borderRadius: 15, border: '1px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.1)', color: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', flexShrink: 0, transition: 'background 0.15s', letterSpacing: '0.01em' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+          >
+            <span style={{ width: 15, height: 15, borderRadius: '50%', border: '1.5px solid currentColor', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>i</span>
+            {!isMobile && <span>About</span>}
+          </button>
           {session?.userId === null && session?.role === 'admin' ? <SuperAdminBell /> : session?.userId ? <NotificationBell /> : null}
           {session && (
             <button onClick={() => setScreen('profile')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 99, padding: '4px 10px 4px 4px', cursor: 'pointer', transition: 'all 0.15s' }}
@@ -343,6 +464,10 @@ export default function Layout({ children }) {
           </div>
         </nav>
       )}
+
+      {showAbout   && <AboutModal onClose={() => setShowAbout(false)} onContact={() => { setShowAbout(false); setShowContact(true) }} />}
+      {showContact && <CustomerServiceModal onClose={() => setShowContact(false)} />}
+      <SaraChat bottomOffset={isMobile ? 80 : 24} color={accentColor} onContact={() => setShowContact(true)} />
     </div>
   )
 }

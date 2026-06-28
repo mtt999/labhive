@@ -1,6 +1,9 @@
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
+import AboutModal from '../../components/AboutModal'
+import CustomerServiceModal from '../../components/CustomerServiceModal'
+import SaraChat from '../../components/SaraChat'
 
 function LabHiveLogo({ size = 120 }) {
   return <img src={import.meta.env.BASE_URL + 'labhive_logo.svg'} width={size} height={size} style={{ display: 'block', objectFit: 'contain', margin: '0 auto' }} alt="LabHive" />
@@ -208,6 +211,8 @@ export default function Login() {
   const [helpLoading, setHelpLoading] = useState(false)
   const [failCount, setFailCount] = useState(0)
   const [lockUntil, setLockUntil] = useState(0)
+  const [showAbout, setShowAbout]   = useState(false)
+  const [showContact, setShowContact] = useState(false)
   const lockTimerRef = useRef(null)
 
   useEffect(() => {
@@ -350,6 +355,7 @@ export default function Login() {
   }
 
   return (
+    <>
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '8px 20px 8px' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
@@ -523,8 +529,29 @@ export default function Login() {
           <div>© {new Date().getFullYear()} All rights reserved</div>
         </div>
 
+        {/* ── About + Contact ── */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, paddingBottom: 8 }}>
+          <button
+            onClick={() => setShowAbout(true)}
+            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.color = '#1D9E75' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text2)' }}
+          >ℹ️ About LabHive</button>
+          <button
+            onClick={() => setShowContact(true)}
+            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.color = '#1D9E75' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text2)' }}
+          >✉️ Contact Us</button>
+        </div>
+
       </div>
     </div>
+
+    {showAbout   && <AboutModal onClose={() => setShowAbout(false)} onContact={() => { setShowAbout(false); setShowContact(true) }} />}
+    {showContact && <CustomerServiceModal onClose={() => setShowContact(false)} />}
+    <SaraChat color={mode === 'solo' ? '#534AB7' : mode === 'team' ? '#1D9E75' : '#9ca3af'} onContact={() => setShowContact(true)} />
+    </>
   )
 }
 // FORCE_REBUILD_TEST_1778520430
