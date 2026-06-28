@@ -553,6 +553,7 @@ export default function Dashboard() {
   const [moduleImages, setModuleImages] = useState({})
   const [orgName, setOrgName] = useState('')
   const [customLinks, setCustomLinks] = useState([])
+  const [soloPoolFilter, setSoloPoolFilter] = useState(null)
 
   const isAdmin   = session?.role === 'admin'
   const isStudent = session?.role === 'student'
@@ -589,6 +590,7 @@ export default function Dashboard() {
         let mods = soloRes.data?.active_modules
         let soloPool = null
         try { soloPool = settingsRes?.data?.value ? JSON.parse(settingsRes.data.value) : null } catch {}
+        setSoloPoolFilter(soloPool)
         if (soloPool !== null) {
           if (mods?.length) {
             const filtered = mods.filter(k => soloPool.includes(k) || k === 'profile')
@@ -685,9 +687,15 @@ export default function Dashboard() {
   })()
   // Screens not managed by user_screen_access (always allowed if in activeModules)
   const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcode', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement'])
-  const modules = userAccess
-    ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))
-    : allModules
+  const modules = (() => {
+    let list = userAccess
+      ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))
+      : allModules
+    if (isSolo && soloPoolFilter !== null) {
+      list = list.filter(m => soloPoolFilter.includes(m.key) || m.key === 'profile')
+    }
+    return list
+  })()
 
   useEffect(() => { loadSettings() }, [session?.userId, screen])
   async function loadSettings() {

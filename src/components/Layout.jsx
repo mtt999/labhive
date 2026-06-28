@@ -154,25 +154,32 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
   const isStaff     = session?.role === 'admin' || session?.role === 'user'
 
   // External URL state for mileage / labsafety links
-  const [extUrls, setExtUrls]     = useState({})
+  const [extUrls, setExtUrls]       = useState({})
   const [extConfirm, setExtConfirm] = useState(null)
+  const [soloPool, setSoloPool]     = useState(null)
 
   useEffect(() => {
-    sb.from('settings').select('key, value').in('key', ['mileage_url', 'labsafety_url'])
+    const keys = ['mileage_url', 'labsafety_url']
+    if (loginMode === 'solo') keys.push('solo_allowed_modules')
+    sb.from('settings').select('key, value').in('key', keys)
       .then(({ data }) => {
         const map = {}
         data?.forEach(r => { map[r.key] = r.value })
         setExtUrls(map)
+        if (loginMode === 'solo' && map.solo_allowed_modules) {
+          try { setSoloPool(JSON.parse(map.solo_allowed_modules)) } catch {}
+        }
       })
-  }, [])
+  }, [loginMode])
 
   // Navigable modules — same role-based filter as dashboard getModules,
   // but also includes external modules (mileage, labsafety) for the full icon count.
   const navigable = ALL_MODULES_META.filter(m => {
-    if (!m.screen && !m.external) return false          // no way to navigate
-    if (!m.roles || !m.roles.includes(roleKey)) return false  // wrong role group
-    if (m.soloLocked && loginMode === 'solo') return false     // locked for solo
-    if (m.staffOnly && !isStaff) return false                  // staff-only
+    if (!m.screen && !m.external) return false
+    if (!m.roles || !m.roles.includes(roleKey)) return false
+    if (m.soloLocked && loginMode === 'solo') return false
+    if (m.staffOnly && !isStaff) return false
+    if (loginMode === 'solo' && soloPool !== null && !m.external && !soloPool.includes(m.key) && m.key !== 'profile') return false
     return true
   })
   const visibleMeta = activeModules
