@@ -587,18 +587,23 @@ export default function Dashboard() {
           sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle(),
         ])
         let mods = soloRes.data?.active_modules
-        try {
-          const soloPool = settingsRes?.data?.value ? JSON.parse(settingsRes.data.value) : null
-          if (soloPool !== null) {
-            if (mods?.length) {
-              const filtered = mods.filter(k => soloPool.includes(k) || k === 'profile')
-              const missing = soloPool.filter(k => !filtered.includes(k) && k !== 'profile')
-              mods = [...filtered, ...missing]
-            } else {
-              mods = soloPool
-            }
+        let soloPool = null
+        try { soloPool = settingsRes?.data?.value ? JSON.parse(settingsRes.data.value) : null } catch {}
+        if (soloPool !== null) {
+          if (mods?.length) {
+            const filtered = mods.filter(k => soloPool.includes(k) || k === 'profile')
+            const missing = soloPool.filter(k => !filtered.includes(k) && k !== 'profile')
+            mods = [...filtered, ...missing]
+          } else {
+            mods = soloPool
           }
-        } catch {}
+          // Write filtered result back to DB so stale removed modules don't persist
+          const original = soloRes.data?.active_modules
+          const changed = !original || original.length !== mods.length || mods.some((k, i) => k !== original[i])
+          if (changed) {
+            sb.from('solo_users').update({ active_modules: mods }).eq('id', session.userId).then(() => {})
+          }
+        }
         setActiveModules(mods?.length ? mods : null)
         setCustomLinks((soloRes.data?.custom_external_links || []).filter(l => l.enabled))
       } else {
