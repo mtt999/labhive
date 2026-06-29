@@ -371,6 +371,11 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
                 </div>
               )
             })}
+            {loginMode === 'solo' && ALL_MODULES_META.filter(m => m.soloLocked && !displayModules.find(d => d.key === m.key)).map(m => (
+              <div key={m.key}>
+                <ModuleToggleCard module={m} selected={false} onToggle={() => {}} pinned={false} alwaysOn={false} restricted={true} soloLocked={true} />
+              </div>
+            ))}
           </div>
         </div>
         <div style={{ padding: '16px 28px 24px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'var(--surface)' }}>
