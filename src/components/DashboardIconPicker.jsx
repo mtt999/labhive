@@ -353,7 +353,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
             💡 Drag cards to reorder icons on your home screen
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, paddingBottom: 20 }}>
-            {displayModules.map(m => {
+            {displayModules.filter(m => !(loginMode === 'solo' && m.soloLocked)).map(m => {
               const isDragging = dragKey === m.key
               const isOver = dragOverKey === m.key && dragKey !== m.key
               const canDrag = !restrictedKeys.has(m.key) && !uiPinnedKeys.includes(m.key)
@@ -367,11 +367,11 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
                   onDragEnd={handleDragEnd}
                   style={{ opacity: isDragging ? 0.35 : 1, outline: isOver ? `2px dashed ${loginMode === 'solo' ? '#534AB7' : '#1D9E75'}` : 'none', borderRadius: 12, transition: 'opacity 0.15s' }}
                 >
-                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={uiPinnedKeys.includes(m.key)} alwaysOn={!uiPinnedKeys.includes(m.key) && alwaysOnKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={loginMode === 'solo' && !!m.soloLocked} />
+                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={uiPinnedKeys.includes(m.key)} alwaysOn={!uiPinnedKeys.includes(m.key) && alwaysOnKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={false} />
                 </div>
               )
             })}
-            {loginMode === 'solo' && ALL_MODULES_META.filter(m => m.soloLocked && !displayModules.find(d => d.key === m.key)).map(m => (
+            {loginMode === 'solo' && ALL_MODULES_META.filter(m => m.soloLocked).map(m => (
               <div key={m.key}>
                 <ModuleToggleCard module={m} selected={false} onToggle={() => {}} pinned={false} alwaysOn={false} restricted={true} soloLocked={true} />
               </div>
