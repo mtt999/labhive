@@ -124,10 +124,13 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         let soloPool = null
         try { soloPool = soloSettingsRes?.data?.value ? JSON.parse(soloSettingsRes.data.value) : null } catch { soloPool = null }
         if (soloPool !== null) {
-          // soloLocked modules are always shown in the picker (grayed out) so solo users
-          // can see that more features exist — even if the admin's pool excludes them.
           localAvailable = localAvailable.filter(m => soloPool.includes(m.key) || m.key === 'profile' || m.soloLocked)
         }
+        // Always ensure soloLocked modules appear in the picker so solo users can see
+        // that these features exist (shown grayed with "Team accounts only" label).
+        ALL_MODULES_META.filter(m => m.soloLocked).forEach(m => {
+          if (!localAvailable.find(a => a.key === m.key)) localAvailable = [...localAvailable, m]
+        })
       } else if (session?.userId) {
         const queries = [
           sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
