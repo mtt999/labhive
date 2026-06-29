@@ -124,7 +124,9 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         let soloPool = null
         try { soloPool = soloSettingsRes?.data?.value ? JSON.parse(soloSettingsRes.data.value) : null } catch { soloPool = null }
         if (soloPool !== null) {
-          localAvailable = localAvailable.filter(m => soloPool.includes(m.key) || m.key === 'profile')
+          // soloLocked modules are always shown in the picker (grayed out) so solo users
+          // can see that more features exist — even if the admin's pool excludes them.
+          localAvailable = localAvailable.filter(m => soloPool.includes(m.key) || m.key === 'profile' || m.soloLocked)
         }
       } else if (session?.userId) {
         const queries = [
