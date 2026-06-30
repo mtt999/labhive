@@ -195,12 +195,13 @@ tr:last-child td { border-bottom: none; }
   flex: 0 0 220px;
   height: 160px; /* mobile default — overridden on desktop */
 }
-/* Desktop: rows stretch to fill available viewport height */
+/* Desktop: always 4 columns, rows stretch to fill available viewport height */
 @media (min-width: 769px) {
   .module-icon-grid {
     align-content: stretch;
   }
   .module-icon-grid > * {
+    flex: 0 0 calc(25% - 11px);
     height: auto;
     min-height: 100px;
   }
