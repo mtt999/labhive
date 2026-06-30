@@ -35,6 +35,7 @@ import { logAdminError } from './lib/logAdminError'
 import CustomerServiceModal from './components/CustomerServiceModal'
 import TermsAcceptance from './components/TermsAcceptance'
 import { CURRENT_TERMS_VERSION } from './lib/termsVersion'
+import CookieConsent from './components/CookieConsent'
 
 window.addEventListener('error', (e) => {
   logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
@@ -369,6 +370,7 @@ export default function App() {
     <>
       <Login />
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
+      <CookieConsent />
     </>
   )
 
@@ -403,6 +405,7 @@ export default function App() {
       {!termsAccepted && session && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
       {termsAccepted && session?.mustChangePassword && <ForcePasswordChange />}
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
+      <CookieConsent />
       {showIconPicker === true && (
         <DashboardIconPicker
           session={session}

@@ -205,19 +205,101 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     return next
   })
 
+  // Icon-only collapsed sidebar — persisted in localStorage
+  const [sidebarIconOnly, setSidebarIconOnly] = useState(
+    () => localStorage.getItem('ilab_sidebar_icon_only') === 'true'
+  )
+  const toggleIconOnly = (val) => {
+    setSidebarIconOnly(val)
+    localStorage.setItem('ilab_sidebar_icon_only', String(val))
+  }
+
+  const AppsBadge = () => (
+    <button
+      onClick={() => toggleIconOnly(true)}
+      title="Collapse to icon view"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: `linear-gradient(135deg, ${accentColor}, ${accentColor}bb)`, padding: '4px 9px 4px 7px', borderRadius: 7, boxShadow: `0 2px 10px ${accentColor}44`, border: 'none', cursor: 'pointer', transition: 'filter 0.15s' }}
+      onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.12)'}
+      onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Apps</span>
+    </button>
+  )
+
+  const AppsIconBtn = () => (
+    <button
+      onClick={() => toggleIconOnly(false)}
+      title="Expand sidebar"
+      style={{ width: 38, height: 38, borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${accentColor}, ${accentColor}bb)`, boxShadow: `0 2px 10px ${accentColor}44`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'filter 0.15s' }}
+      onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.15)'}
+      onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+    </button>
+  )
+
+  const iconBtn = (onClick, title, content, isActive = false) => (
+    <button
+      title={title}
+      onClick={onClick}
+      style={{ width: 38, height: 38, borderRadius: 10, border: isActive ? `1.5px solid ${accentColor}` : '1.5px solid transparent', background: isActive ? accentLight : 'transparent', color: isActive ? accentColor : 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0, transition: 'background 0.13s' }}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--surface2)' }}
+      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+    >
+      {content}
+    </button>
+  )
+
   return (
     <>
     <aside style={{
-      width: 220, flexShrink: 0, background: '#fff',
+      width: sidebarIconOnly ? 56 : 220,
+      flexShrink: 0, background: '#fff',
       borderRight: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
+      transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
     }}>
-      {isDash ? (
-        /* ── Dashboard: show module list ── */
+
+      {/* ── Icon-only rail (collapsed) ── */}
+      {sidebarIconOnly ? (
         <>
-          <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid #f3f4f6' }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Modules</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '10px 4px', flex: 1, overflowY: 'auto' }}>
+            {AppsIconBtn()}
+            <div style={{ width: 28, height: 1, background: 'var(--border)', margin: '4px 0', flexShrink: 0 }} />
+            {/* Sub-tabs (module page only) */}
+            {!isDash && tabs && tabs.map(t =>
+              iconBtn(() => setSidebarSubTab(t.key), t.label, t.icon, activeTab === t.key)
+            )}
+            {!isDash && tabs && visibleMeta.length > 0 && (
+              <div style={{ width: 28, height: 1, background: 'var(--border)', margin: '4px 0', flexShrink: 0 }} />
+            )}
+            {/* All app icons */}
+            {visibleMeta.map(m => {
+              const isCurrent = !isDash && !m.external && (m.screen === screen ||
+                (m.key === 'supply'       && ['inspection', 'results', 'history'].includes(screen)) ||
+                (m.key === 'projects'     && screen === 'project-detail') ||
+                (m.key === 'equipmenthub' && screen === 'equipmentscan'))
+              return iconBtn(() => handleModuleClick(m), m.label, m.icon, isCurrent)
+            })}
+          </div>
+          {/* Home icon pinned at bottom */}
+          {!isDash && (
+            <div style={{ padding: '8px 4px', borderTop: '1px solid #f3f4f6', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+              {iconBtn(() => setScreen('dashboard'), 'Home', '🏠', false)}
+            </div>
+          )}
+        </>
+      ) : isDash ? (
+        /* ── Dashboard expanded: Apps header + module list ── */
+        <>
+          <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f3f4f6' }}>
+            {AppsBadge()}
           </div>
           <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
             {visibleMeta.map(m => (
@@ -232,9 +314,8 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
           </nav>
         </>
       ) : (
-        /* ── Module page: title + sub-tabs + [middle: portal + modules] + home ── */
+        /* ── Module page expanded: title + sub-tabs + portal + apps nav + home ── */
         <>
-          {/* Module title */}
           {mod && (
             <div style={{ padding: '11px 14px 9px', borderBottom: '1px solid #f3f4f6', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -244,7 +325,6 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
             </div>
           )}
 
-          {/* Sub-tabs for current screen */}
           {tabs && (
             <nav style={{ padding: '8px', flexShrink: 0 }}>
               {tabs.map(t => {
@@ -263,17 +343,14 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
             </nav>
           )}
 
-          {/* Middle section: portal + module nav — takes all remaining space so Home button is always pinned */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            {/* Portal slot — screens inject full-height panels here */}
             <div id="sidebar-portal-slot" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }} />
 
-            {/* Module navigation */}
             {visibleMeta.length > 0 && (
               <div style={{ borderTop: '1px solid #f3f4f6', flexShrink: 0, maxHeight: modulesOpen ? 240 : 'none', overflowY: modulesOpen ? 'auto' : 'visible' }}>
                 <div style={{ padding: '7px 14px 3px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Modules</span>
-                  <button onClick={toggleModules} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--text3)', lineHeight: 1, padding: '0 2px' }} title={modulesOpen ? 'Collapse modules' : 'Expand modules'}>
+                  {AppsBadge()}
+                  <button onClick={toggleModules} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--text3)', lineHeight: 1, padding: '0 2px' }} title={modulesOpen ? 'Collapse' : 'Expand'}>
                     {modulesOpen ? '−' : '+'}
                   </button>
                 </div>
@@ -303,7 +380,6 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
             )}
           </div>
 
-          {/* Home button — always pinned at bottom, outside the flex:1 middle section */}
           <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
             <button
               onClick={() => setScreen('dashboard')}
@@ -379,37 +455,57 @@ export default function Layout({ children }) {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* About button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* About — glass icon button */}
           <button
             onClick={() => setShowAbout(true)}
             title="About LabHive"
-            style={{ height: 30, borderRadius: 15, border: '1px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.1)', color: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', flexShrink: 0, transition: 'background 0.15s', letterSpacing: '0.01em' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+            style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.18s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.transform = 'translateY(-1px) scale(1.06)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}
           >
-            <span style={{ width: 15, height: 15, borderRadius: '50%', border: '1.5px solid currentColor', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>i</span>
-            {!isMobile && <span>About</span>}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+              <path d="M12 16v-4"/>
+              <path d="M12 8h.01"/>
+            </svg>
           </button>
+
           {session?.userId === null && session?.role === 'admin' ? <SuperAdminBell /> : session?.userId ? <NotificationBell /> : null}
+
+          {/* Profile pill */}
           {session && (
-            <button onClick={() => setScreen('profile')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 99, padding: '4px 10px 4px 4px', cursor: 'pointer', transition: 'all 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+            <button onClick={() => setScreen('profile')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 99, padding: '3px 10px 3px 3px', cursor: 'pointer', transition: 'all 0.18s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                 {session.photoUrl
                   ? <img src={session.photoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
                   : session.avatar
-                    ? <span style={{ fontSize: 16 }}>{session.avatar}</span>
-                    : <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>{(session.username || 'A')[0].toUpperCase()}</span>
+                    ? <span style={{ fontSize: 15 }}>{session.avatar}</span>
+                    : <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{(session.username || 'A')[0].toUpperCase()}</span>
                 }
               </div>
               {!isMobile && displayName && (
-                <span style={{ fontSize: 13, color: '#e3f2fd', fontFamily: 'var(--mono)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--mono)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
               )}
             </button>
           )}
-          <button className="btn btn-sm" onClick={() => clearSession()} style={{ border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#ffffff', flexShrink: 0 }}>{isMobile ? '↩' : 'Sign out'}</button>
+
+          {/* Sign out — glass icon button */}
+          <button
+            onClick={() => clearSession()}
+            title="Sign out"
+            style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', color: 'rgba(255,255,255,0.75)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.18s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,80,80,0.22)'; e.currentTarget.style.transform = 'translateY(-1px) scale(1.06)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,100,100,0.3)'; e.currentTarget.style.color = '#ff9e9e'; e.currentTarget.style.borderColor = 'rgba(255,100,100,0.35)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </header>
 

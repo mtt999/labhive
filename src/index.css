@@ -199,11 +199,12 @@ tr:last-child td { border-bottom: none; }
 @media (min-width: 769px) {
   .module-icon-grid {
     align-content: stretch;
+    padding: 0 10%;
   }
   .module-icon-grid > * {
     flex: 0 0 calc(25% - 11px);
     height: auto;
-    min-height: 100px;
+    min-height: 80px;
   }
 }
 @media (max-width: 768px) {

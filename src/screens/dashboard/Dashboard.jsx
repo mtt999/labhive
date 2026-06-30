@@ -122,7 +122,7 @@ function LockedCard({ m, message = '🔒 Lab managers only' }) {
   )
 }
 
-const CARD_MAX_H = 190
+const CARD_MAX_H = 152
 const GRID_GAP = 14
 const APPROX_COLS = 4
 function gridMaxHeight(count) {

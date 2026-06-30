@@ -204,6 +204,10 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
           0%,60%,100% { opacity:0.25; transform:scale(0.75) }
           30%          { opacity:1;   transform:scale(1)    }
         }
+        @keyframes sara-pulse {
+          0%   { transform:scale(0.92); opacity:0.7 }
+          100% { transform:scale(1.85); opacity:0   }
+        }
       `}</style>
 
       {/* ── Chat panel ── */}
@@ -302,24 +306,40 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
       )}
 
       {/* ── Floating button ── */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        title={open ? 'Close Sara' : 'Chat with Sara'}
-        style={{
-          position: 'fixed', bottom: bottomOffset, right: 20,
-          width: 56, height: 56, borderRadius: '50%',
-          background: ACCENT, border: 'none', color: '#fff',
-          cursor: 'pointer', zIndex: 9999,
-          boxShadow: open ? '0 4px 14px rgba(29,158,117,0.3)' : '0 4px 20px rgba(29,158,117,0.45)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'transform 0.15s, box-shadow 0.15s',
-          fontSize: open ? 22 : 24,
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)' }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'   }}
-      >
-        {open ? '×' : '💬'}
-      </button>
+      <div style={{ position: 'fixed', bottom: bottomOffset, right: 20, zIndex: 9999 }}>
+        {/* Double ripple pulse — only when closed */}
+        {!open && <>
+          <div style={{ position: 'absolute', inset: -6, borderRadius: '50%', background: `${ACCENT}35`, animation: 'sara-pulse 2.4s ease-out infinite', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: -6, borderRadius: '50%', background: `${ACCENT}22`, animation: 'sara-pulse 2.4s ease-out 0.9s infinite', pointerEvents: 'none' }} />
+        </>}
+        <button
+          onClick={() => setOpen(o => !o)}
+          title={open ? 'Close Sara' : 'Chat with Sara'}
+          style={{
+            position: 'relative',
+            width: 56, height: 56, borderRadius: '50%',
+            background: `linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT}bb 100%)`,
+            border: 'none', color: '#fff', cursor: 'pointer',
+            boxShadow: open
+              ? `0 4px 16px ${ACCENT}55`
+              : `0 6px 24px ${ACCENT}66, 0 2px 8px rgba(0,0,0,0.12)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = `0 8px 28px ${ACCENT}88` }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)';   e.currentTarget.style.boxShadow = open ? `0 4px 16px ${ACCENT}55` : `0 6px 24px ${ACCENT}66, 0 2px 8px rgba(0,0,0,0.12)` }}
+        >
+          {open ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          ) : (
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          )}
+        </button>
+      </div>
     </>
   )
 }
