@@ -3,16 +3,25 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-// Auto-recover from stale deployments. Lazy chunks (jspdf, exceljs, …) have
-// hashed filenames that change on every deploy; a browser holding an old
+// Auto-recover from stale deployments. Lazy chunks (Admin, jspdf, exceljs, …)
+// have hashed filenames that change on every deploy; a browser holding an old
 // index.html requests a chunk that no longer exists and the dynamic import
 // fails ("jspdf failed" on Windows machines with older cache). Vite fires
-// vite:preloadError for exactly this case — reload once to fetch the fresh
-// build. sessionStorage guard prevents a reload loop if something else broke.
+// vite:preloadError for exactly this case — reload to fetch the fresh build.
+//
+// The guard is time-based, NOT once-per-session. A one-shot boolean meant that
+// after any single recovery, every later stale chunk in that tab failed
+// silently and its <Suspense> hung forever — a long-lived tab that had already
+// reloaded once would open e.g. the Admin Panel to a permanent spinner. A
+// cooldown still prevents a reload loop (a chunk that 404s even on the fresh
+// build won't retry more than once per RELOAD_COOLDOWN_MS) while letting each
+// genuinely new deploy recover.
+const RELOAD_COOLDOWN_MS = 30000
 window.addEventListener('vite:preloadError', (e) => {
   e.preventDefault()
-  if (sessionStorage.getItem('ilab_chunk_reload')) return
-  sessionStorage.setItem('ilab_chunk_reload', '1')
+  const last = Number(sessionStorage.getItem('ilab_chunk_reload_at') || 0)
+  if (Date.now() - last < RELOAD_COOLDOWN_MS) return
+  sessionStorage.setItem('ilab_chunk_reload_at', String(Date.now()))
   window.location.reload()
 })
 
