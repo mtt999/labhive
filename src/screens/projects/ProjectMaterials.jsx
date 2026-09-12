@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../barcode/BarcodeScannerScreen'
+import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────
 const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
@@ -958,13 +959,13 @@ export default function ProjectMaterials({ project, readOnly = false }) {
           <div>No materials yet. Add your first material.</div>
         </div>
       ) : (
-        materials.map(m => {
+        materials.map((m, idx) => {
           const isOpen = expanded === m.id
           const firstPhoto = m.photos?.[0]
           return (
             <div key={m.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
               {/* Material card header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: 'var(--surface)' }}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}
                 onClick={() => setExpanded(isOpen ? null : m.id)}>
                 {/* Thumbnail */}
                 <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -984,18 +985,25 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
                     {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
-                    {m.source_name && <span>📍 {m.source_name}</span>}
-                    {m.container_type && <span>⚖️ {m.container_type}</span>}
-                    {m.sampling_date && <span>📅 {m.sampling_date}</span>}
-                    {m.photos?.length > 0 && <span>📷 {m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
+                    {m.source_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconMapPin size={12} />{m.source_name}</span>}
+                    {m.container_type && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconScale size={12} />{m.container_type}</span>}
+                    {m.sampling_date && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCalendar size={12} />{m.sampling_date}</span>}
+                    {m.photos?.length > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCamera size={12} />{m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
                   </div>
                 </div>
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                   {!readOnly && (
-                    <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}>Delete</button>
+                    <button className="btn btn-sm" title="Delete material" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}
+                      style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#c84b2f' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = '' }}>
+                      <IconTrash size={15} />
+                    </button>
                   )}
-                  <span style={{ fontSize: 13, color: 'var(--text3)', display: 'flex', alignItems: 'center' }}>{isOpen ? '▲' : '▼'}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                    <IconChevronDown size={16} />
+                  </span>
                 </div>
               </div>
 
@@ -1024,9 +1032,9 @@ export default function ProjectMaterials({ project, readOnly = false }) {
 
                   {/* Tab 1: Material Info */}
                   {matTab === 'info' && (
-                    <div style={{ padding: '16px 16px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: m.photos?.length ? 16 : 0 }}>
-                        {m.pi_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
+                    <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
+                      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 20px' }}>
+                        {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
                         {isSoloMat ? <>
                           {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
                             const def = subDefs.find(s => s.key === key)
@@ -1035,45 +1043,47 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                               const sieves = val.split(',').filter(Boolean)
                               return (
                                 <div key={key} style={{ gridColumn: '1/-1' }}>
-                                  <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
                                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{sieves.map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div>
                                 </div>
                               )
                             }
-                            return <div key={key}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div><div style={{ fontWeight: 500 }}>{val}</div></div>
+                            return <div key={key}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div><div style={{ fontWeight: 500 }}>{val}</div></div>
                           })}
-                          {(m.source_name || m.source_type) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
-                          {m.source_location && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
-                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}</div></div>}
+                          {(m.source_name || m.source_type) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
+                          {m.source_location && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}</div></div>}
                         </> : <>
                           {m.material_type === 'aggregate' && <>
-                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
-                            <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(Array.isArray(m.agg_sieve_sizes) ? m.agg_sieve_sizes : []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
+                            <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(Array.isArray(m.agg_sieve_sizes) ? m.agg_sieve_sizes : []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
                           </>}
                           {m.material_type === 'asphalt_binder' && <>
-                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
-                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
-                            {m.ab_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
-                            {m.ab_other_additives && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
+                            {m.ab_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
+                            {m.ab_other_additives && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
                           </>}
                           {m.material_type === 'plant_mix' && <>
-                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
-                            {m.pm_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
-                            {m.pm_nmas && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas}</div></div>}
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
+                            {m.pm_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
+                            {m.pm_nmas && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas}</div></div>}
                           </>}
-                          {m.source_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
-                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
-                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{formatLocation(l) || l.location_id}</span>)}</div></div>}
+                          {m.source_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
+                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{formatLocation(l) || l.location_id}</span>)}</div></div>}
                         </>}
                       </div>
                       {m.photos?.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Photos ({m.photos.length})</div>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {m.photos.map((url, i) => (
-                              <img key={i} src={url} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
-                            ))}
-                          </div>
+                        <div style={{ flexShrink: 0, width: 140 }}>
+                          <img src={m.photos[0]} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', display: 'block' }} onClick={() => window.open(m.photos[0], '_blank')} />
+                          {m.photos.length > 1 && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                              {m.photos.slice(1).map((url, i) => (
+                                <img key={i} src={url} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
