@@ -112,7 +112,10 @@ function getScreenTabs(screen, session) {
     // top-level tab: teaming up is what makes shared data visible.
     return [
       { key: 'inventory', icon: '📦', label: 'Material Inventory' },
-      ...((isAdmin || isStaff) && !isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
+      // Solo users manage their own workspace's projects here too — it is the
+      // only entry point to project creation, so hiding it left them unable to
+      // create a project at all.
+      ...(isAdmin || isStaff || isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
       { key: 'results',   icon: '✏️',  label: 'Project Test Results' },
       { key: 'workspace', icon: '📊', label: 'Workspace' },
       { key: 'members',   icon: '👥', label: 'Project Members' },

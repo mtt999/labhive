@@ -2525,21 +2525,27 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   )
 }
 
-// ── Manage Projects (admin/lab-manager only) ────────────────────
-function ManageProjectsTab({ session }) {
-  const { toast } = useAppStore()
+// ── Manage Projects (admin/lab-manager, or solo user's own workspace) ──
+function ManageProjectsTab({ session, isSolo }) {
+  const { toast, viewingWorkspaceOwnerId } = useAppStore()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
 
+  // Solo workspaces have no organization_id — they scope by solo_owner_id
+  // instead (the workspace being viewed, which may be a shared one).
+  const soloOwnerId = isSolo ? (viewingWorkspaceOwnerId || session?.userId) : null
+
   function load() {
-    if (!session?.organizationId) return
+    if (isSolo ? !soloOwnerId : !session?.organizationId) return
     setLoading(true)
-    sb.from('projects').select('*').eq('organization_id', session.organizationId).is('solo_owner_id', null).order('name')
-      .then(({ data }) => { setProjects(data || []); setLoading(false) })
+    const q = isSolo
+      ? sb.from('projects').select('*').eq('solo_owner_id', soloOwnerId)
+      : sb.from('projects').select('*').eq('organization_id', session.organizationId).is('solo_owner_id', null)
+    q.order('name').then(({ data }) => { setProjects(data || []); setLoading(false) })
   }
-  useEffect(load, [session?.organizationId])
+  useEffect(load, [session?.organizationId, isSolo, soloOwnerId])
 
   async function deleteProject(id) {
     if (!confirm('Delete this project and all its data? This cannot be undone.')) return
@@ -2576,7 +2582,7 @@ function ManageProjectsTab({ session }) {
         </div>
       )}
       {showNewModal && (
-        <NewProjectModal isSolo={false} soloOwnerId={null} onClose={() => setShowNewModal(false)} onCreated={() => { setShowNewModal(false); load() }} />
+        <NewProjectModal isSolo={isSolo} soloOwnerId={soloOwnerId} onClose={() => setShowNewModal(false)} onCreated={() => { setShowNewModal(false); load() }} />
       )}
       {editingProject && (
         <Modal onClose={() => setEditingProject(null)}>
@@ -2693,7 +2699,7 @@ export default function ProjectMaterial() {
       )}
 
       {mainTab === 'manage_projects' && (
-        <ManageProjectsTab session={session} />
+        <ManageProjectsTab session={session} isSolo={isSolo} />
       )}
 
       {mainTab === 'results' && (
