@@ -113,7 +113,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
         </div>
 
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Student picks their visible icons from this assigned list.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Lab user picks their visible icons from this assigned list.</div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn" onClick={() => onClose(false)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

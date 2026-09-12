@@ -62,7 +62,7 @@ const FAQ = [
   {
     id: 'roles',
     q: 'What user roles are there?',
-    a: 'LabHive has 4 roles:\n• Org Admin — full control of the organization\n• Lab Manager — manages day-to-day operations\n• Lab User / Student — limited module access\n• Solo User — independent personal workspace',
+    a: 'LabHive has 4 roles:\n• Org Admin — full control of the organization\n• Lab Manager — manages day-to-day operations\n• Lab User — limited module access\n• Solo User — independent personal workspace',
     keywords: ['role', 'permission', 'admin', 'manager', 'lab_user', 'access level', 'types of user', 'lab user'],
     followups: ['team', 'features', 'signup'],
   },
