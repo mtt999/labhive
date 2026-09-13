@@ -666,6 +666,8 @@ export default function Dashboard() {
         const row = prefsRes.data?.[0]
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
+        // Captured out of the try below so the lab-user gate can see it.
+        let orgLabUserPool = null
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
@@ -677,6 +679,7 @@ export default function Dashboard() {
               : orgRes?.data?.allowed_modules
           const orgPool = outerOrgPool || null
           const effectivePool = orgPool ?? appPool
+          orgLabUserPool = effectivePool
           if (effectivePool !== null) {
             if (mods?.length) {
               // Remove modules no longer in the pool; always keep profile and staff-pinned
@@ -710,7 +713,20 @@ export default function Dashboard() {
         const defaultMods = session?.role === 'lab_user' ? ['profile'] : null
         setActiveModules(mods?.length ? mods : defaultMods)
         if (session?.role === 'lab_user') {
-          setStudentAllowedPool(new Set(row?.allowed_modules || []))
+          // This pool does two jobs in CardGridView: it restricts which cards
+          // exist, and it unlocks `locked` modules (equipment, pm, barcodeqr).
+          // It used to read ONLY user_dashboard_prefs.allowed_modules — the
+          // per-user assignment a lab manager makes. When that was unset (the
+          // normal case), the org admin's Icon Pools → Lab User grant never
+          // reached the unlock check, so modules the admin had granted AND the
+          // user had ticked in the picker were silently dropped from the
+          // dashboard while still showing in the picker and sidebar.
+          // Per-user assignment still wins when present; otherwise fall back to
+          // the org-wide lab-user pool. 'profile' is always included — it is
+          // pinned ("Always visible") and is not part of either pool.
+          const perUser = row?.allowed_modules
+          const gatePool = perUser?.length ? perUser : (orgLabUserPool || [])
+          setStudentAllowedPool(new Set([...gatePool, 'profile']))
         }
       }
     } catch(e) {}
