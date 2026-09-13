@@ -63,6 +63,23 @@ SET search_path = public AS $$
   SELECT organization_id FROM users WHERE auth_id = auth.uid() LIMIT 1
 $$;
 
+-- Same LIMIT 1 hazard as my_user_id(): one auth account can own users rows in
+-- more than one organization (a person who works with two labs), and with no
+-- ORDER BY this returns an arbitrary one. Every org-scoped policy would then
+-- resolve to a random org — the user sees one org's data at random, and a
+-- write whose organization_id came from the app session is REJECTED by
+-- WITH CHECK whenever the two disagree. Silent and intermittent.
+--
+-- Org scoping therefore uses this set-returning version: every organization
+-- the account actually belongs to. This does not widen access — a row is only
+-- reachable if one of the user's own rows is in that organization.
+CREATE OR REPLACE FUNCTION my_org_ids()
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
+  SELECT DISTINCT organization_id FROM users
+  WHERE auth_id = auth.uid() AND organization_id IS NOT NULL
+$$;
+
 CREATE OR REPLACE FUNCTION my_solo_id()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
@@ -133,8 +150,8 @@ $b$);
 
 SELECT _apply_rls('organizations', 'orgs_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR id = my_org_id())
-WITH CHECK (is_super_admin() OR id = my_org_id())
+USING    (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
@@ -144,8 +161,8 @@ $b$);
 
 SELECT _apply_rls('users', 'users_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
@@ -168,12 +185,12 @@ SELECT _apply_rls('user_screen_access', 'user_screen_access_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -181,13 +198,13 @@ SELECT _apply_rls('user_dashboard_prefs', 'user_dashboard_prefs_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -200,38 +217,38 @@ SELECT _apply_rls('equipment_inventory', 'equipment_inventory_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR (login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR (login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
 
 SELECT _apply_rls('equipment_categories', 'equipment_categories_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 SELECT _apply_rls('equipment_locations', 'equipment_locations_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 SELECT _apply_rls('equipment_booking_settings', 'equipment_booking_settings_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
@@ -245,12 +262,12 @@ SELECT _apply_rls('equipment_bookings', 'equipment_bookings_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
@@ -259,13 +276,13 @@ SELECT _apply_rls('booking_notifications', 'booking_notifications_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -273,12 +290,12 @@ SELECT _apply_rls('equipment_booking_blocks', 'equipment_booking_blocks_policy',
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
 )
 $b$);
 
@@ -302,7 +319,7 @@ BEGIN
       USING (
         is_super_admin()
         OR equipment_id IN (
-          SELECT id FROM equipment_inventory WHERE organization_id = my_org_id()
+          SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid)
           UNION ALL
           SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id()
         )
@@ -310,7 +327,7 @@ BEGIN
       WITH CHECK (
         is_super_admin()
         OR equipment_id IN (
-          SELECT id FROM equipment_inventory WHERE organization_id = my_org_id()
+          SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid)
           UNION ALL
           SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id()
         )
@@ -323,13 +340,13 @@ SELECT _apply_rls('equipment_sop_notes', 'equipment_sop_notes_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -346,7 +363,7 @@ $b$);
 
 -- These three tables serve BOTH team users (organization_id) and solo users.
 -- solo_owner_id added Sept 2026: without it a solo user's rows carry
--- organization_id = NULL, so `organization_id = my_org_id()` evaluates to NULL
+-- organization_id = NULL, so `organization_id IN (SELECT oid FROM my_org_ids() AS oid)` evaluates to NULL
 -- (never true) and every solo INSERT was silently rejected and every SELECT
 -- returned nothing. Do NOT drop the solo branch from these policies.
 ALTER TABLE rooms       ADD COLUMN IF NOT EXISTS solo_owner_id uuid;
@@ -362,12 +379,12 @@ BEGIN
       FOR ALL TO authenticated
       USING (
         is_super_admin()
-        OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+        OR (organization_id IS NOT NULL AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
         OR (solo_owner_id  IS NOT NULL AND solo_owner_id  = my_solo_id())
       )
       WITH CHECK (
         is_super_admin()
-        OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+        OR (organization_id IS NOT NULL AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
         OR (solo_owner_id  IS NOT NULL AND solo_owner_id  = my_solo_id())
       )
     $b$);
@@ -381,28 +398,28 @@ END $$;
 
 SELECT _apply_rls('floor_plans', 'floor_plans_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 SELECT _apply_rls('storage_locations', 'storage_locations_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR (organization_id IS NULL AND my_solo_id() IS NOT NULL)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR (organization_id IS NULL AND my_solo_id() IS NOT NULL)
 )
 $b$);
 
 SELECT _apply_rls('student_lockers', 'student_lockers_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
@@ -414,13 +431,13 @@ SELECT _apply_rls('projects', 'projects_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR solo_owner_id = my_solo_id()
   OR solo_owner_id IN (SELECT owner_id FROM solo_workspace_members WHERE member_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR solo_owner_id = my_solo_id()
 )
 $b$);
@@ -434,11 +451,11 @@ BEGIN
       FOR ALL TO authenticated
       USING (
         is_super_admin()
-        OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+        OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
       )
       WITH CHECK (
         is_super_admin()
-        OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+        OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
       )
     $b$);
   END LOOP;
@@ -494,15 +511,15 @@ SELECT _apply_rls('project_materials', 'project_materials_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+  OR (organization_id IS NOT NULL AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR (solo_owner_id IS NOT NULL AND solo_owner_id = my_solo_id())
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+  OR (organization_id IS NOT NULL AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR (solo_owner_id IS NOT NULL AND solo_owner_id = my_solo_id())
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -510,11 +527,11 @@ SELECT _apply_rls('project_record_files', 'project_record_files_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -522,12 +539,12 @@ SELECT _apply_rls('project_supplies', 'project_supplies_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR project_id IN (SELECT id FROM projects WHERE solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR project_id IN (SELECT id FROM projects WHERE solo_owner_id = my_solo_id())
 )
 $b$);
@@ -536,15 +553,15 @@ SELECT _apply_rls('test_result_entries', 'test_result_entries_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR project_id IN (SELECT id FROM projects WHERE solo_owner_id = my_solo_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR project_id IN (SELECT id FROM projects WHERE solo_owner_id = my_solo_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -565,12 +582,12 @@ SELECT _apply_rls('analysis_comments', 'analysis_comments_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
+  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
@@ -584,13 +601,13 @@ SELECT _apply_rls('training_schedule', 'training_schedule_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 $b$);
 
@@ -606,13 +623,13 @@ BEGIN
       FOR ALL TO authenticated
       USING (
         is_super_admin()
-        OR user_id::text IN (SELECT id::text FROM my_user_ids())
-        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+        OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
       )
       WITH CHECK (
         is_super_admin()
-        OR user_id::text IN (SELECT id::text FROM my_user_ids())
-        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+        OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
       )
     $b$);
   END LOOP;
@@ -620,8 +637,8 @@ END $$;
 
 SELECT _apply_rls('retraining_requests', 'retraining_requests_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id() OR user_id::text IN (SELECT id::text FROM my_user_ids()))
-WITH CHECK (is_super_admin() OR organization_id = my_org_id() OR user_id::text IN (SELECT id::text FROM my_user_ids()))
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))
 $b$);
 
 
@@ -633,14 +650,14 @@ SELECT _apply_rls('tasks', 'tasks_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR (login_mode = 'team' AND organization_id = my_org_id())
+  OR (login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR (login_mode = 'solo' AND created_by::text = my_solo_id()::text)
-  OR assigned_to::text IN (SELECT id::text FROM my_user_ids())
+  OR assigned_to::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR assigned_to::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR (login_mode = 'team' AND organization_id = my_org_id())
+  OR (login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR (login_mode = 'solo' AND created_by::text = my_solo_id()::text)
 )
 $b$);
@@ -649,12 +666,12 @@ SELECT _apply_rls('task_attachments', 'task_attachments_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id = my_org_id())
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
 )
 WITH CHECK (
   is_super_admin()
-  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id = my_org_id())
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
   OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
 )
 $b$);
@@ -663,13 +680,13 @@ SELECT _apply_rls('task_comments', 'task_comments_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -677,14 +694,14 @@ SELECT _apply_rls('user_out_of_lab', 'user_out_of_lab_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR (login_mode = 'team' AND organization_id = my_org_id())
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR (login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR (login_mode = 'team' AND organization_id = my_org_id())
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR (login_mode = 'team' AND organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -700,12 +717,12 @@ SELECT _apply_rls('reminders', 'reminders_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -717,14 +734,14 @@ SELECT _apply_rls('lab_safety_progress', 'lab_safety_progress_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -733,32 +750,32 @@ SELECT _apply_rls('task_reminders', 'task_reminders_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
 
 SELECT _apply_rls('team_task_groups', 'team_task_groups_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 SELECT _apply_rls('team_task_group_members', 'team_task_group_members_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
-  OR group_id IN (SELECT id FROM team_task_groups WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR group_id IN (SELECT id FROM team_task_groups WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR group_id IN (SELECT id FROM team_task_groups WHERE organization_id = my_org_id())
+  OR group_id IN (SELECT id FROM team_task_groups WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -769,8 +786,8 @@ $b$);
 
 SELECT _apply_rls('meetings', 'meetings_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
@@ -783,20 +800,20 @@ SELECT _apply_rls('messages', 'messages_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 $b$);
 
 SELECT _apply_rls('re_messages', 're_messages_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id = my_org_id())
-WITH CHECK (is_super_admin() OR organization_id = my_org_id())
+USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
@@ -813,7 +830,7 @@ SELECT _apply_rls('notifications', 'notifications_select', $b$
 FOR SELECT TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -821,12 +838,12 @@ SELECT _apply_rls('notifications', 'notifications_update', $b$
 FOR UPDATE TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -834,7 +851,7 @@ SELECT _apply_rls('notifications', 'notifications_delete', $b$
 FOR DELETE TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -850,12 +867,12 @@ SELECT _apply_rls('feedback_responses', 'feedback_responses_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
 )
 $b$);
 
@@ -863,12 +880,12 @@ SELECT _apply_rls('notification_prefs', 'notification_prefs_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 WITH CHECK (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
 )
 $b$);
@@ -880,28 +897,28 @@ SELECT _apply_rls('notification_prefs', 'notification_prefs_select_org', $b$
 FOR SELECT TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
 SELECT _apply_rls('support_messages', 'support_messages_insert',
   $b$FOR INSERT TO authenticated, anon WITH CHECK (true)$b$);
 SELECT _apply_rls('support_messages', 'support_messages_select',
-  $b$FOR SELECT TO authenticated USING (is_super_admin() OR user_id::text IN (SELECT id::text FROM my_user_ids()))$b$);
+  $b$FOR SELECT TO authenticated USING (is_super_admin() OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))$b$);
 
 SELECT _apply_rls('account_deletion_requests', 'account_deletion_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 $b$);
 
@@ -924,9 +941,9 @@ SELECT _apply_rls('email_notifications_queue', 'email_queue_select', $b$
 FOR SELECT TO authenticated
 USING (
   is_super_admin()
-  OR user_id::text IN (SELECT id::text FROM my_user_ids())
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id = my_org_id())
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 )
 $b$);
 
@@ -987,14 +1004,14 @@ SELECT _apply_rls('team_workspace_invites', 'team_workspace_invites_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR inviter_id::text IN (SELECT id::text FROM my_user_ids())
-  OR invitee_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR inviter_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR invitee_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id = my_org_id()
-  OR inviter_id::text IN (SELECT id::text FROM my_user_ids())
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR inviter_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 $b$);
 
@@ -1002,12 +1019,12 @@ SELECT _apply_rls('team_workspace_members', 'team_workspace_members_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR owner_id::text  IN (SELECT id::text FROM my_user_ids())
-  OR member_id::text IN (SELECT id::text FROM my_user_ids())
+  OR owner_id::text  IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR member_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 WITH CHECK (
   is_super_admin()
-  OR owner_id::text IN (SELECT id::text FROM my_user_ids())
+  OR owner_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
 )
 $b$);
 
