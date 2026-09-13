@@ -6,10 +6,12 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects','training','booking','equipmenthub','profile','pm']
+  // No hardcoded lab-user allowlist here. What a lab user may see is decided
+  // by the org's icon pool plus the module's own role flags (studentLocked /
+  // staffOnly / adminOnly) — a fixed key list silently overrode whatever the
+  // org admin granted and had to be edited by hand for every new module.
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
-    if (role === 'lab_user' && !studentAllowed.includes(m.key)) return false
     if (m.adminOnly && !isStaff) return false
     if (m.hideForStaff && isStaff) return false
     if (m.staffOnly && !isStaff) return false
