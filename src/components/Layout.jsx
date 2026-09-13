@@ -578,9 +578,9 @@ export default function Layout({ children }) {
     localStorage.setItem(`ilab_tour_done_${uid}`, 'true')
     // Write tour_done to the user's own row — simple UPDATE, no unique-constraint issues
     if (session?.loginMode === 'solo') {
-      sb.from('solo_users').update({ tour_done: true }).eq('id', uid).catch(() => {})
+      sb.from('solo_users').update({ tour_done: true }).eq('id', uid).then(() => {}, () => {})
     } else if (session?.userId) {
-      sb.from('users').update({ tour_done: true }).eq('id', uid).catch(() => {})
+      sb.from('users').update({ tour_done: true }).eq('id', uid).then(() => {}, () => {})
     }
   }
 

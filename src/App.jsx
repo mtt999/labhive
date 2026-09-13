@@ -550,9 +550,9 @@ export default function App() {
               // Skip localStorage/DB flags for demo — next login should show picker again
               localStorage.setItem(`ilab_picker_done_${session.userId}`, 'true')
               if (session.loginMode === 'solo') {
-                sb.from('solo_users').update({ picker_done: true }).eq('id', session.userId).catch(() => {})
+                sb.from('solo_users').update({ picker_done: true }).eq('id', session.userId).then(() => {}, () => {})
               } else {
-                sb.from('users').update({ picker_done: true }).eq('id', session.userId).catch(() => {})
+                sb.from('users').update({ picker_done: true }).eq('id', session.userId).then(() => {}, () => {})
               }
             }
             if (modules?.length > 0) setActiveModules(modules)
