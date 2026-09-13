@@ -605,6 +605,33 @@ export default function Dashboard() {
 
   useEffect(() => { loadDashboardPrefs() }, [session?.userId, session?.loginMode])
 
+  // studentAllowedPool is a CAPABILITY (what an admin granted), not a saved
+  // preference. loadDashboardPrefs() returns early when activeModules is
+  // already in the store, and again for demo accounts — so the pool was never
+  // set in either case and CardGridView hid every `locked` module. Equipment &
+  // Maintenance and Task Board vanished from the dashboard while still showing
+  // as selected in the picker. Loading it separately keeps it correct no
+  // matter which of those guards fires.
+  async function loadStudentGate() {
+    try {
+      const [prefsRes, orgRes, appRes] = await Promise.all([
+        sb.from('user_dashboard_prefs').select('allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
+        session?.organizationId
+          ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers').eq('id', session.organizationId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
+      ])
+      let appPool = null
+      try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
+      const orgPool = (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules) || null
+      const effective = orgPool ?? appPool
+      // A per-user assignment from a lab manager wins; otherwise the org pool.
+      const perUser = prefsRes.data?.[0]?.allowed_modules
+      const gatePool = perUser?.length ? perUser : (effective || [])
+      setStudentAllowedPool(new Set([...gatePool, 'profile']))
+    } catch { /* leave the pool null: CardGridView then falls back to all */ }
+  }
+
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
@@ -614,6 +641,8 @@ export default function Dashboard() {
         sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle()
           .then(({ data }) => { try { setSoloPoolFilter(data?.value ? JSON.parse(data.value) : null) } catch {} })
       }
+      // Capability pool for lab users — must run before the early-returns below.
+      if (session?.role === 'lab_user' && session?.userId) loadStudentGate()
       // If activeModules is already set (e.g., just saved from Profile), don't overwrite it
       // with a DB re-fetch. Only fetch when null (initial load, page reload, or after logout).
       if (activeModules !== null) return
@@ -668,8 +697,6 @@ export default function Dashboard() {
         const row = prefsRes.data?.[0]
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
-        // Captured out of the try below so the lab-user gate can see it.
-        let orgLabUserPool = null
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
@@ -681,7 +708,6 @@ export default function Dashboard() {
               : orgRes?.data?.allowed_modules
           const orgPool = outerOrgPool || null
           const effectivePool = orgPool ?? appPool
-          orgLabUserPool = effectivePool
           if (effectivePool !== null) {
             if (mods?.length) {
               // Remove modules no longer in the pool; always keep profile and staff-pinned
