@@ -203,8 +203,13 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
             ALL_MODULES_META.filter(m => m.studentLocked && m.screen && grantedScreens.has(m.screen))
               .forEach(m => localRestricted.delete(m.key))
           }
-          // Also unlock studentLocked modules included in the admin-assigned allowed pool
-          ALL_MODULES_META.filter(m => m.studentLocked && pool.includes(m.key))
+          // Unlock studentLocked modules (QR Labels) granted either per-user by
+          // a lab manager OR org-wide by the admin's lab-user icon pool. Only
+          // the per-user list was consulted before, so an org-wide grant left
+          // the icon locked here while the dashboard showed it — the same
+          // org-pool-vs-per-user-pool split that hid granted modules entirely.
+          ALL_MODULES_META
+            .filter(m => m.studentLocked && (pool.includes(m.key) || effectivePool?.includes(m.key)))
             .forEach(m => localRestricted.delete(m.key))
         } else if (session?.role === 'user') {
           // Lab managers: adminOnly modules restricted unless explicitly granted; studentLocked modules are free

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
-import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
@@ -350,18 +350,25 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
     const orgGrant = orgRes?.data?.allowed_modules ?? appPool
 
     const applicable = modulesForPoolRole(kind)
-    // Profile is mandatory: always available, always selected, never toggleable.
-    const isAvailable = m => m.key === 'profile' || !orgGrant || orgGrant.includes(m.key)
+    // Modules the app force-shows for this role regardless of any pool:
+    // profile for everyone, plus STAFF_PINNED_MODULES (Lab Management) for
+    // staff. The picker and the dashboard both add these back unconditionally,
+    // so showing them as locked here would be a lie — the manager sees the icon
+    // either way. They are always available, always selected, never toggleable.
+    const alwaysOnKeys = kind === 'labmanagers'
+      ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES]
+      : [...PINNED_MODULES]
+    const isAvailable = m => alwaysOnKeys.includes(m.key) || !orgGrant || orgGrant.includes(m.key)
 
     // Everything applicable is shown. Modules outside the org's grant render
     // locked so the admin can see the full feature set rather than silently
     // missing icons, but they cannot be selected and do not count.
-    setPoolModules(applicable.map(m => ({ ...m, locked: !isAvailable(m), alwaysOn: m.key === 'profile' })))
+    setPoolModules(applicable.map(m => ({ ...m, locked: !isAvailable(m), alwaysOn: alwaysOnKeys.includes(m.key) })))
 
     const availKeys = applicable.filter(isAvailable).map(m => m.key)
     const saved = orgRes?.data?.[poolKey]
     const selKeys = saved?.length ? saved.filter(k => availKeys.includes(k)) : availKeys
-    setSelected(new Set([...selKeys, 'profile']))
+    setSelected(new Set([...selKeys, ...alwaysOnKeys]))
 
     const savedFiltered = saved?.filter(k => availKeys.includes(k))
     setOrder(savedFiltered?.length
@@ -379,7 +386,8 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
     setSaving(true)
     const availKeys = poolModules.filter(m => !m.locked).map(m => m.key)
     const toSave = (order || availKeys).filter(k => selected.has(k) && availKeys.includes(k))
-    if (!toSave.includes('profile')) toSave.push('profile')
+    const mustKeep = poolModules.filter(m => m.alwaysOn).map(m => m.key)
+    mustKeep.forEach(k => { if (!toSave.includes(k)) toSave.push(k) })
     const { error } = await sb.from('organizations').update({ [poolKey]: toSave }).eq('id', orgId)
     if (error) toast('Error saving: ' + error.message)
     else toast(`${label} icon pool saved ✓`)
@@ -415,7 +423,7 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setSelected(new Set(available.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
           <span style={{ color: 'var(--border)' }}>·</span>
-          <button onClick={() => setSelected(new Set(['profile']))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+          <button onClick={() => setSelected(new Set(poolModules.filter(m => m.alwaysOn).map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
         </div>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>💡 Drag cards to set the default icon order for this group</div>
@@ -749,14 +757,28 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 }
 
 // ── Module lists ──────────────────────────────────────────────
-// Org-level pool (org admins): all modules except profile (always pinned)
-const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile')
+// Modules the app force-shows regardless of any pool: profile for everyone,
+// Lab Management for staff (STAFF_PINNED_MODULES). Dashboard.getModules and
+// the icon picker both add these back unconditionally, so unticking them in a
+// pool changes nothing — offering them as choices only misleads whoever is
+// setting the pool, which is exactly how Lab Management came to look "denied"
+// to an org that could always see it.
+const FORCED_MODULES = new Set([...PINNED_MODULES, ...STAFF_PINNED_MODULES])
 
-// Super admin global team pool: exclude profile (always pinned) and labsafety (org-specific external link)
-const APP_GLOBAL_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile' && m.key !== 'labsafety')
+// Pools are also role-scoped now: a team-only module has no business appearing
+// in the solo pool (labmanagement is roles:['team'] yet had no soloLocked flag,
+// so it was being offered as a solo icon).
+const inTeam = m => (m.roles || []).includes('team')
+const inSolo = m => (m.roles || []).includes('solo')
+
+// Org-level pool (org admins)
+const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => inTeam(m) && !FORCED_MODULES.has(m.key))
+
+// Super admin global team pool: also excludes labsafety (org-specific external link)
+const APP_GLOBAL_MODULES = ALL_MODULES_META.filter(m => inTeam(m) && !FORCED_MODULES.has(m.key) && m.key !== 'labsafety')
 
 // Super admin global solo pool: same exclusions + soloLocked
-const SOLO_GLOBAL_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked && m.key !== 'profile' && m.key !== 'labsafety')
+const SOLO_GLOBAL_MODULES = ALL_MODULES_META.filter(m => inSolo(m) && !m.soloLocked && !FORCED_MODULES.has(m.key) && m.key !== 'labsafety')
 
 // Profile is always-on so excluded from access-control, but included here for image upload
 const ORG_IMAGE_MODULES = ALL_MODULES_META
