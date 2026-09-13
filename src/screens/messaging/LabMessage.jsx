@@ -847,8 +847,16 @@ export default function LabMessage() {
                 })}
               </div>
 
-              {/* Reply bar */}
-              <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+              {/* Reply bar.
+                  paddingRight reserves the strip Sara's launcher occupies. She
+                  is position:fixed at right:20 with a ~56px button, so the
+                  rightmost 76px of the viewport is hers — and the send button
+                  sits at the very end of this row, landing underneath her.
+                  Hiding Sara here was tried (efa21d4) and deliberately reverted
+                  (8db9ee1, "Sara visible"), so reserve the space instead: this
+                  clears the button at any window width, unlike a vertical
+                  offset. Keep this padding if the row is ever restyled. */}
+              <div style={{ padding: '10px 76px 10px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
                 {replyFile && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 10px', background: 'var(--accent-light)', borderRadius: 6, fontSize: 12, color: 'var(--text2)' }}>
                     <IconPaperclip size={13} /> <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{replyFile.name}</span>
