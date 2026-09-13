@@ -528,6 +528,19 @@ WITH CHECK (
 )
 $b$);
 
+-- analysis_comments was never created, so the Test Results discussion thread
+-- silently read back empty forever (the SELECT errored, the call site did
+-- `c.data || []`, and the UI just said "No comments yet"). Created here so the
+-- policy below actually has a table to attach to.
+CREATE TABLE IF NOT EXISTS analysis_comments (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  equipment_id UUID REFERENCES equipment_inventory(id) ON DELETE CASCADE,
+  author       TEXT,
+  body         TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS analysis_comments_equipment_idx ON analysis_comments(equipment_id);
+
 SELECT _apply_rls('analysis_comments', 'analysis_comments_policy', $b$
 FOR ALL TO authenticated
 USING (
