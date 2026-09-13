@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { setPublicDemo, isPublicDemo } from '../../lib/demoMode'
 import { useState, useEffect, useRef } from 'react'
 import AboutModal from '../../components/AboutModal'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
@@ -240,7 +241,7 @@ export default function Login() {
   function applyTeamSession(user) {
     const adminLevel = user.admin_level || 0
     const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
-    const isDemo = user.email?.toLowerCase() === 'demo@labhive.app'
+    const isDemo = isPublicDemo(user.email)
     // Remember exactly which row was chosen — a single auth_id can have multiple
     // `users` rows (e.g. demo's Manager + Lab User, or an admin added as another
     // role). Without this, a hard refresh can't disambiguate which one was active
@@ -268,7 +269,7 @@ export default function Login() {
   }
 
   function applySoloSession(soloUser) {
-    const isDemo = soloUser.email?.toLowerCase() === 'demo@labhive.app'
+    const isDemo = isPublicDemo(soloUser.email)
     localStorage.setItem('ilab_active_identity', JSON.stringify({ kind: 'solo', id: soloUser.id }))
     setSession({
       role: 'solo', username: soloUser.nick_name?.trim() || soloUser.name,
@@ -337,6 +338,10 @@ export default function Login() {
     const isDemoLogin = (emailLower === 'demo' || emailLower === 'demo@labhive.app') && password === 'demo'
     const loginEmail    = isDemoLogin ? 'demo@labhive.app' : emailLower
     const loginPassword = isDemoLogin ? 'DemoLabHive2026!' : password
+    // Restrictions follow the ROUTE taken, not the address: demo/demo is the
+    // public shortcut, while the same account entered with its real password
+    // is the owner and stays unrestricted.
+    setPublicDemo(isDemoLogin)
 
     const { data: authData, error: authError } = await sb.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
     if (authError) {
@@ -450,13 +455,17 @@ export default function Login() {
             /* Role picker — shown when user has multiple roles / orgs */
             (() => {
               const { rows, orgsMap, isSuperAdmin, soloUser: pickerSolo } = accountPicker
-              const adminRows   = rows.filter(u => u.role === 'admin')
+              // Public demo visitors never see an admin identity at all —
+              // not greyed out, not listed. Signing in with the account's real
+              // password clears the public flag, so the owner still gets it.
+              const hideAdmin   = isPublicDemo(rows[0]?.email)
+              const adminRows   = hideAdmin ? [] : rows.filter(u => u.role === 'admin')
               const managerRows = rows.filter(u => u.role === 'user')
               const labUserRows = rows.filter(u => u.role === 'lab_user')
 
               const ROLE_CARDS = [
                 ...(isSuperAdmin ? [{ key: 'superadmin', label: 'Super Admin', sub: 'Full system access — all organizations', bg: '#FEE2E2', color: '#991B1B', border: '#FECACA', available: true, onClick: () => { applySuperAdmin(); setAccountPicker(null) } }] : []),
-                { key: 'admin',   label: 'Org Admin',    sub: adminRows[0]   ? (orgsMap[adminRows[0].organization_id]   || 'Organization Admin')  : 'You don\'t have an admin account',   bg: '#FEF3C7', color: '#92400E', border: '#FCD34D', available: adminRows.length   > 0, rows: adminRows },
+                ...(hideAdmin ? [] : [{ key: 'admin',   label: 'Org Admin',    sub: adminRows[0]   ? (orgsMap[adminRows[0].organization_id]   || 'Organization Admin')  : 'You don\'t have an admin account',   bg: '#FEF3C7', color: '#92400E', border: '#FCD34D', available: adminRows.length   > 0, rows: adminRows }]),
                 { key: 'manager', label: 'Lab Manager',  sub: managerRows[0] ? (orgsMap[managerRows[0].organization_id] || 'Lab Manager')           : 'You don\'t have a lab manager account', bg: '#E1F5EE', color: '#065F46', border: '#9FE1CB', available: managerRows.length > 0, rows: managerRows },
                 { key: 'labuser', label: 'Lab User',     sub: labUserRows[0] ? (orgsMap[labUserRows[0].organization_id] || 'Lab User')              : 'You don\'t have a lab user account',   bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE', available: labUserRows.length > 0, rows: labUserRows },
                 ...(pickerSolo ? [{ key: 'solo', label: 'Solo User', sub: pickerSolo.nick_name?.trim() || pickerSolo.name || 'Personal workspace', bg: '#EEEDFE', color: '#534AB7', border: '#CECBF6', available: true, onClick: () => { applySoloSession(pickerSolo); setAccountPicker(null) } }] : []),

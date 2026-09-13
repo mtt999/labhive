@@ -833,7 +833,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {isAdmin && (
+      {/* Hidden from public demo visitors: the demo should not advertise an
+          admin account. Signing in as the demo account with its real password
+          clears the public flag, so the owner still sees this. */}
+      {isAdmin && !session?.isDemo && (
         <div
           onClick={() => setScreen('orgadmin')}
           style={{ flexShrink: 0, display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', marginBottom:20, cursor:'pointer', transition:'all 0.15s' }}

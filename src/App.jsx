@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, lazy, Suspense, Component } from 'react'
 import { useAppStore } from './store/useAppStore'
 import { sb } from './lib/supabase'
+import { isPublicDemo } from './lib/demoMode'
 
 class ScreenErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false } }
@@ -229,13 +230,13 @@ export default function App() {
   function applyRestoredTeamSession(teamUser) {
     const adminLevel = teamUser.admin_level || 0
     const role = teamUser.role === 'admin' || adminLevel >= 1 ? 'admin' : teamUser.role
-    const isDemo = teamUser.email?.toLowerCase() === 'demo@labhive.app'
+    const isDemo = isPublicDemo(teamUser.email)
     localStorage.setItem('ilab_active_identity', JSON.stringify({ kind: 'team', id: teamUser.id }))
     setSession({ role, dbRole: teamUser.role, username: teamUser.nick_name?.trim() || teamUser.name, userId: teamUser.id, email: teamUser.email, adminLevel, photoUrl: teamUser.photo_url, avatar: teamUser.avatar, loginMode: 'team', organizationId: teamUser.organization_id || null, projectGroup: teamUser.project_group || null, mustChangePassword: teamUser.must_change_password === true, termsAcceptedVersion: isDemo ? null : (teamUser.terms_accepted_version || null), tourDone: isDemo ? false : (teamUser.tour_done === true), pickerDone: isDemo ? false : (teamUser.picker_done === true), isDemo })
   }
 
   function applyRestoredSoloSession(soloUser) {
-    const isDemo = soloUser.email?.toLowerCase() === 'demo@labhive.app'
+    const isDemo = isPublicDemo(soloUser.email)
     localStorage.setItem('ilab_active_identity', JSON.stringify({ kind: 'solo', id: soloUser.id }))
     setSession({ role: 'solo', username: soloUser.nick_name?.trim() || soloUser.name, userId: soloUser.id, email: soloUser.email, photoUrl: soloUser.photo_url, avatar: soloUser.avatar, activeModules: soloUser.active_modules || [], loginMode: 'solo', termsAcceptedVersion: isDemo ? null : (soloUser.terms_accepted_version || null), isPaid: soloUser.is_paid || false, tourDone: isDemo ? false : (soloUser.tour_done === true), pickerDone: isDemo ? false : (soloUser.picker_done === true), isDemo })
     sb.from('solo_workspace_members').select('owner_id').eq('member_id', soloUser.id)
@@ -445,6 +446,9 @@ export default function App() {
       if (!['dashboard', 'orgadmin', 'profile'].includes(screen)) setScreen('dashboard')
       return
     }
+    // Public demo visitors get no admin panel — hidden on the dashboard and
+    // unreachable by typing the screen key or a ?screen=orgadmin deep link.
+    if (session?.isDemo && screen === 'orgadmin') { setScreen('dashboard'); return }
     if (session?.role === 'lab_user') {
       const baseAllowed = ['dashboard', 'projects', 'training', 'profile', 'equipmenthub', 'booking', 'remessages', 'barcodeqr', 'equipmentscan', 'home', 'equipment', 'pm', 'history', 'training-proto', 'layout-proto']
       if (!baseAllowed.includes(screen) && !(userAccess && userAccess.has(screen))) setScreen('dashboard')

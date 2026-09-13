@@ -9,6 +9,10 @@ export const useAppStore = create((set, get) => ({
     sb.auth.signOut()
     localStorage.removeItem('ilab_login_mode')
     localStorage.removeItem('ilab_active_identity')
+    // Demo restrictions are decided at sign-in (public demo/demo vs the real
+    // password). Clearing this on logout means the next sign-in re-evaluates
+    // rather than inheriting the previous person's unlocked state.
+    localStorage.removeItem('ilab_demo_public')
     set({ session: null, loginMode: null, sharedWorkspaces: [], viewingWorkspaceOwnerId: null, activeModules: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
   },
 
