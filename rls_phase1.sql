@@ -656,7 +656,46 @@ WITH CHECK (
 )
 $b$);
 
--- task_reminders (the 'reminders' name in code targets a non-existent table).
+-- 'reminders' IS the table the app actually uses — PM.jsx reads and writes it
+-- in 8 places and Admin.jsx deletes from it, while 'task_reminders' below is
+-- referenced nowhere in src/. The old comment claiming otherwise meant this
+-- table went unsecured: it holds per-user reminders keyed only by user_id, and
+-- the client filters by user_id alone, so without a policy any authenticated
+-- user could read or edit anyone else's. Both names are covered here —
+-- _apply_rls skips whichever does not exist.
+SELECT _apply_rls('reminders', 'reminders_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR user_id::text = my_user_id()::text
+  OR user_id::text = my_solo_id()::text
+)
+WITH CHECK (
+  is_super_admin()
+  OR user_id::text = my_user_id()::text
+  OR user_id::text = my_solo_id()::text
+)
+$b$);
+
+-- lab_safety_progress — per-user safety step completion (user_id,
+-- organization_id, step_number). Was missing entirely; TrainingRecords.jsx
+-- queries it by user_id list with no org filter, relying purely on RLS.
+SELECT _apply_rls('lab_safety_progress', 'lab_safety_progress_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR organization_id = my_org_id()
+  OR user_id::text = my_user_id()::text
+  OR user_id::text = my_solo_id()::text
+)
+WITH CHECK (
+  is_super_admin()
+  OR organization_id = my_org_id()
+  OR user_id::text = my_user_id()::text
+  OR user_id::text = my_solo_id()::text
+)
+$b$);
+
 SELECT _apply_rls('task_reminders', 'task_reminders_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -966,7 +1005,8 @@ DECLARE
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
-    'task_reminders_policy','team_task_groups_policy','team_task_group_members_policy',
+    'task_reminders_policy','reminders_policy','lab_safety_progress_policy',
+    'team_task_groups_policy','team_task_group_members_policy',
     'meetings_policy','messages_policy','re_messages_policy',
     'notifications_insert','notifications_select','notifications_update','notifications_delete',
     'admin_notif_insert','admin_notif_select','admin_notif_update',

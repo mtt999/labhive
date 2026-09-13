@@ -69,9 +69,22 @@ const LabManagement        = lazy(() => import('./screens/labmanagement/LabManag
 window.addEventListener('error', (e) => {
   logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
 })
+// An unhandled rejection means, by definition, that no call site caught it —
+// so nothing has told the user. Previously this only logged to the super-admin
+// bell, leaving the user staring at a button that silently did nothing (a
+// failed export, a save that threw). Toast it as well; there is no
+// double-message risk precisely because it is unhandled.
+let lastRejectionMsg = ''
 window.addEventListener('unhandledrejection', (e) => {
   const msg = e.reason?.message || String(e.reason) || 'Unhandled promise rejection'
   logAdminError(`Promise Error: ${msg}`, e.reason?.stack?.split('\n')[1]?.trim() || '')
+  // A failed lazy chunk is already handled by the vite:preloadError reload in
+  // main.jsx — toasting it too would just add noise mid-recovery.
+  if (/dynamically imported module|Importing a module script failed|Load failed/i.test(msg)) return
+  if (msg === lastRejectionMsg) return          // collapse identical repeats
+  lastRejectionMsg = msg
+  setTimeout(() => { lastRejectionMsg = '' }, 4000)
+  try { useAppStore.getState().toast(`Something didn't complete: ${msg}`, true) } catch {}
 })
 
 if (isNative()) {
