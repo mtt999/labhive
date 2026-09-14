@@ -745,22 +745,8 @@ export default function Dashboard() {
         // LabUsers with no config see only Profile until admin assigns icons
         const defaultMods = session?.role === 'lab_user' ? ['profile'] : null
         setActiveModules(mods?.length ? mods : defaultMods)
-        if (session?.role === 'lab_user') {
-          // This pool does two jobs in CardGridView: it restricts which cards
-          // exist, and it unlocks `locked` modules (equipment, pm, barcodeqr).
-          // It used to read ONLY user_dashboard_prefs.allowed_modules — the
-          // per-user assignment a lab manager makes. When that was unset (the
-          // normal case), the org admin's Icon Pools → Lab User grant never
-          // reached the unlock check, so modules the admin had granted AND the
-          // user had ticked in the picker were silently dropped from the
-          // dashboard while still showing in the picker and sidebar.
-          // Per-user assignment still wins when present; otherwise fall back to
-          // the org-wide lab-user pool. 'profile' is always included — it is
-          // pinned ("Always visible") and is not part of either pool.
-          const perUser = row?.allowed_modules
-          const gatePool = perUser?.length ? perUser : (orgLabUserPool || [])
-          setLabUserAllowedPool(new Set([...gatePool, 'profile']))
-        }
+        // (the lab-user capability pool is loaded by loadLabUserGate(), which
+        // runs before the early-returns above — see the comment there)
       }
     } catch(e) {}
   }
