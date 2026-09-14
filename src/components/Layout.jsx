@@ -71,7 +71,7 @@ const MODULE_META = {
 function getScreenTabs(screen, session) {
   const isSolo    = session?.loginMode === 'solo'
   const isAdmin   = session?.role === 'admin' || session?.userId === null
-  const isStaff   = session?.role === 'user'
+  const isLabManager   = session?.role === 'user'
 
   if (screen === 'training') return [
     ...(!isSolo ? [{ key: 'safety',  icon: '🦺', label: 'Safety' }] : []),
@@ -84,8 +84,8 @@ function getScreenTabs(screen, session) {
   ]
 
   if (screen === 'labmanagement') return [
-    { key: 'students',  icon: '👥', label: 'Lab Users' },
-    { key: 'staff',     icon: '👨‍💼', label: 'Lab Managers' },
+    { key: 'labusers',  icon: '👥', label: 'Lab Users' },
+    { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
     { key: 'guide',     icon: '📖', label: 'Lab Manager Guide' },
   ]
@@ -93,13 +93,13 @@ function getScreenTabs(screen, session) {
   if (screen === 'booking') return [
     { key: 'calendar', icon: '📅', label: 'Book Equipment' },
     { key: 'history',  icon: '📋', label: 'History & Usage' },
-    ...((isAdmin || isStaff) ? [{ key: 'eq_notes', icon: '⚠️', label: 'Special Treatment' }] : []),
+    ...((isAdmin || isLabManager) ? [{ key: 'eq_notes', icon: '⚠️', label: 'Special Treatment' }] : []),
     ...(isAdmin ? [{ key: 'settings', icon: '⚙️', label: 'Settings' }] : []),
   ]
 
   if (screen === 'equipment') return [
     { key: 'list',        icon: '📋', label: 'List of Equipment' },
-    ...((isAdmin || isStaff) ? [
+    ...((isAdmin || isLabManager) ? [
       { key: 'calibration', icon: '🧪', label: 'Calibration' },
       { key: 'records',     icon: '📊', label: 'Maintenance Records' },
     ] : []),
@@ -115,7 +115,7 @@ function getScreenTabs(screen, session) {
       // Solo users manage their own workspace's projects here too — it is the
       // only entry point to project creation, so hiding it left them unable to
       // create a project at all.
-      ...(isAdmin || isStaff || isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
+      ...(isAdmin || isLabManager || isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
       { key: 'results',   icon: '✏️',  label: 'Project Test Results' },
       { key: 'workspace', icon: '📊', label: 'Workspace' },
       { key: 'members',   icon: '👥', label: 'Project Members' },
@@ -135,7 +135,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
     { key: 'records',   icon: '📋', label: 'Records' },
-    ...(isAdmin || isStaff ? [
+    ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
       { key: 'types',   icon: '🏷️', label: 'Material Types' },
     ] : []),
@@ -208,7 +208,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
   const activeTab   = sidebarSubTab || (tabs?.[0]?.key ?? null)
   const loginMode   = session?.loginMode || 'team'
   const roleKey     = loginMode === 'solo' ? 'solo' : 'team'
-  const isStaff     = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager     = session?.role === 'admin' || session?.role === 'user'
 
   // External URL state for labsafety link
   const [extUrls, setExtUrls]       = useState({})
@@ -258,7 +258,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     if (!m.screen && !m.external) return false
     if (!m.roles || !m.roles.includes(roleKey)) return false
     if (m.soloLocked && loginMode === 'solo') return false
-    if (m.staffOnly && !isStaff) return false
+    if (m.labManagerOnly && !isLabManager) return false
     if (loginMode === 'solo' && soloPool !== null && !m.external && !soloPool.includes(m.key) && m.key !== 'profile') return false
     return true
   })
