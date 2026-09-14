@@ -1067,7 +1067,23 @@ Every one of these shipped and went unnoticed; none produced an error.
 5. **`onConflict` needs a matching unique index**, or the upsert is rejected
    outright (`feedback_responses`, `lab_user_lockers`).
 6. **Schema drift between labhive and ictlab.** The same shared component hits
-   different columns. Verify a column exists in *both* before relying on it.
+   different columns — and sometimes the same column with a different TYPE.
+   Verify per project before relying on it, especially in raw SQL:
+   - `projects.lab_user_ids` is `text[]` in labhive but `uuid[]` in ictlab, so
+     a statement written against one fails on the other ("COALESCE could not
+     convert type uuid[] to text[]"). PostgREST coerces at runtime, so only
+     hand-written SQL notices.
+   - `lab_user_lockers` had `assigned_at`/`notes` in labhive and `created_at`
+     in ictlab; `organizations.lab_user_default_modules` existed only in
+     labhive. Check `information_schema.columns` (udt_name for array element
+     types) before writing a migration.
+
+7. **The same relationship stored in two directions.** The Edit lab user modal
+   wrote `users.assigned_project_ids` while the whole Projects screen reads
+   `projects.lab_user_ids` — assigning projects had no visible effect and the
+   lab user saw "No projects found". When a link is denormalised both ways,
+   one side must be authoritative and written by every path that changes it
+   (`syncProjectAssignments()` in Profile.jsx).
 
 ## Before changing a conditional that gates UI
 
