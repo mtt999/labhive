@@ -176,6 +176,12 @@ $b$);
 -- STEP 6: solo_users
 -- ────────────────────────────────────────────────────────────────
 
+-- Solo profiles support the same avatar picker as team profiles, and the
+-- session already reads solo_users.avatar. A SELECT on a missing column just
+-- yields undefined, so the gap only shows on WRITE — picking an avatar as a
+-- solo user would fail. Added here so the two user tables stay in step.
+ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS avatar TEXT;
+
 SELECT _apply_rls('solo_users', 'solo_users_policy', $b$
 FOR ALL TO authenticated
 USING    (is_super_admin() OR auth_id = auth.uid())
