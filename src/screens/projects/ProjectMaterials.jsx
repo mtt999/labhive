@@ -1,13 +1,15 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
+import { SIEVE_SIZES } from '../../lib/materialFields'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../barcode/BarcodeScannerScreen'
 import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────
-const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
+// Canonical list lives in src/lib/materialFields.js so the Material form and
+// the search filters cannot drift apart.
 const PG_GRADES    = ['PG 52-28','PG 58-22','PG 58-28','PG 64-22','PG 64-28','PG 70-22','PG 70-28','PG 76-22','PG 76-28','PG 82-22','Other']
 const LOCATIONS    = ['ICT-High Bay A','ICT-High Bay C','Shed','MFF - Soil Hall','MFF - Aggregate Hall','MFF - Saw Room','Other']
 const CONTAINER_TYPES = ['Metal Bucket','Plastic Bucket','5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
