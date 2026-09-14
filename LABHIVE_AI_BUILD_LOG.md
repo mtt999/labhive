@@ -34,6 +34,57 @@ not a full transcript of every conversation.
 
 ## Log
 
+### 2026-09-13 — Module-visibility resolver, RLS determinism, terminology rename, avatars
+
+**Tool used:** Claude Code
+
+**What you asked for (prompts/goals):**
+- Lab users were seeing the wrong dashboard icons: 9 granted by the org admin,
+  7 offered in the picker, 5 actually rendered. Asked why, and to check every
+  icon and every org for the same class of problem.
+- Show the whole feature set everywhere, with anything outside the plan greyed
+  out and locked rather than hidden, and excluded from the selected counts.
+- Two side-by-side icon pools (lab managers / lab users) in the admin panel.
+- Replace "staff" with "lab manager" and "student" with "lab user" everywhere —
+  UI text, code identifiers, and the database — before adding new features.
+- Illustrated avatars users can pick instead of uploading a photo, covering a
+  wide range of skin tones, religious dress and LGBTQ+ representation.
+- Lockers: let lab users see the whole grid read-only with their own marked
+  "Yours"; managers keep assign/remove.
+- Hunt for silent bugs generally, ahead of showing the app to teammates.
+
+**Resulting changes (files/features affected):**
+- `src/lib/modulePools.js` (new) — single resolver for the four-layer module
+  hierarchy. Five screens previously composed the same pools with their own
+  inline rule and disagreed. No inline composition remains.
+- `src/screens/dashboard/Dashboard.jsx` — capability pool moved into
+  `loadLabUserGate()` so two early-returns can no longer skip it; hardcoded
+  lab-user allowlist removed; dead `orgLabUserPool` reference removed; the
+  "My active projects" query fixed (it filtered on a column that never existed).
+- `src/screens/admin/Admin.jsx` — icon pools as two side-by-side panels, locked
+  icons shown with "Contact us to enable" and excluded from counts, role-aware
+  module lists, forced modules no longer offered as inert choices.
+- `src/components/DashboardIconPicker.jsx` — out-of-plan modules shown locked
+  instead of hidden; now role-aware for the first time.
+- `src/components/Avatars.jsx` (new) — 37 parametric SVG avatars + picker,
+  wired into Profile → My Info, the header and user cards.
+- `src/screens/training/TrainingRecords.jsx` — locker grid read-only for lab
+  users; management table gated to editors; Unavailable now persists (it used
+  `.update()`, which matched zero rows for orgs with no locker rows).
+- `src/screens/messaging/LabMessage.jsx` — broadcast messages and their replies
+  notified nobody; Sara's launcher no longer covers the send button.
+- `src/lib/supabase.js`, `src/App.jsx`, `src/main.jsx` — REST failures logged
+  centrally, unhandled rejections surfaced to the user, stale-deploy recovery
+  fixed (one-shot guards that went permanently blind), update-available prompt.
+- `rls_phase1.sql` — `my_user_ids()` / `my_org_ids()` replace non-deterministic
+  `LIMIT 1` helpers; `is_active` now revokes data access; policies added for
+  `reminders`, `lab_safety_progress`, `ict_layout`; missing tables created.
+- Terminology renamed across UI text, ~40 code identifiers and the database
+  (`student_ids` → `lab_user_ids`, `student_lockers` → `lab_user_lockers`,
+  `student_default_modules` → `lab_user_default_modules`).
+
+**Related git commit(s):** e6feae6..5c63daf
+
 ### 2026-07-25 — Lab Messages: delete convs, bubble fix, chat background picker, Sara
 
 **Tool used:** Claude Code
