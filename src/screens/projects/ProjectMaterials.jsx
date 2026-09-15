@@ -287,10 +287,30 @@ export function PiSelect({ value, onChange, required = true }) {
   )
 }
 
+// Free notes about the material itself.
+//
+// Deliberately NOT other_info: that column is already two things — the
+// "describe the material type" answer when the type is Other, and the JSON
+// blob holding a solo user's sub-fields. Writing general notes there would
+// overwrite one or the other depending on who was typing.
+function AdditionalInfoForm({ form, setForm }) {
+  return (
+    <Section title="2 · Additional Info">
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label>Additional Info</label>
+        <textarea rows={3} value={form.additional_info || ''}
+          onChange={e => setForm(f => ({ ...f, additional_info: e.target.value }))}
+          placeholder="Anything else worth recording about this material…"
+          style={{ resize: 'vertical' }} />
+      </div>
+    </Section>
+  )
+}
+
 // ── Source form ───────────────────────────────────────────────
 function SourceForm({ form, setForm }) {
   return (
-    <Section title="2 · Material Source">
+    <Section title="3 · Material Source">
       <div className="field">
         <label>Source Type</label>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -319,7 +339,7 @@ function SourceForm({ form, setForm }) {
 // ── QTY form ──────────────────────────────────────────────────
 function QtyForm({ form, setForm }) {
   return (
-    <Section title="3 · Material Quantity">
+    <Section title="4 · Material Quantity">
       <div className="field">
         <label>Container Type</label>
         <select value={form.container_type || ''} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
@@ -363,7 +383,7 @@ function LocationForm({ form, setForm, projectId, projectName, materialId, mater
   // Solo users: plain text box
   if (isSolo) {
     return (
-      <Section title="4 · Material Location">
+      <Section title="5 · Material Location">
         <div className="field">
           <label>Location</label>
           <input
@@ -377,7 +397,7 @@ function LocationForm({ form, setForm, projectId, projectName, materialId, mater
   }
 
   return (
-    <Section title="4 · Material Location">
+    <Section title="5 · Material Location">
       {/* Selected locations chips */}
       {locations.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -414,7 +434,7 @@ function LocationForm({ form, setForm, projectId, projectName, materialId, mater
 // ── Sampling date form ────────────────────────────────────────
 function SamplingDateForm({ form, setForm }) {
   return (
-    <Section title="5 · Date of Sampling">
+    <Section title="6 · Date of Sampling">
       <div className="field" style={{ maxWidth: 240 }}>
         <label>Sampling Date</label>
         <input type="date" value={form.sampling_date || ''} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} />
@@ -476,7 +496,7 @@ function PhotosForm({ form, setForm, materialId }) {
   const hasPhotos = (form.photos || []).length > 0
 
   return (
-    <Section title="6 · Material Photos">
+    <Section title="7 · Material Photos">
       <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
 
       {/* Photo grid */}
@@ -574,7 +594,7 @@ function SoloMaterialTypeForm({ form, setForm }) {
 
 function SoloSourceForm({ form, setForm }) {
   return (
-    <Section title="2 · Material Source">
+    <Section title="3 · Material Source">
       <div className="grid-2">
         <div className="field">
           <label>Supplier / Provider</label>
@@ -591,7 +611,7 @@ function SoloSourceForm({ form, setForm }) {
 
 function SoloQtyForm({ form, setForm }) {
   return (
-    <Section title="3 · Material Quantity">
+    <Section title="4 · Material Quantity">
       <div className="field">
         <label>Unit</label>
         <select value={form.qty_unit || ''} onChange={e => setForm(f => ({ ...f, qty_unit: e.target.value }))}>
@@ -659,7 +679,7 @@ function blankForm() {
     agg_sieve_sizes: [], agg_raw_or_rap: '',
     ab_binder_pg: '', ab_mix_design: '', ab_has_polymer: false, ab_polymer_info: '', ab_other_additives: '',
     pm_mix_design: '', pm_binder_pg: '', pm_nmas: '',
-    other_info: '',
+    other_info: '', additional_info: '',
     soloSubfields: {},
     source_type: '', source_name: '', source_location: '',
     qty_total: '', container_type: '', container_color: '', container_count: '', container_other: '',
@@ -719,6 +739,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
     pm_binder_pg: material.pm_binder_pg || '',
     pm_nmas: material.pm_nmas || '',
     other_info: material.other_info || '',
+    additional_info: material.additional_info || '',
     soloSubfields: parseSoloSubfields(material.other_info),
     source_type: material.source_type || '',
     source_name: material.source_name || '',
@@ -754,6 +775,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       pm_binder_pg: isSolo ? null : (form.pm_binder_pg || null),
       pm_nmas: isSolo ? null : (form.pm_nmas || null),
       other_info: isSolo ? serializeSoloSubfields(form.soloSubfields) : (form.other_info || null),
+      additional_info: form.additional_info || null,
       source_type: form.source_type || null,
       source_name: form.source_name || null,
       source_location: form.source_location || null,
@@ -790,6 +812,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       {isSolo ? (
         <>
           <SoloMaterialTypeForm form={form} setForm={setForm} />
+          <AdditionalInfoForm form={form} setForm={setForm} />
           <SoloSourceForm form={form} setForm={setForm} />
           <SoloQtyForm form={form} setForm={setForm} />
           <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
@@ -798,6 +821,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       ) : (
         <>
           <MaterialTypeForm form={form} setForm={setForm} orgTypes={orgTypes} />
+          <AdditionalInfoForm form={form} setForm={setForm} />
           <SourceForm form={form} setForm={setForm} />
           <QtyForm form={form} setForm={setForm} />
           <LocationForm form={form} setForm={setForm} projectId={projectId} projectName={projectName} materialId={material?.id} materialType={form.material_type} isSolo={isSolo} />
@@ -921,6 +945,7 @@ function MaterialInfoView({ m, editHint = false }) {
                     <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
                       <div style={{ flex: 1, maxWidth: 900, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoFlow: 'dense', gap: '10px 20px', alignContent: 'start' }}>
                         {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
+                        {m.additional_info && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Additional Info</div><div style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{m.additional_info}</div></div>}
                         {isSoloMat ? <>
                           {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
                             const def = subDefs.find(s => s.key === key)
@@ -992,7 +1017,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
     material_type:   material.material_type || '',
     pi_name:         material.pi_name || '',
     agg_sieve_sizes: Array.isArray(material.agg_sieve_sizes) ? material.agg_sieve_sizes : [],
-    other_info:      material.other_info || '',
+    additional_info: material.additional_info || '',
     container_type:  material.container_type || '',
     container_color: material.container_color || '',
     container_count: material.container_count || '',
@@ -1024,7 +1049,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
       // The fraction IS one size, so its sieve list mirrors the size chosen
       // here rather than drifting into a second source of truth.
       agg_sieve_sizes: isAgg && form.reduction_value ? [form.reduction_value] : form.agg_sieve_sizes,
-      other_info: form.other_info || null,
+      additional_info: form.additional_info || null,
       container_type: form.container_type || null,
       container_color: form.container_color || null,
       container_count: form.container_count ? parseInt(form.container_count) : null,
@@ -1149,8 +1174,8 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
 
         <div className="field" style={{ marginBottom: 0 }}>
           <label>Additional Info</label>
-          <textarea rows={3} value={form.other_info}
-            onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))}
+          <textarea rows={3} value={form.additional_info}
+            onChange={e => setForm(f => ({ ...f, additional_info: e.target.value }))}
             placeholder="Anything else about this fraction…" />
         </div>
       </Section>
