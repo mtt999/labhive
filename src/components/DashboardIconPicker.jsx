@@ -15,7 +15,7 @@ export const ALL_MODULES_META = [
   { key: 'pm',           screen: 'pm',           label: 'Task Board',         sub: 'Tasks, meetings & team chat',     icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team', 'solo'] },
   { key: 'profile',      screen: 'profile',      label: 'Profile',            sub: 'Your info & settings',            icon: '👤', bg: '#EEEDFE', color: '#534AB7', roles: ['team', 'solo'] },
   { key: 'barcodeqr',    screen: 'barcodeqr',    label: 'QR Labels',          sub: 'Equipment QR code management',    icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team', 'solo'], labUserLocked: true, soloLocked: true },
-  { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',   sub: 'Lab users & managers',            icon: '🏛️', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'],           labManagerOnly: true },
+  { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',   sub: 'Lab users & managers',            icon: '🏛️', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'],           labManagerOnly: true, neverLabUser: true },
 ]
 
 export const PINNED_MODULES = ['profile']
@@ -85,7 +85,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
   // alwaysOnKeys: cannot be toggled off, but ARE draggable (labmanagement for labManagers)
   const alwaysOnKeys = isLabManager ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES] : PINNED_MODULES
   const pinnedKeys = alwaysOnKeys // keep for backward compat with selectNone/toggle gate
-  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
+  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser))
   const [available, setAvailable] = useState(baseAvailable)
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
@@ -117,7 +117,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
       let savedModules = null
       let pool = null
       // All users see all non-hideForLabManager modules; adminOnly ones are locked for non-admins
-      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
+      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser))
       let localRestricted = new Set(isLabManager ? [] : ALL_MODULES_META.filter(m => m.adminOnly || m.labUserLocked).map(m => m.key))
       if (loginMode === 'solo') {
         ALL_MODULES_META.filter(m => m.soloLocked).forEach(m => localRestricted.add(m.key))
