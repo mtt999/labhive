@@ -14,6 +14,7 @@ import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 import ProjectMaterials, { MaterialModal, PiSelect, CharLimitHint } from './ProjectMaterials'
 import { FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
+import { materialIcon } from '../../lib/materialFields'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -2401,7 +2402,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                       ...(isSel ? { borderColor: 'var(--accent3)', background: 'var(--accent3-light)', boxShadow: '0 6px 18px rgba(83,74,183,0.18)' } : {}) }}>
                     {firstPhoto
                       ? <img src={firstPhoto} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
-                      : <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>}
+                      : <div style={{ fontSize: 28, marginBottom: 8 }}>{materialIcon(m.material_type)}</div>}
                     <div style={{ fontWeight: 600, fontSize: 14, color: isSel ? 'var(--accent3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || '—'}</div>
                     {m.material_type && <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.material_type}</div>}
                     {m.sampling_date && <div style={{ marginTop: 8, marginBottom: 10 }}><span className="badge badge-hold" style={{ fontSize: 10, padding: '2px 8px' }}>📅 {m.sampling_date}</span></div>}
