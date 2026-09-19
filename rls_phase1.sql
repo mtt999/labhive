@@ -464,6 +464,10 @@ $b$);
 -- STEP 13: projects + child tables
 -- ────────────────────────────────────────────────────────────────
 
+-- Who created a project. Recorded from the session at insert time and shown
+-- in Project Info; rows that predate this column read as "Not recorded".
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by TEXT;
+
 SELECT _apply_rls('projects', 'projects_policy', $b$
 FOR ALL TO authenticated
 USING (
