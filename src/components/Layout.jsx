@@ -531,6 +531,18 @@ export default function Layout({ children }) {
   const tourTriggeredRef = useRef(false)
   useEffect(() => { setMobileDrawerOpen(false) }, [screen, sidebarSubTab])
 
+  // Daily task reminders, once per user per day, from whatever screen they
+  // land on. Previously this only ran from the Reminders tab's mount effect,
+  // so a reminder was delivered only to users who went looking for it.
+  const dailyRef = useRef(false)
+  useEffect(() => {
+    if (dailyRef.current || !session?.userId) return
+    dailyRef.current = true
+    import('../lib/dailyReminders')
+      .then(m => m.runDailyTaskReminders())
+      .catch(e => console.warn('[daily reminders]', e))
+  }, [session?.userId])
+
   useEffect(() => {
     const orgId = session?.organizationId
     if (!orgId || session?.loginMode !== 'team') { setOrgLogoUrl(null); return }
