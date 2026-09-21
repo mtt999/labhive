@@ -4,13 +4,20 @@
 // PREREQUISITE: In Supabase Dashboard → Authentication → Settings
 //   disable "Enable email confirmations" so signUp works without email links.
 //
-// All demo users share the password: LabDemo@2025
+// All demo users share one password, supplied via the DEMO_PASSWORD env var.
 
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = 'https://qhsxtpywfczqopcimykk.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_eXj0rGtAqMRX2Q3B9kgc1w_CE8rzWei'
-const DEMO_PASSWORD = 'LabDemo@2025'
+// Never hardcode this: the repo is public, so a literal here is a working
+// password anyone can read. Pass it at run time instead:
+//   DEMO_PASSWORD='...' node scripts/seed-demo-users.mjs
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD
+if (!DEMO_PASSWORD) {
+  console.error('Set DEMO_PASSWORD, e.g.  DEMO_PASSWORD=\'...\' node scripts/seed-demo-users.mjs')
+  process.exit(1)
+}
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
@@ -175,7 +182,7 @@ async function main() {
   }
 
   console.log('\n✅ Done! All demo lab users created.')
-  console.log(`   Login password for all demo users: ${DEMO_PASSWORD}`)
+  console.log('   Login password for all demo users: the DEMO_PASSWORD you passed in')
   console.log('   If auth signUp failed, go to Supabase Dashboard → Auth → Settings and disable email confirmation, then re-run.')
 }
 
