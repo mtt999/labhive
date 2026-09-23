@@ -3,6 +3,8 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 
 // type: 'placeholder' | 'safety_video' | 'video' | 'pdf' | 'download'
+import { requiredSafetySteps } from './safetySteps'
+
 const STEPS = [
   { number: 1, title: 'Step 1', icon: '📋', description: 'Safety orientation',                  type: 'placeholder', content: null },
   { number: 2, title: 'Step 2', icon: '🎬', description: 'Required training video',              type: 'placeholder', content: null },
@@ -52,7 +54,8 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-        {STEPS.map(s => <StepDot key={s.number} number={s.number} completed={!!userProg[s.number]} />)}
+        {STEPS.filter(s => requiredSafetySteps(user?.required_safety_steps).includes(s.number))
+              .map(s => <StepDot key={s.number} number={s.number} completed={!!userProg[s.number]} />)}
       </div>
     </div>
   )
@@ -202,14 +205,18 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, saving }
   const { setScreen, setSidebarSubTab } = useAppStore()
   const [activeStep, setActiveStep] = useState(1)
   const userProg = progress[user?.id] || {}
-  const allApproved = STEPS.every(s => userProg[s.number])
+  // Only the steps this user owes count, and only those are listed. A step
+  // nobody assigned would otherwise read as outstanding work forever.
+  const required = requiredSafetySteps(user?.required_safety_steps)
+  const mySteps = STEPS.filter(s => required.includes(s.number))
+  const allApproved = mySteps.every(s => userProg[s.number])
 
   if (!user) return null
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ display: 'flex', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
-        {STEPS.map(s => {
+        {mySteps.map(s => {
           const done = !!userProg[s.number]
           const active = activeStep === s.number
           return (
@@ -231,7 +238,7 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, saving }
         })}
       </div>
 
-      {STEPS.map(s => {
+      {mySteps.map(s => {
         if (s.number !== activeStep) return null
         const done = !!userProg[s.number]
         return (
@@ -339,7 +346,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
     try {
       if (isLabManager) {
         const [usersRes, progRes] = await Promise.all([
-          sb.from('users').select('id, name, last_name, nick_name, photo_url, avatar, email')
+          sb.from('users').select('id, name, last_name, nick_name, photo_url, avatar, email, required_safety_steps')
             .eq('organization_id', session.organizationId).eq('role', 'lab_user').eq('is_active', true).order('name'),
           sb.from('lab_safety_progress').select('user_id, step_number, completed').eq('organization_id', session.organizationId),
         ])

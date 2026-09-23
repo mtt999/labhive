@@ -1,1 +1,0 @@
-import{a0 as e}from"./index-hhKCRdZK.js";class t extends e{async requestReview(){}}export{t as RateAppWeb};
