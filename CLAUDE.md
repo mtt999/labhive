@@ -1453,3 +1453,34 @@ What it does NOT catch, so do not read an empty result as "nothing is broken":
 wrong column TYPE (`lab_user_ids` is `text[]` here and `uuid[]` there), missing
 RLS policies (use the exposure check), writes that match zero rows, `onConflict`
 without a matching unique index, and a relationship stored in two directions.
+
+## Realtime: subscribing is not enabling (Sept 2026)
+
+`sb.channel(...).on('postgres_changes', ...)` against a table that is **not in
+the `supabase_realtime` publication** does not error. It connects, waits, and
+never fires. Every "live" feature on it silently degrades to "updates when you
+navigate" — which looks fine until someone sits watching a screen for a change
+that never arrives.
+
+Five of ICT-Lab's twelve subscribed tables were unpublished and nobody had
+noticed: `tasks`, `task_comments`, `re_messages`, `support_messages`,
+`admin_notifications`. The Task Board, messages and the super admin bell were
+all refresh-only.
+
+**`realtime_check.sql`** (repo root) lists every table the app subscribes to
+and whether realtime is actually on. Re-generate the VALUES list from the code
+with:
+
+```bash
+grep -rhoE "table: '[a-z_]+'" src | sed "s/table: '//;s/'//" | sort -u
+```
+
+To enable one: `ALTER PUBLICATION supabase_realtime ADD TABLE <t>;`
+Realtime honours RLS for `postgres_changes`, so enabling it does not widen
+access — clients only receive rows their policies already allow.
+
+**Do not rely on a subscription as the only refresh path.** The sidebar safety
+lock did, and re-ran only on mount; the dashboard's copy of the same check had
+`screen` in its deps and re-ran on every navigation. An approved lab user got
+their modules on the dashboard while the sidebar stayed locked. Realtime is
+the fast path; navigation should still re-check.
