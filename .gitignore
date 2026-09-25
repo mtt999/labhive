@@ -36,3 +36,6 @@ android/app/build/
 android/build/
 android/app/src/main/assets/public/
 client_secret*.json
+
+# Source copy — the served one is public/tesla-1901.jpg
+/Nikola_Tesla,_with_his_equipment_Wellcome_M0014782.jpg

@@ -6,7 +6,6 @@ import AboutModal from '../../components/AboutModal'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
 import SaraChat from '../../components/SaraChat'
 import { IconQr, IconAlert, IconEye, IconEyeOff, IconCheckCircle, IconSparkle, IconInfo, IconMail } from '../../components/Icons'
-import LoginBackground from '../../components/LoginBackground'
 
 function LabHiveLogo({ size = 120 }) {
   return <img src={import.meta.env.BASE_URL + 'labhive_logo.svg'} width={size} height={size} style={{ display: 'block', objectFit: 'contain', margin: '0 auto' }} alt="LabHive" />
@@ -438,11 +437,17 @@ export default function Login() {
 
   return (
     <>
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '8px 20px 8px' }}>
-      <LoginBackground />
+    {/* .login-shell carries the photograph, the scrim and the card alignment.
+        It keeps the locked container behaviour — height 100%, scroll, 8px 20px
+        padding, content starting at the top — so the logo's -40px margin still
+        works against the top of the flow. */}
+    <div className="login-shell">
+      <div className="login-scroll">
       <div style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
 
-        <div style={{ textAlign: 'center', marginBottom: -40 }}>
+        {/* 200px against -40px is the locked pair: the -40 closes the gap the
+            logo's transparent viewBox leaves under the artwork. */}
+        <div style={{ textAlign: 'center', marginBottom: -58 }}>
           <LabHiveLogo size={200} />
         </div>
 
@@ -671,7 +676,6 @@ export default function Login() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>LabHive</div>
           <div>The All-in-One Research Lab Platform</div>
           <div style={{ fontWeight: 500, color: 'var(--text2)', marginTop: 4 }}>Built by a lab researcher, for lab researchers</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
@@ -693,6 +697,12 @@ export default function Login() {
           ><IconMail size={15} /> Contact Us</button>
         </div>
 
+      </div>
+      </div>
+      {/* Outside .login-scroll on purpose: pinned to the photo, not to the
+          content, so it cannot drift when the content scrolls. */}
+      <div className="login-credit">
+        Nikola Tesla, Colorado Springs, 1901 · Wellcome Collection
       </div>
     </div>
 

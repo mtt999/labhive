@@ -422,3 +422,126 @@ main > * { animation: screen-fade 0.16s ease-out; }
     bottom: calc(88px + env(safe-area-inset-bottom));
   }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Login backdrop — Nikola Tesla, Colorado Springs, 1901 (Wellcome Collection)
+
+   Option A: full-bleed photo, card on the right, scrim gathering from the
+   right edge.
+
+   The card goes RIGHT, which is the mirror of ICT-Lab's login, because this
+   photograph is composed the other way round. Tesla sits about a fifth of the
+   way across and is the whole subject; a card on the left would sit on top of
+   him. The transmitter coil and plank wall on the right are the part of the
+   frame that can be covered without losing anything.
+   ─────────────────────────────────────────────────────────────────────────── */
+/* The shell holds the photograph and the scrim and NEVER scrolls. Only the
+   content inside it does.
+   
+   This split is the whole reason the scrim used to drift: a background image
+   is anchored to its element's box and stays put when that element scrolls,
+   but an absolutely-positioned ::before scrolls along with the content. Put
+   both on a scrolling element and the dark layer slides off the picture. */
+.login-shell {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+  background-color: #15171c;      /* shown while the photo loads, and behind it */
+  background-image: url('/tesla-1901.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  /* 38% across biases the crop toward Tesla so he survives on narrow windows,
+     where `cover` eats the sides first. 46% down keeps the discharge and his
+     chair while trimming floor — the lower the focal point, the more bare
+     boards show and the less lightning. */
+  background-position: 38% 46%;
+}
+
+/* The scrolling layer: everything the user reads and types lives here. */
+.login-scroll {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* Centred rather than top-aligned: with the content scaled to fit, anything
+     left over should split evenly above and below rather than pooling under
+     the footer. */
+  justify-content: center;
+  align-items: center;            /* narrow screens: centred, as before */
+  padding: 8px 20px 8px;
+}
+
+/* Only pull the card right once there is room for the photograph beside it.
+   Below this the scrim would have to cover nearly everything anyway, so the
+   card returns to centre rather than clinging to an edge. */
+@media (min-width: 900px) {
+  .login-scroll { align-items: flex-end; padding-right: max(20px, 6%); }
+}
+
+.login-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Two passes. The horizontal one carries the card and fades out before it
+     reaches Tesla. The bottom one is slight, only enough to hold the credit
+     line — heavier and it starts eating the inscription on the floorboards. */
+  background:
+    linear-gradient(270deg,
+      rgba(12,14,18,0.90) 0%,
+      rgba(12,14,18,0.80) 22%,
+      rgba(12,14,18,0.52) 42%,
+      rgba(12,14,18,0.18) 62%,
+      rgba(12,14,18,0.00) 80%),
+    linear-gradient(0deg,
+      rgba(12,14,18,0.34) 0%,
+      rgba(12,14,18,0.10) 14%,
+      rgba(12,14,18,0.00) 30%);
+}
+
+
+/* Anything outside the white card sits on the scrim and cannot use the page's
+   normal text tokens. */
+.login-shell .login-credit {
+  position: absolute;
+  left: 20px;
+  bottom: 12px;
+  z-index: 1;
+  font-size: 11px;
+  color: rgba(255,255,255,0.62);
+  letter-spacing: 0.01em;
+}
+@media (max-width: 899px) {
+  /* Centred layout: the card is in the middle, so the credit moves to the
+     bottom centre rather than the corner. It stays ABSOLUTE — it lives
+     outside the scrolling layer now, and static would push it past the
+     bottom of a full-height container and off the screen entirely. */
+  .login-shell .login-credit {
+    left: 0; right: 0; bottom: 10px;
+    text-align: center;
+  }
+}
+
+/* Fit the whole sign-in page in the window — no scrolling to reach the About
+   and Contact buttons under the card.
+   
+   Scaling the rendered result rather than editing the pieces: the logo at
+   200px with its -40px margin, and the card's padding, are locked values that
+   several other things are measured against. `zoom` leaves all of that alone
+   and just draws it smaller, so the proportions the layout was tuned for
+   survive.
+   
+   Stepped rather than continuous, because each step is a real height where
+   something specific stops fitting: the footer buttons first, then the card's
+   lower fields, then the logo. */
+@media (max-height: 860px) { .login-scroll > * { zoom: 0.94; } }
+@media (max-height: 780px) { .login-scroll > * { zoom: 0.86; } }
+@media (max-height: 700px) { .login-scroll > * { zoom: 0.78; } }
+@media (max-height: 620px) { .login-scroll > * { zoom: 0.70; } }
+/* Past this the page is shorter than a phone in landscape, and shrinking
+   further would make the fields genuinely hard to tap. Let it scroll instead
+   of becoming unusable. */
+@media (max-height: 540px) { .login-scroll > * { zoom: 0.70; } }
