@@ -8,6 +8,7 @@ import { orgCapabilityPool } from '../../lib/modulePools'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
+import { applyDefaultIcons } from '../../lib/defaultIcons'
 
 async function createAuthUser(email, password) {
   const emailLC = email.trim().toLowerCase()
@@ -675,7 +676,12 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       // Fetch the new user's ID to save icon prefs and queue welcome email
       const { data: newUser } = await sb.from('users').select('id').ilike('email', emailLC)
         .eq('role', role).eq('organization_id', orgId).maybeSingle()
-      if (role === 'lab_user' && newUser?.id) await saveIconPrefs(newUser.id)
+      // Creating applies the organisation's configured defaults rather than a
+      // form selection. The picker is only shown when EDITING now, so on
+      // create there is nothing for selectedIcons to reflect but the defaults
+      // it was pre-filled with — and reading them from the org directly means
+      // the default cannot drift from what the org actually set.
+      if (role === 'lab_user' && newUser?.id) await applyDefaultIcons(newUser.id, orgId, 'lab_user')
       queueWelcomeEmail(sb, { name: name.trim(), toEmail: emailLC, orgId, userId: newUser?.id ?? null, password: tempPassword })
       setSavedCreds({ name: name.trim(), email: emailLC, password: tempPassword })
       onSaved()
@@ -780,7 +786,11 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         )}
       </div>
 
-      {role === 'lab_user' && (
+      {/* Editing only. On create the organisation's defaults are applied, so
+          asking here was a confirmation step with the same answer every time —
+          and it made the org-level default setting look like it did nothing.
+          Widening one lab user's icons later belongs in Lab Management. */}
+      {role === 'lab_user' && user && (
         <div style={{ marginTop: 4, marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
             Dashboard icons for this lab user
