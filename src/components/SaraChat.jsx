@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { useAppStore } from '../store/useAppStore'
+import { reportIssue } from '../lib/reportIssue'
 
 const AVATAR = import.meta.env.BASE_URL + 'sara-avatar.png'
 
@@ -143,6 +145,14 @@ function findAnswer(input) {
 
 export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E75' }) {
   const A = color
+  const { session } = useAppStore()
+  // Reporting a problem is a different shape from asking a question: it takes
+  // a description and optionally a screenshot, and ends in something being
+  // sent rather than answered. Its own mode, not a chat turn.
+  const [reporting, setReporting]   = useState(false)
+  const [reportText, setReportText] = useState('')
+  const [reportFile, setReportFile] = useState(null)
+  const [sending, setSending]       = useState(false)
   const [open, setOpen]       = useState(false)
   const [view, setView]       = useState('welcome') // 'welcome' | 'chat'
   const [messages, setMessages] = useState([])
@@ -158,6 +168,34 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
   useEffect(() => {
     if (open && view === 'chat') setTimeout(() => inputRef.current?.focus(), 100)
   }, [open, view])
+
+  async function submitReport() {
+    if (!reportText.trim() && !reportFile) return
+    setSending(true)
+    const res = await reportIssue({
+      session,
+      message: reportText.trim() || '(screenshot only — no description given)',
+      file: reportFile,
+      screen: useAppStore.getState?.().screen || null,
+    })
+    setSending(false)
+    setReporting(false); setReportText(''); setReportFile(null)
+
+    if (!res.ok) {
+      setMessages(prev => [...prev, { from: 'sara',
+        text: `I couldn't send that — ${res.error}.\nPlease try again, or use Contact support below.` }])
+      return
+    }
+    // Say plainly if part of it failed. "Sent!" when the screenshot silently
+    // did not upload leaves them believing we can see something we cannot.
+    const caveat = res.problems?.length
+      ? `\n\nOne thing to note: ${res.problems.join(', ')}. Your report itself was saved.`
+      : ''
+    setMessages(prev => [...prev, { from: 'sara',
+      text: `Thanks — your report has been sent to the administrators ✅${caveat}`
+          + `\n\nThey have been notified by email and in the app, so someone should pick it up shortly. `
+          + `You can carry on working and check back later — there is nothing else you need to do.` }])
+  }
 
   function goChat(q) {
     setView('chat')
@@ -338,6 +376,42 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
                 )}
               </div>
 
+              {reporting ? (
+                <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Report a problem</div>
+                  <textarea value={reportText} onChange={e => setReportText(e.target.value)} rows={3}
+                    placeholder="What went wrong? What were you trying to do?"
+                    style={{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '8px 10px',
+                             fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
+                    <label style={{ cursor: 'pointer', color: A, fontWeight: 600 }}>
+                      📎 Attach a screenshot
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => setReportFile(e.target.files?.[0] || null)} />
+                    </label>
+                    {reportFile && <span style={{ marginLeft: 8 }}>{reportFile.name}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button onClick={submitReport} disabled={sending || (!reportText.trim() && !reportFile)}
+                      style={{ flex: 1, border: 'none', borderRadius: 99, padding: '8px 14px', fontSize: 13, fontWeight: 700,
+                               color: '#fff', cursor: sending ? 'default' : 'pointer',
+                               background: (reportText.trim() || reportFile) && !sending ? A : '#e5e7eb' }}>
+                      {sending ? 'Sending…' : 'Send report'}
+                    </button>
+                    <button onClick={() => { setReporting(false); setReportText(''); setReportFile(null) }}
+                      style={{ border: '1.5px solid #e5e7eb', background: '#fff', borderRadius: 99,
+                               padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (<>
+              <div style={{ padding: '8px 12px 0' }}>
+                <button onClick={() => setReporting(true)}
+                  style={{ border: `1.5px solid ${A}`, background: '#fff', color: A, borderRadius: 99,
+                           padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  ⚠ Report a problem
+                </button>
+              </div>
+
               {/* Input */}
               <div style={{ padding: '8px 10px 10px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                 <input
@@ -358,6 +432,7 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                 </button>
               </div>
+              </>)}
               {onContact && (
                 <div style={{ padding: '0 12px 10px', textAlign: 'center' }}>
                   <button onClick={() => { setOpen(false); onContact() }} style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Talk to a real person →</button>
