@@ -69,7 +69,7 @@ function SelectorCard({ mode, selected, onSelect }) {
 function SignUpForm({ onSuccess, onCancel }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState(linkError || '')
   const [loading, setLoading] = useState(false)
 
   async function handleSignUp(e) {
@@ -196,7 +196,7 @@ function SignUpForm({ onSuccess, onCancel }) {
 // ── Main Login ─────────────────────────────────────────────────────────────
 const QR_SCAN_EQ = new URLSearchParams(window.location.search).get('eq')
 
-export default function Login() {
+export default function Login({ linkError = null }) {
   const { setSession, setLoginMode, setSharedWorkspaces } = useAppStore()
   // When arriving from a QR code scan, default to Solo mode so visitors can sign up
   const [mode, setMode]             = useState(QR_SCAN_EQ ? 'solo' : null)

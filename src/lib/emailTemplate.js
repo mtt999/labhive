@@ -1,7 +1,14 @@
-const LOGO_URL = 'https://labhive.app/logo.svg'
+// PNG, not the SVG the rest of the site uses: Gmail, Outlook and the iOS Mail
+// app all refuse to render SVG in an <img>, so the logo was simply absent from
+// every email we have ever sent. Rendered at 2x (125x144) for retina clients
+// and displayed at 62x72 — the logo is taller than it is wide, so the old
+// square 72x72 slot was also squashing it.
+// Served from /app/ — that is the SPA's public dir, the one the build
+// actually copies. docs/logo-email.png at the site root would 404.
+const LOGO_URL = 'https://labhive.app/app/logo-email.png'
 const APP_URL  = 'https://labhive.app/app'
 
-export function buildEmailHtml({ title, body, ctaLabel = 'View in LabHive →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null, credentials = null }) {
+export function buildEmailHtml({ title, body, bodyHtml = null, ctaLabel = 'View in LabHive →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null, credentials = null }) {
   const credentialsBlock = credentials ? `
         <tr>
           <td style="padding:0 36px 20px;">
@@ -45,7 +52,7 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in LabHive →', 
         <!-- Header -->
         <tr>
           <td style="background:#0d47a1;padding:28px 32px 24px;text-align:center;">
-            <img src="${LOGO_URL}" width="72" height="72" alt="LabHive logo" style="display:block;margin:0 auto 12px;border:0;">
+            <img src="${LOGO_URL}" width="62" height="72" alt="LabHive logo" style="display:block;margin:0 auto 12px;border:0;">
             <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;line-height:1;">LabHive</div>
             <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;margin-top:5px;">The All-in-One Research Lab Platform</div>
           </td>
@@ -55,7 +62,12 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in LabHive →', 
         <tr>
           <td style="padding:32px 36px 24px;">
             <h2 style="margin:0 0 14px;font-size:17px;font-weight:700;color:#111827;line-height:1.4;">${escHtml(title)}</h2>
-            <p style="margin:0 0 28px;font-size:14px;color:#4B5563;line-height:1.7;">${escHtml(body)}</p>
+            ${bodyHtml
+              // bodyHtml is inserted RAW, so it is only ever passed content we
+              // author. `body` stays escaped and is what the plain-text part
+              // uses, so a mail client without HTML still reads correctly.
+              ? bodyHtml
+              : `<p style="margin:0 0 28px;font-size:14px;color:#4B5563;line-height:1.7;">${escHtml(body)}</p>`}
           </td>
         </tr>
 
