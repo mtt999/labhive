@@ -9,6 +9,7 @@ import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { applyDefaultIcons } from '../../lib/defaultIcons'
+import { generateTempPassword } from '../../lib/tempPassword'
 
 async function createAuthUser(email, password) {
   const emailLC = email.trim().toLowerCase()
@@ -35,24 +36,6 @@ async function createAuthUser(email, password) {
   return data.user
 }
 
-function generateTempPassword() {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-  const lower = 'abcdefghjkmnpqrstuvwxyz'
-  const digits = '23456789'
-  const symbols = '!@#$%'
-  const all = upper + lower + digits + symbols
-  const arr = [
-    upper[Math.floor(Math.random() * upper.length)],
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    symbols[Math.floor(Math.random() * symbols.length)],
-    ...Array.from({ length: 4 }, () => all[Math.floor(Math.random() * all.length)]),
-  ]
-  return arr.sort(() => Math.random() - 0.5).join('')
-}
 
 const MODULE_IMAGE_DEFS = [
   { key: 'supply',         label: 'Supply Inventory',    icon: '📦' },
