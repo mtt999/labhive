@@ -55,6 +55,7 @@ const Results              = lazy(() => import('./screens/inspection/Results'))
 const ProjectMaterial      = lazy(() => import('./screens/projects/ProjectMaterial'))
 const History              = lazy(() => import('./screens/inspection/History'))
 const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecords'))
+const ResetPassword = lazy(() => import('./screens/auth/ResetPassword'))
 const TrainingRecordsProto = lazy(() => import('./screens/training/TrainingRecordsProto'))
 const LayoutProto          = lazy(() => import('./screens/proto/LayoutProto'))
 const Profile              = lazy(() => import('./screens/profile/Profile'))
@@ -102,6 +103,11 @@ if (isNative()) {
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
 
 // Detect QR scan: equipment (?eq=<uuid>) or material/item (?item=<name>)
+// A password-reset link arrives as #access_token=...&type=recovery. Read it
+// from the fragment at module load, before the auth library consumes and
+// clears it.
+const IS_RECOVERY = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type') === 'recovery'
+
 const SCAN_EQ_ID   = new URLSearchParams(window.location.search).get('eq')
 const SCAN_ITEM_QR = new URLSearchParams(window.location.search).get('item')
 
@@ -134,6 +140,7 @@ export default function App() {
   // async DB re-check from re-opening it within the same session.
   const pickerDismissedRef = useRef(false)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [recovering, setRecovering] = useState(IS_RECOVERY)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
   const [termsAccepted, setTermsAccepted] = useState(false)
 
@@ -492,6 +499,29 @@ export default function App() {
       </Suspense>
     )
   }
+
+  // Before the login screen AND before the app: a recovery link creates a real
+
+  // session, so without this branch the link would sign someone straight in
+
+  // with the password they came to replace.
+
+  if (recovering) return (
+
+    <ResetPassword onDone={() => {
+
+      // Clear the token from the address bar so a refresh does not re-enter
+
+      // this screen with a token that has already been used.
+
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+
+      setRecovering(false)
+
+    }} />
+
+  )
+
 
   if (!session) return (
     <>

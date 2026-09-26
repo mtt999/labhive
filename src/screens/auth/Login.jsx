@@ -205,6 +205,32 @@ export default function Login() {
   // across browser restarts (see the auth storage adapter in lib/supabase.js)
   const [keepSignedIn, setKeepSignedIn] = useState(() => localStorage.getItem('ilab_keep_signed_in') !== 'false')
   const [password, setPassword]     = useState('')
+  // Reset flow. Kept on this screen rather than a separate page: the person is
+  // already here, and the only thing needed is the email they were trying to
+  // sign in with.
+  const [resetSent, setResetSent] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  async function sendReset() {
+    const addr = (identifier || '').trim().toLowerCase()
+    if (!addr || !addr.includes('@')) {
+      setError('Enter your email address above first, then choose Forgot password.')
+      return
+    }
+    setResetting(true)
+    setError(null)
+    const { error: err } = await sb.auth.resetPasswordForEmail(addr, {
+      // Must be listed under Authentication → URL Configuration → Redirect
+      // URLs in Supabase, or the link bounces to the site root and the token
+      // is discarded.
+      redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+    })
+    setResetting(false)
+    if (err) { setError(err.message); return }
+    // Always the same message whether or not the address exists — saying "no
+    // such account" would let anyone test which emails are registered.
+    setResetSent(true)
+  }
   const [error, setError]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -577,7 +603,8 @@ export default function Login() {
                   </div>
                 </div>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: mode ? 'pointer' : 'default', opacity: mode ? 1 : 0.35, pointerEvents: mode ? 'auto' : 'none', transition: 'opacity 0.2s', fontSize: 13, color: 'var(--text2)', userSelect: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: mode ? 'pointer' : 'default', opacity: mode ? 1 : 0.35, pointerEvents: mode ? 'auto' : 'none', transition: 'opacity 0.2s', fontSize: 13, color: 'var(--text2)', userSelect: 'none' }}>
                   <input
                     type="checkbox"
                     checked={keepSignedIn}
@@ -587,6 +614,19 @@ export default function Login() {
                   />
                   Keep me signed in on this device
                 </label>
+                  <button type="button" onClick={sendReset} disabled={resetting}
+                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                             fontSize: 13, fontWeight: 600, color: accentColor, whiteSpace: 'nowrap' }}>
+                    {resetting ? 'Sending…' : 'Forgot password?'}
+                  </button>
+                </div>
+                {resetSent && (
+                  <div style={{ fontSize: 13, lineHeight: 1.6, color: '#085041', background: '#E1F5EE',
+                                border: '1px solid #9FE1CB', borderRadius: 8, padding: '10px 12px', marginBottom: 16 }}>
+                    If that address has an account, a reset link is on its way. Open it and
+                    you will be asked to choose a new password.
+                  </div>
+                )}
 
                 {error && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent2)', background: 'var(--accent2-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}><IconAlert size={16} /> {error}</div>
