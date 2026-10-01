@@ -1,6 +1,7 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
-import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal } from '../../components/Icons'
+import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal, IconTag } from '../../components/Icons'
+import { TestedLabelForm, TestedMaterialsRecords } from './TestedLabels'
 import { openProjectMaterials, takeReopenProject } from '../../lib/projectMaterialsTab'
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
@@ -2362,10 +2363,10 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['projects', 'materials', 'search'].map(m => (
+        {['projects', 'materials', 'tested', 'search'].map(m => (
           <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')} style={pillIcon}
             onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null); setSelectedMaterialId(null); setMatPanelTab('info') }}>
-            {m === 'projects' ? <><IconFlask size={15} />Projects</> : m === 'materials' ? <><IconBox size={15} />Materials</> : <><IconSearch size={15} />Search</>}
+            {m === 'projects' ? <><IconFlask size={15} />Projects</> : m === 'materials' ? <><IconBox size={15} />Materials</> : m === 'tested' ? <><IconTag size={15} />Tested</> : <><IconSearch size={15} />Search</>}
           </button>
         ))}
         {viewMode === 'projects' && (
@@ -2450,6 +2451,8 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
           onCreated={() => { loadAllMaterials(); loadProjects(); setMaterialsRefresh(n => n + 1) }}
         />
       )}
+
+      {viewMode === 'tested' && <TestedLabelForm session={session} isSolo={isSolo} />}
 
       {viewMode === 'search' && (
         <MaterialSearch session={session} isSolo={isSolo} viewingWorkspaceOwnerId={viewingWorkspaceOwnerId} />
@@ -2861,7 +2864,7 @@ export default function ProjectMaterial() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">Project Workspace</div>
+        <div className="section-title">{mainTab === 'tested' ? 'Tested Materials' : 'Project Workspace'}</div>
         <HelpPanel screen="projects" />
       </div>
 
@@ -2869,6 +2872,7 @@ export default function ProjectMaterial() {
         <MaterialInventoryTab session={session} isSolo={isSolo} onProjectCreated={loadAllProjects} />
       )}
 
+      {mainTab === 'tested' && <TestedMaterialsRecords session={session} isSolo={isSolo} />}
       {mainTab === 'manage_projects' && (
         <ManageProjectsTab session={session} isSolo={isSolo} />
       )}
