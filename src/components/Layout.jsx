@@ -119,6 +119,9 @@ function getScreenTabs(screen, session) {
       // only entry point to project creation, so hiding it left them unable to
       // create a project at all.
       ...(isAdmin || isLabManager || isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
+      // Material types belong to projects (they are what a material IS), not to
+      // labels — moved here from QR Labels. Org-wide, so not for solo users.
+      ...((isAdmin || isLabManager) && !isSolo ? [{ key: 'material_types', icon: '🧪', label: 'Material Types' }] : []),
       { key: 'results',   icon: '✏️',  label: 'Project Test Results' },
       { key: 'workspace', icon: '📊', label: 'Workspace' },
       { key: 'members',   icon: '👥', label: 'Project Members' },
@@ -146,7 +149,6 @@ function getScreenTabs(screen, session) {
     { key: 'materials', icon: '🏷️', label: 'Material Labels' },
     ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
-      { key: 'types',   icon: '🏷️', label: 'Material Types' },
     ] : []),
   ]
 

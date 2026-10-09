@@ -3,7 +3,10 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal, IconTag } from '../../components/Icons'
 import { TestedLabelForm, TestedMaterialsRecords } from './TestedLabels'
 import { openProjectMaterials, takeReopenProject } from '../../lib/projectMaterialsTab'
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+// Lazy: it lives in the barcode scanner module, which pulls in jsQR — no
+// reason to load a QR decoder for everyone who opens Projects.
+const MaterialTypesManager = lazy(() => import('../barcode/BarcodeScannerScreen').then(m => ({ default: m.MaterialTypesManager })))
+import { useState, useEffect, useRef, useMemo, Fragment, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -2864,7 +2867,7 @@ export default function ProjectMaterial() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">{mainTab === 'tested' ? 'Tested Materials' : 'Project Workspace'}</div>
+        <div className="section-title">{mainTab === 'tested' ? 'Tested Materials' : mainTab === 'material_types' ? 'Material Types' : 'Project Workspace'}</div>
         <HelpPanel screen="projects" />
       </div>
 
@@ -2873,6 +2876,11 @@ export default function ProjectMaterial() {
       )}
 
       {mainTab === 'tested' && <TestedMaterialsRecords session={session} isSolo={isSolo} />}
+      {mainTab === 'material_types' && !isSolo && (session?.role === 'admin' || session?.role === 'user') && (
+        <Suspense fallback={<div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>}>
+          <MaterialTypesManager session={session} />
+        </Suspense>
+      )}
       {mainTab === 'manage_projects' && (
         <ManageProjectsTab session={session} isSolo={isSolo} />
       )}
