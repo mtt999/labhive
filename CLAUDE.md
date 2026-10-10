@@ -1700,3 +1700,10 @@ exam pass is not guarded: the exam is how a lab user earns it.
 
 Every lab-user screen asks only for its own rows; anything that reads other
 people's training rows must be manager-only, or it will now see nothing.
+
+   - **`users.auth_id` is TEXT in ICT-Lab and UUID in LabHive.** Write
+     `auth_id::text = auth.uid()::text`, never `auth_id = auth.uid()`: the
+     uncast form fails in ICT-Lab with "operator does not exist: text =
+     uuid" — and inside a plpgsql trigger it fails at RUN time, silently, so
+     the Oct 2026 change log recorded no admin change in ICT-Lab until it
+     was cast. Never run one project's rls_phase1.sql in the other.
