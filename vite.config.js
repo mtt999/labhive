@@ -27,7 +27,7 @@ export default defineConfig(({ command }) => ({
         // ("failed to resolve module specifier"). Reserve bare package names
         // and relative paths so code-splitting keeps working.
         reservedStrings: [
-          '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$',
+          '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$', '^jszip$',
           '^@capacitor/', '^@capacitor-mlkit/', '^@basecom-gmbh/', '^capacitor-rate-app$',
           '^\\./', '^\\.\\./',
         ],

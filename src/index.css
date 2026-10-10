@@ -593,3 +593,6 @@ main > * { animation: screen-fade 0.16s ease-out; }
   .pmt-page { grid-template-columns: 1fr; }
   .pmt-info { position: static; }
 }
+
+/* ── Lab Management → Export Data: options and preview side by side, stacked on phones ── */
+@media (max-width: 820px) { .export-grid { grid-template-columns: 1fr !important; } }
