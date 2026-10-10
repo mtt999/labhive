@@ -1742,7 +1742,7 @@ in the file has to be run on its own.
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 | `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql and locker_requests_setup.sql (pending).
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending). locker_requests_setup.sql ran in both on Oct 10.
 
 ## Security hardening — functions and storage (Oct 2026)
 
