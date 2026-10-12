@@ -1743,7 +1743,7 @@ in the file has to be run on its own.
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
 | `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql and support_messages_manage.sql (pending). locker_requests_setup.sql ran in both on Oct 10.
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending). support_messages_manage.sql ran in both on Oct 12. locker_requests_setup.sql ran in both on Oct 10.
 
 ## Security hardening — functions and storage (Oct 2026)
 
