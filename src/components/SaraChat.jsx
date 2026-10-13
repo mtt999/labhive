@@ -4,6 +4,9 @@ import { reportIssue } from '../lib/reportIssue'
 
 const AVATAR = import.meta.env.BASE_URL + 'sara-avatar.png'
 
+// Sara's answers. Keep them in step with the app — these were last checked
+// against every module in Oct 2026. When a tab, button or rule changes, the
+// answer that mentions it changes too.
 const FAQ = [
   {
     id: 'what',
@@ -15,7 +18,7 @@ const FAQ = [
   {
     id: 'features',
     q: 'What features does LabHive have?',
-    a: 'LabHive includes:\n• Supply Inventory & Inspections\n• Equipment List + Equipment SOP (SOPs, videos, exams)\n• Equipment Booking calendar\n• Training Records & compliance tracking\n• Project Workspace with test results\n• Task Board with meetings & deadlines\n• QR code labels & barcode scanning',
+    a: 'LabHive includes:\n• Project Workspace — projects, materials, labels, reductions, tested samples and test results\n• Booking Equipment — shared booking calendar with approval\n• Training Records — safety, documents, vehicle, equipment, alarm, locker and exam\n• Equipment SOP — SOPs, videos, standards and exams per instrument\n• Equipment & Maintenance — equipment list, calibration and maintenance\n• Task Board — tasks, meetings, timeline and reminders\n• Lab Messages — notes, ideas and issue reports\n• Lab Management — users, account requests and data export\n• Supply Inventory — room-by-room supply counts\n• QR Labels & scanning',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions'],
     followups: ['booking', 'training', 'projects'],
   },
@@ -71,28 +74,63 @@ const FAQ = [
   {
     id: 'booking',
     q: 'How does equipment booking work?',
-    a: 'Lab members pick a date and time slot on the shared booking calendar, submit a request, and an admin approves or denies it. You can scan an equipment\'s QR code to jump straight to booking. Confirmed bookings can even be rescheduled by dragging them on the calendar.',
-    keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking'],
+    a: 'Select an instrument and drag on the shared calendar to pick your time, give a purpose, and send it; a lab manager approves or denies it and you are notified. You can then add it to Google Calendar or Outlook, and move it later by dragging it on the calendar.\n\nYou can cancel a booking until it starts and edit it until it ends; once it is over it is locked. Equipment that needs training, or retraining after 3 months unused, asks for it first. Scanning an equipment QR code takes you straight to its booking.',
+    keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking', 'cancel', 'reschedule', 'edit booking'],
     followups: ['qr', 'equipment', 'mobile'],
   },
   {
     id: 'training',
     q: 'How does training tracking work?',
-    a: 'The Training Records module lets lab users upload certificates and log completions for equipment training, vehicle logs, building alarm training, and more. Admins review and approve submissions. You can also run knowledge-check exams.',
-    keywords: ['training', 'certificate', 'compliance', 'certification', 'records', 'exam', 'log', 'upload'],
-    followups: ['features', 'roles'],
+    a: 'Training Records holds everything a lab user completes and keeps current: safety steps, documents and certificates, vehicle, equipment training, building alarm, a locker, and knowledge-check exams. A lab manager approves each submission. Training records are private: only the person and their lab managers can see them.',
+    keywords: ['training', 'certificate', 'compliance', 'certification', 'records', 'exam', 'log', 'upload', 'vehicle', 'golf cart', 'golf car', 'alarm'],
+    followups: ['safety', 'locker', 'features'],
+  },
+  {
+    id: 'safety',
+    q: 'How does lab safety training work?',
+    a: 'Open Training Records → Safety and complete each step. A lab manager approves every step, and some modules stay locked until your safety training is approved.',
+    keywords: ['safety', 'lab safety', 'safety training', 'safety video', 'orientation', 'locked'],
+    followups: ['training', 'contact'],
+  },
+  {
+    id: 'locker',
+    q: 'How do I get a locker?',
+    a: 'Open Training Records → Lab User Locker and press "Request a locker" (you can add a note). A lab manager assigns you a free locker and you get a notification. Until then the tab shows your request, and you can cancel it.',
+    keywords: ['locker', 'lockers', 'cabinet', 'my locker', 'request locker'],
+    followups: ['training', 'contact'],
+  },
+  {
+    id: 'tasks',
+    q: 'How does the Task Board work?',
+    a: 'The Task Board keeps your tasks, meetings and deadlines. Add a task with a deadline, priority and project; click its status circle to move it along. Calendar shows deadlines by month, Timeline shows tasks as bars per project, and "Remind me daily" sends you a reminder each morning at 7am until the task is done.',
+    keywords: ['task', 'tasks', 'task board', 'deadline', 'meeting', 'reminder', 'timeline', 'todo', 'to do', 'out of lab'],
+    followups: ['notifications', 'features'],
+  },
+  {
+    id: 'notifications',
+    q: 'How do notifications work?',
+    a: 'The bell at the top right shows your notifications; click one to go straight to it. In Profile → Notifications you choose what you are told about in the app, and what is also sent by email.',
+    keywords: ['notification', 'notifications', 'bell', 'alert', 'notify', 'emails'],
+    followups: ['tasks', 'booking'],
+  },
+  {
+    id: 'password',
+    q: 'How do I change my password?',
+    a: 'Go to Profile → Password. A team account created by your admin asks you to set a new password at first sign-in. If you are locked out, ask your lab admin to reset it, or contact us.',
+    keywords: ['password', 'forgot', 'reset', 'change password', 'locked out', 'can\'t log in', 'cannot log in'],
+    followups: ['signup', 'contact'],
   },
   {
     id: 'projects',
     q: 'What is the Project Workspace?',
-    a: 'The Project Workspace lets you create research projects, manage material inventory with barcode tracking, record test results, and store project links & files. Solo users can share their workspace with collaborators.',
-    keywords: ['project', 'research', 'material', 'test result', 'workspace', 'sample', 'inventory', 'project workspace'],
+    a: 'The Project Workspace holds your projects and the materials stored for them. Every material has its own label with a barcode and QR code, and a storage location. Split a material into new ones with Material Reduction (for example fractions by sieve size), print a separate label for each tested sample, record test results with their files, and analyse them in Workspace. Team up through Project Members; solo users can invite collaborators.',
+    keywords: ['project', 'research', 'material', 'test result', 'workspace', 'sample', 'inventory', 'project workspace', 'reduction', 'fraction', 'sieve', 'tested', 'label'],
     followups: ['solo', 'qr', 'features'],
   },
   {
     id: 'qr',
     q: 'How do QR codes work in LabHive?',
-    a: 'You can generate QR code labels for any piece of equipment. Scanning a code (via the mobile app or any camera) opens that equipment\'s page, showing its SOP, booking calendar, contact info, and calibration records — no login required.',
+    a: 'Lab managers print QR labels for equipment in QR Labels, and every material has its own label too. Scanning an equipment label (with the mobile app or any phone camera) opens its SOP, booking, contact and calibration options once you sign in; a material label opens that material\'s record.',
     keywords: ['qr', 'qr code', 'barcode', 'scan', 'label', 'generate'],
     followups: ['booking', 'mobile', 'equipment'],
   },
@@ -120,7 +158,7 @@ const FAQ = [
   {
     id: 'contact',
     q: 'How do I contact support?',
-    a: 'Tap the "Contact Us" button on this page or use the Customer Service option inside the app. We\'re happy to help with setup, questions, or feature requests.',
+    a: 'Tap "Contact Us" on this page, or use "Report a problem" here in the app to send us a description and a screenshot. We\'re happy to help with setup, questions or feature requests.',
     keywords: ['contact', 'support', 'help', 'question', 'reach', 'email', 'talk', 'message', 'issue', 'problem', 'feedback'],
     followups: ['signup', 'pricing'],
   },
