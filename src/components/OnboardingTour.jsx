@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { TOURS, startTour } from '../lib/tours'
+import HelpPanel from './HelpPanel'
+import { useAppStore } from '../store/useAppStore'
 
 // ── Tour card definitions ──────────────────────────────────────────────────
 
@@ -131,6 +133,15 @@ export function ModuleTip({ screen, userId, accentColor }) {
   const A = accentColor || '#1D9E75'
   const isGreen = A === '#1D9E75'
 
+  // Tell HelpPanel the banner is up, so this screen's "?" moves beside it
+  const setModuleTipScreen = useAppStore(st => st.setModuleTipScreen)
+  const shown = visible && !!tip
+  useEffect(() => {
+    setModuleTipScreen(shown ? screen : null)
+    return () => setModuleTipScreen(null)
+  }, [shown, screen])
+  const tour = TOURS.find(t => t.screen === screen)
+
   if (!visible || !tip) return null
 
   function dismiss() {
@@ -147,8 +158,9 @@ export function ModuleTip({ screen, userId, accentColor }) {
   const btnColor   = isGreen ? '#14532d' : '#2d2470'
 
   return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 16 }}>
     <div style={{
-      marginBottom: 16,
+      flex: 1, minWidth: 0,
       background: `linear-gradient(135deg, ${bgColor} 0%, #f8fafc 100%)`,
       border: `1px solid ${borderCol}`,
       borderLeft: `4px solid ${accentBdr}`,
@@ -169,6 +181,8 @@ export function ModuleTip({ screen, userId, accentColor }) {
         onClick={dismiss}
         style={{ flexShrink: 0, background: btnBg, border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 700, color: btnColor, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', marginTop: 1 }}
       >Got it ✓</button>
+    </div>
+    <HelpPanel screen={screen} placement="tip" onTour={tour ? () => startTour(tour) : undefined} />
     </div>
   )
 }
