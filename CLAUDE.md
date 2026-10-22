@@ -1971,3 +1971,16 @@ the table. `rls_phase1.sql` re-grants every public table (except locked
 `*_backup_*` tables) to authenticated + service_role, plus anon SELECT on
 settings (sign-in page). Existing tables kept their grants; this matters for
 new tables and for a restore into a fresh project.
+
+## Lab Users: Cards / List, advisor filter and sort (Oct 2026, both apps)
+
+`LabUsersPanel` (Profile.jsx) toolbar under the search box: **Cards / List**,
+**Advisor** (All / one / No advisor — the supervisor field), **Sort** (Name /
+Advisor; Advisor groups under a light-teal bar per advisor, No advisor last)
+in both views. View + sort are remembered per browser
+(`labhive_labusers_view` / `_sort`); with no saved choice List is the default
+past 20 lab users. List row: first name · last name · email · (advisor, when
+sorted by name) · Safety chip (Done ✓ / n of required, from
+lab_safety_progress) · Signed in (a Terms acceptance) · Icons / Edit /
+Deactivate / Delete (`actionButtons`, shared with the cards). Saving the Edit
+box no longer wipes `terms_accepted_version` (only a new account starts null).
