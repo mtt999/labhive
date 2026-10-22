@@ -517,8 +517,11 @@ export default function App() {
     // unreachable by typing the screen key or a ?screen=orgadmin deep link.
     if (session?.isDemo && screen === 'orgadmin') { setScreen('dashboard'); return }
     if (session?.role === 'lab_user') {
-      const baseAllowed = ['dashboard', 'projects', 'projectmaterials', 'training', 'profile', 'equipmenthub', 'booking', 'remessages', 'barcodeqr', 'equipmentscan', 'home', 'equipment', 'pm', 'history', 'training-proto', 'layout-proto']
-      if (!baseAllowed.includes(screen) && !(userAccess && userAccess.has(screen))) setScreen('dashboard')
+      // No Supply Inventory screens (home / inspection / results / history) or
+      // Lab Management for lab users — not even with a screen-access grant.
+      const blocked = ['home', 'inspection', 'results', 'history', 'labmanagement']
+      const baseAllowed = ['dashboard', 'projects', 'projectmaterials', 'training', 'profile', 'equipmenthub', 'booking', 'remessages', 'barcodeqr', 'equipmentscan', 'equipment', 'pm', 'training-proto', 'layout-proto']
+      if (blocked.includes(screen) || (!baseAllowed.includes(screen) && !(userAccess && userAccess.has(screen)))) setScreen('dashboard')
     }
     // equipmentscan, barcodeqr, home, equipment bypass per-user access control
     const INTERNAL = new Set(['dashboard', 'profile', 'inspection', 'results', 'pm', 'equipmentscan', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'projects', 'projectmaterials', 'training', 'training-proto', 'layout-proto', 'history', 'equipmenthub', 'booking', 'remessages', 'labmanagement'])

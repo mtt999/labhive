@@ -86,6 +86,8 @@ function getScreenTabs(screen, session) {
 
   if (screen === 'labmanagement') return [
     { key: 'labusers',  icon: '👥', label: 'Lab Users' },
+    // Under Lab Users: replaces the old Import Excel button there
+    ...(isAdmin || isLabManager ? [{ key: 'importusers', icon: '📥', label: 'Import lab users' }] : []),
     { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
     { key: 'orgadmins',       icon: '🏛️', label: 'Organization Admins' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
@@ -273,7 +275,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     if (!m.roles || !m.roles.includes(roleKey)) return false
     if (m.soloLocked && loginMode === 'solo') return false
     if (m.labManagerOnly && !isLabManager && !(activeModules || []).includes(m.key)) return false
-    if (m.neverLabUser && !isLabManager) return false
+    if (m.neverLabUser && !isLabManager && roleKey === 'team') return false
     if (loginMode === 'solo' && soloPool !== null && !m.external && !soloPool.includes(m.key) && m.key !== 'profile') return false
     return true
   })
@@ -769,7 +771,7 @@ export default function Layout({ children }) {
       {isMobile && (
         <nav style={{ flexShrink: 0, zIndex: 200, background: '#fff', borderTop: '1px solid #e0e0e0', boxShadow: '0 -2px 12px rgba(0,0,0,0.07)', paddingBottom: 'max(calc(env(safe-area-inset-bottom, 0px) / 2), 4px)' }}>
           <div style={{ display: 'flex', height: 56 }}>
-            {NAV_TABS.map(tab => {
+            {NAV_TABS.filter(tab => !(tab.id === 'supply' && session?.role === 'lab_user')).map(tab => {
               const isActive = tab.screens.includes(screen)
               const dest = tab.id === 'home' ? 'dashboard' : tab.id === 'booking' ? 'booking' : tab.id === 'messages' ? 'remessages' : tab.id === 'projects' ? 'projects' : 'profile'
               return (

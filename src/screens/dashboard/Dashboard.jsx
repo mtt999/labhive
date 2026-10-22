@@ -18,7 +18,7 @@ function getModules(role, loginMode, activeModules) {
     // Granted wins: activeModules is already the resolved pool ∩ the user's
     // own picks, so a module the org admin put in the lab user pool shows.
     if (m.labManagerOnly && !isLabManager && !(activeModules || []).includes(m.key)) return false
-    if (m.neverLabUser && !isLabManager) return false
+    if (m.neverLabUser && !isLabManager && roleKey === 'team') return false
     if (m.soloLocked && loginMode === 'solo') return false
     return true
   })

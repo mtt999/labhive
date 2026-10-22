@@ -1997,3 +1997,29 @@ change policies sit AFTER `my_managed_org_ids()` is defined — earlier, the
 CREATE POLICY fails and `_apply_rls` turns RLS off for the table.
 `SupervisorPicker` shows "+ Manage" to admins / lab managers only, and the
 list save `.select()`s so a refused write says so.
+
+## Import lab users + yearly re-safety + Supply for managers only (LabHive, Oct 22 2026)
+
+Ported from ICT-Lab (see ictlab/CLAUDE.md for the full design). Differences:
+
+- `src/screens/labmanagement/ImportLabUsers.jsx` is the SAME file as ICT-Lab's
+  except the `APP` line (`{ name: 'LabHive', selfApprove: false }`). Steps are
+  generated from `SAFETY_STEPS` (4 here). Keep the two copies identical.
+- **No self-approval:** a lab manager approves every safety step in LabHive
+  (lab users submit nothing in the app), so there is no `safety_self_approve`
+  column or trigger, and `create-lab-users` does not write one.
+- **Yearly re-safety** (`users.annual_resafety`, default ON, cron
+  `annual-safety-reset` Sep 1 00:05 Chicago) covers active lab users in EVERY
+  LabHive organization. After the reset each step needs a manager's approval
+  again. Untick steps in Edit to excuse someone.
+- `[0]` = no steps required (`NO_SAFETY_STEPS`, `storedSafetySteps()`).
+- **Supply Inventory** carries `neverLabUser`, but here the check is scoped to
+  TEAM lab users (`roleKey === 'team'` / `role === 'lab_user'`): solo sessions
+  have role `solo` and keep Supply. Lab users are also sent back from home /
+  inspection / results / history / labmanagement in App.jsx.
+- Welcome email keeps LabHive's own short text, plus a safety line and
+  `sendAfter`. `send-emails` honours `send_after` and paces 600ms per send.
+- SQL: `lab_user_import_setup.sql` (LabHive copy), `lab_user_no_supply.sql`,
+  `org_settings_managers_only.sql`; policies also in rls_phase1.sql.
+- Edge Function `create-lab-users` must be deployed in THIS project too
+  (Verify JWT off), and `send-emails` redeployed.

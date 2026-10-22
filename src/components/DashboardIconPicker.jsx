@@ -5,7 +5,10 @@ import { orgCapabilityPool, orgPoolForRole } from '../lib/modulePools'
 
 // All 12 icons available to BOTH solo and team
 export const ALL_MODULES_META = [
-  { key: 'supply',       screen: 'home',         label: 'Supply Inventory',   sub: 'Weekly inspection & export',      icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team', 'solo'] },
+  // Team lab users never get Supply Inventory — lab managers and admins only
+  // (Oct 2026, matching ICT-Lab). neverLabUser is the wall, and it applies to
+  // TEAM lab users only: solo sessions (role 'solo') keep Supply.
+  { key: 'supply',       screen: 'home',         label: 'Supply Inventory',   sub: 'Weekly inspection & export',      icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team', 'solo'], neverLabUser: true },
   { key: 'projects',     screen: 'projects',     label: 'Project Workspace',  sub: 'Inventory, results & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team', 'solo'] },
   { key: 'training',     screen: 'training',     label: 'Training Records',   sub: 'Certs, equipment & alarm',        icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team', 'solo'] },
   { key: 'equipment',    screen: 'equipment',    label: 'Equipment & Maintenance', sub: 'Lab equipment tracking',     icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team', 'solo'] },
@@ -85,7 +88,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
   // alwaysOnKeys: cannot be toggled off, but ARE draggable (labmanagement for labManagers)
   const alwaysOnKeys = isLabManager ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES] : PINNED_MODULES
   const pinnedKeys = alwaysOnKeys // keep for backward compat with selectNone/toggle gate
-  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser))
+  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser) && !(m.neverLabUser && session?.role === 'lab_user'))
   const [available, setAvailable] = useState(baseAvailable)
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
@@ -117,7 +120,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
       let savedModules = null
       let pool = null
       // All users see all non-hideForLabManager modules; adminOnly ones are locked for non-admins
-      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser))
+      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser) && !(m.neverLabUser && session?.role === 'lab_user'))
       let localRestricted = new Set(isLabManager ? [] : ALL_MODULES_META.filter(m => m.adminOnly || m.labUserLocked).map(m => m.key))
       if (loginMode === 'solo') {
         ALL_MODULES_META.filter(m => m.soloLocked).forEach(m => localRestricted.add(m.key))

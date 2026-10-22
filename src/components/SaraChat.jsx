@@ -88,9 +88,16 @@ const FAQ = [
   {
     id: 'safety',
     q: 'How does lab safety training work?',
-    a: 'Open Training Records → Safety and complete each step. A lab manager approves every step, and some modules stay locked until your safety training is approved.',
-    keywords: ['safety', 'lab safety', 'safety training', 'safety video', 'orientation', 'locked'],
+    a: 'Open Training Records → Safety and complete each step. A lab manager approves every step, and some modules stay locked until your safety training is approved.\n\nEvery Sep 1 the safety training is renewed: you complete the steps again, and a lab manager approves them, before LabHive opens fully for you.',
+    keywords: ['safety', 'lab safety', 'safety training', 'safety video', 'orientation', 'locked', 'yearly', 'sep 1', 'september', 'renew'],
     followups: ['training', 'contact'],
+  },
+  {
+    id: 'import',
+    q: 'How do I add many lab users from Excel?',
+    a: 'Lab managers and admins: open Lab Management → Import lab users → New import.\n1. Download the template and fill in first name, last name, email and supervisor — up to 50 people per file (use more files for a longer list)\n2. Upload it, then edit, remove or add rows and tick the safety steps each person must do, plus Yearly re-safety\n3. Confirm, then send the welcome email now or pick a date and time — or Save and finish later\nA row whose email already has an account must be removed or changed first. The history shows who got the email and who has signed in, and Edit list changes an import afterwards.',
+    keywords: ['import', 'excel', 'template', 'bulk', 'many users', 'add users', 'spreadsheet', 'xlsx', 'welcome email', 'schedule email'],
+    followups: ['safety', 'contact'],
   },
   {
     id: 'locker',

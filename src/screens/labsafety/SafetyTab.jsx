@@ -213,6 +213,12 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, saving }
 
   if (!user) return null
 
+  if (mySteps.length === 0) return (
+    <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--text2)', fontSize: 14 }}>
+      No safety steps are required for {user.name || 'this lab user'}.
+    </div>
+  )
+
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ display: 'flex', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
