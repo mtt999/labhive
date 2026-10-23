@@ -3341,6 +3341,9 @@ function BookingHistory({ session }) {
   const [timeFrom, setTimeFrom] = useState('')
   const [timeTo, setTimeTo] = useState('')
   const [orgUsers, setOrgUsers] = useState([])
+  // The summary used to stop at the 6 busiest instruments, so anything booked
+  // less had no usage record anywhere on the page.
+  const [allUsage, setAllUsage] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -3441,12 +3444,20 @@ function BookingHistory({ session }) {
       {/* Usage summary */}
       {Object.keys(usageStats).length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>📊 Usage Summary</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>📊 Usage Summary</div>
+            <span style={{ fontSize: 12, color: 'var(--text3)' }}>confirmed bookings in the filter below · {Object.keys(usageStats).length} equipment</span>
+            {Object.keys(usageStats).length > 6 && (
+              <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setAllUsage(v => !v)}>
+                {allUsage ? 'Show the top 6' : `Show all ${Object.keys(usageStats).length}`}
+              </button>
+            )}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-            {Object.entries(usageStats).sort((a,b) => b[1].hours - a[1].hours).slice(0, 6).map(([name, stats]) => (
+            {Object.entries(usageStats).sort((a,b) => b[1].hours - a[1].hours).slice(0, allUsage ? undefined : 6).map(([name, stats]) => (
               <div key={name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-                <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--accent)' }}>{Math.round(stats.hours)}h</div>
+                <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--accent)' }}>{stats.hours < 10 ? Math.round(stats.hours * 10) / 10 : Math.round(stats.hours)}h</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)' }}>{stats.count} booking{stats.count !== 1 ? 's' : ''}</div>
               </div>
             ))}
