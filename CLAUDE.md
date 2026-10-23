@@ -2073,3 +2073,10 @@ dependency array is evaluated on every render, so a name declared further
 down is in its temporal dead zone. The build does not catch it. Put an effect
 below every piece of state it lists (functions it CALLS may sit below — the
 effect body runs after render).
+- Same rule for the messages: the all-done banner counts the person's own
+  steps ("All 2 steps approved"), and only someone who owed **Step 2** (the
+  step with certificate uploads) is told about certificates / sent to
+  Documents; anyone else gets "Your safety training is complete" + Go to the
+  home page. The Training Records green tip (ModuleTip) swaps "Upload your
+  training certificates" for a Safety-tab pointer for lab users excused from
+  Step 2 (it reads their own users row).
