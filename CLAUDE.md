@@ -2023,3 +2023,21 @@ Ported from ICT-Lab (see ictlab/CLAUDE.md for the full design). Differences:
   `org_settings_managers_only.sql`; policies also in rls_phase1.sql.
 - Edge Function `create-lab-users` must be deployed in THIS project too
   (Verify JWT off), and `send-emails` redeployed.
+
+## Training Records hub: Cards / List, advisor, details open in place (Oct 2026, both apps)
+
+`UserTrainingHub` (TrainingRecords.jsx) has the Lab Users toolbar (search ·
+Cards / List · Advisor · Sort), for admins / lab managers only; lab users see
+just their own card. View + sort: `labhive_training_view` / `_sort`; List is the
+default past 20. Clicking a person opens the training panel IN PLACE: in List
+as a row under theirs, in Cards across the grid (`gridColumn: 1 / -1`) right
+after the clicked card's row (cards per row from a ResizeObserver). One open
+at a time; scrolled into view. Someone open but filtered out: panel at the
+bottom. List row: names · advisor (sort by name) · Documents badge · Safety
+dot · Vehicle / Equipment / Alarm / Locker dots.
+
+- **Advisor bars are light blue** (#e0f2fe / #075985) in Training AND Lab
+  Users: teal means "the person who is open", and a teal bar read as one.
+- Advisor = `users.supervisor` (the panel header used to print `degree`).
+- Safety dot = every step that person owes (`requiredSafetySteps`); it counted
+  to a fixed 4, so a 3-step ICT-Lab lab user never showed ✓.
