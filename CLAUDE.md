@@ -2050,3 +2050,5 @@ links to `https://labhive.app/`, and a **LabHive home** pill sits top right
 (`.login-shell .login-home` in index.css, `IconHome` in Icons.jsx). Done with
 explicit permission on the LOCKED login layout: the logo's size (200px) and
 margins are unchanged.
+Signed in, the header logo already opened labhive.app in a new tab; a home
+icon (same, web only) now sits first in the header's right-hand buttons.

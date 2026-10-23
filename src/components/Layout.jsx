@@ -10,6 +10,7 @@ import CustomerServiceModal from './CustomerServiceModal'
 import SaraChat from './SaraChat'
 import FeedbackWidget from './FeedbackWidget'
 import OnboardingTour, { ModuleTip, HelpTourButton } from './OnboardingTour'
+import { IconHome } from './Icons'
 
 function ExternalLinkModal({ url, onConfirm, onCancel }) {
   return (
@@ -636,7 +637,7 @@ export default function Layout({ children }) {
             </svg>
           </button>
         )}
-        <div onClick={() => window.open('https://labhive.app/', '_blank')} style={{ cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div onClick={() => window.open('https://labhive.app/', '_blank')} title="LabHive home page (opens in a new tab)" style={{ cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ marginTop: 20 }}><LabHiveLogo size={79} /></div>
           {!isMobile && (
             <div>
@@ -646,6 +647,16 @@ export default function Layout({ children }) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Home page (labhive.app), like the logo — a new tab, so the app
+              stays signed in. Not in the phone app: it has no home page. */}
+          {!window.Capacitor?.isNativePlatform?.() && (
+            <a href="https://labhive.app/" target="_blank" rel="noopener" title="LabHive home page (opens in a new tab)" aria-label="LabHive home page"
+              style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.18s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}>
+              <IconHome size={16} />
+            </a>
+          )}
           {/* About — glass icon button */}
           <button
             onClick={() => setShowAbout(true)}
