@@ -203,13 +203,19 @@ function StepContentArea({ step, targetUserId, isManager }) {
 
 function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, saving }) {
   const { setScreen, setSidebarSubTab } = useAppStore()
-  const [activeStep, setActiveStep] = useState(1)
+  const [pickedStep, setActiveStep] = useState(null)
   const userProg = progress[user?.id] || {}
   // Only the steps this user owes count, and only those are listed. A step
   // nobody assigned would otherwise read as outstanding work forever.
   const required = requiredSafetySteps(user?.required_safety_steps)
   const mySteps = STEPS.filter(s => required.includes(s.number))
   const allApproved = mySteps.every(s => userProg[s.number])
+  // The step on screen is always one this person owes: the one they picked,
+  // else their first unfinished step, else their first. It started at Step 1
+  // for everyone, so someone excused from Step 1 opened on a blank page.
+  const activeStep = mySteps.some(s => s.number === pickedStep)
+    ? pickedStep
+    : (mySteps.find(s => !userProg[s.number]) || mySteps[0])?.number
 
   if (!user) return null
 
@@ -287,8 +293,10 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, saving }
           only cue was a tab colour change they had no reason to look for.
           Hidden on the last step, which has the completion banner below. */}
       {!allApproved && (() => {
-        const cur  = STEPS.find(x => x.number === activeStep)
-        const next = STEPS.find(x => x.number === activeStep + 1)
+        // "Next" is the next step THIS person owes — it was number + 1, which
+        // sent someone excused from a step to an empty page (Oct 23 2026)
+        const cur  = mySteps.find(x => x.number === activeStep)
+        const next = mySteps.find(x => x.number > activeStep)
         if (!cur || !next || !userProg[cur.number]) return null
         return (
           <div style={{ borderTop: '1px solid #9FE1CB', padding: '14px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
