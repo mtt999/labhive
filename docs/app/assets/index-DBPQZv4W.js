@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/web-DVkrFS94.js","assets/index-BLW7UCpJ.js","assets/index-t8-BkgTP.css"])))=>i.map(i=>d[i]);
+import{ab as t,_ as o}from"./index-BLW7UCpJ.js";const _=t("JailbreakRoot",{web:()=>o(()=>import("./web-DVkrFS94.js"),__vite__mapDeps([0,1,2])).then(e=>new e.JailbreakRootWeb),electron:()=>o(()=>import("./web-DVkrFS94.js"),__vite__mapDeps([0,1,2])).then(e=>new e.JailbreakRootWeb)});export{_ as JailbreakRoot};
