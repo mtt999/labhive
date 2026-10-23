@@ -509,6 +509,28 @@ main > * { animation: screen-fade 0.16s ease-out; }
 }
 
 
+/* Way back to the public home page (labhive.app), top right on the scrim. */
+.login-shell .login-home {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.32);
+  backdrop-filter: blur(4px);
+  transition: background 0.15s;
+}
+.login-shell .login-home:hover { background: rgba(255,255,255,0.22); }
+
 /* Anything outside the white card sits on the scrim and cannot use the page's
    normal text tokens. */
 .login-shell .login-credit {

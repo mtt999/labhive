@@ -5,11 +5,16 @@ import { useState, useEffect, useRef } from 'react'
 import AboutModal from '../../components/AboutModal'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
 import SaraChat from '../../components/SaraChat'
-import { IconQr, IconAlert, IconEye, IconEyeOff, IconCheckCircle, IconSparkle, IconInfo, IconMail } from '../../components/Icons'
+import { IconQr, IconAlert, IconEye, IconEyeOff, IconCheckCircle, IconSparkle, IconInfo, IconMail, IconHome } from '../../components/Icons'
 
 function LabHiveLogo({ size = 120 }) {
   return <img src={import.meta.env.BASE_URL + 'labhive_logo.svg'} width={size} height={size} style={{ display: 'block', objectFit: 'contain', margin: '0 auto' }} alt="LabHive" />
 }
+
+// The public home page (labhive.app). Someone who opened the app from it had
+// no way back. Not shown inside the phone app, which has no home page.
+const HOME_URL = 'https://labhive.app/'
+const onWeb = () => !window.Capacitor?.isNativePlatform?.()
 
 function SelectorCard({ mode, selected, onSelect }) {
   const isTeam      = mode === 'team'
@@ -468,13 +473,20 @@ export default function Login({ linkError = null }) {
         padding, content starting at the top — so the logo's -40px margin still
         works against the top of the flow. */}
     <div className="login-shell">
+      {onWeb() && (
+        <a href={HOME_URL} className="login-home" title="Back to the LabHive home page">
+          <IconHome size={16} /> LabHive home
+        </a>
+      )}
       <div className="login-scroll">
       <div style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
 
         {/* 200px against -40px is the locked pair: the -40 closes the gap the
             logo's transparent viewBox leaves under the artwork. */}
         <div style={{ textAlign: 'center', marginBottom: -58 }}>
-          <LabHiveLogo size={200} />
+          {onWeb()
+            ? <a href={HOME_URL} title="LabHive home page" aria-label="LabHive home page" style={{ display: 'inline-block' }}><LabHiveLogo size={200} /></a>
+            : <LabHiveLogo size={200} />}
         </div>
 
         <div className="card" style={{ padding: '28px 28px 12px' }}>

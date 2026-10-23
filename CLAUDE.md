@@ -2041,3 +2041,12 @@ dot · Vehicle / Equipment / Alarm / Locker dots.
 - Advisor = `users.supervisor` (the panel header used to print `degree`).
 - Safety dot = every step that person owes (`requiredSafetySteps`); it counted
   to a fixed 4, so a 3-step ICT-Lab lab user never showed ✓.
+
+## Sign-in page: a way back to the home page (Oct 2026)
+
+Someone who opened the app from labhive.app had no way back. On the sign-in
+page (web only — hidden inside the phone app, `window.Capacitor`) the logo
+links to `https://labhive.app/`, and a **LabHive home** pill sits top right
+(`.login-shell .login-home` in index.css, `IconHome` in Icons.jsx). Done with
+explicit permission on the LOCKED login layout: the logo's size (200px) and
+margins are unchanged.

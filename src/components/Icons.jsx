@@ -191,6 +191,10 @@ export const IconExternal = (p) => (
   <Icon {...p}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></Icon>
 )
 
+export const IconHome = (p) => (
+  <Icon {...p}><path d="M3 11.5 12 4l9 7.5M5.5 9.5V19a1 1 0 0 0 1 1H10v-5.5h4V20h3.5a1 1 0 0 0 1-1V9.5"/></Icon>
+)
+
 export const IconFolder = (p) => (
   <Icon {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></Icon>
 )
