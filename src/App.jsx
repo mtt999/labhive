@@ -199,6 +199,24 @@ export default function App() {
   // Supabase also announces a recovery token through the auth event, which is
   // the only signal available if the library reaches the fragment before the
   // module-level read above does.
+
+  // The address follows the page you are on, so a refresh (or a hard refresh
+  // in development) returns to it. The Project Materials page writes its own
+  // address (?screen=projectmaterials&project=…) for Back / Forward; that
+  // address used to stay after leaving the page, so every refresh reopened
+  // it. Signed out, the address is left alone — the sign-in URL stays clean.
+  useEffect(() => {
+    if (!session?.loginMode || screen === 'projectmaterials') return
+    try {
+      const url = new URL(window.location.href)
+      const want = screen === 'dashboard' ? null : screen
+      if ((url.searchParams.get('screen') || null) === want && !url.searchParams.has('project') && !url.searchParams.has('material')) return
+      ;['screen', 'project', 'material', 'tab'].forEach(k => url.searchParams.delete(k))
+      if (want) url.searchParams.set('screen', want)
+      const q = url.searchParams.toString()
+      window.history.replaceState(window.history.state, '', url.pathname + (q ? `?${q}` : '') + url.hash)
+    } catch { /* an address we cannot parse: leave it */ }
+  }, [screen, session?.loginMode])
   useEffect(() => {
     const { data } = sb.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
