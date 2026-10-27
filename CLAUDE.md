@@ -2100,3 +2100,14 @@ were on. The Project Materials page still writes its own address
 (`?screen=projectmaterials&project=…&material=…`) for Back / Forward — that
 address used to stay after leaving the page, so every refresh reopened it.
 Leaving it now replaces it. Sidebar sub-tabs are not in the address.
+
+## Demo visitors: Terms and icon picker once per browser (Oct 26 2026)
+
+Public demo sessions force `termsAcceptedVersion: null` and `pickerDone:
+false` (the demo rows are shared, so their DB flags mean nothing). App.jsx now
+remembers in localStorage, per browser: `labhive_demo_terms_v<version>` (the
+Terms show again when CURRENT_TERMS_VERSION goes up),
+`labhive_demo_picker_<userId>` (once per demo role) and
+`labhive_demo_modules_<userId>` (their icon choice, restored at sign-in so the
+dashboard does not reset). Nothing about the visitor is stored anywhere else —
+no IP. The welcome tour was already once per browser (`ilab_tour_done_<uid>`).

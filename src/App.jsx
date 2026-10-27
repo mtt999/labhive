@@ -182,6 +182,15 @@ function ComingSoonScreen() {
   )
 }
 
+// Public demo visitors: the Terms ("Welcome to LabHive") and the icon picker
+// show once per browser, not on every sign-in. Remembered in THIS browser
+// only (localStorage) — the app knows nothing about a visitor's IP. The
+// Terms key carries the version, so new terms are shown again. The demo's
+// icon choice is kept the same way, so the dashboard does not reset.
+const DEMO_TERMS_KEY = `labhive_demo_terms_v${CURRENT_TERMS_VERSION}`
+const demoGet = k => { try { return localStorage.getItem(k) } catch { return null } }
+const demoSet = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private window */ } }
+
 export default function App() {
   const { session, screen, refreshCache, setScreen, setActiveModules, setScanEquipmentId, setSession, setSharedWorkspaces, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
@@ -226,7 +235,8 @@ export default function App() {
   useEffect(() => {
     if (!session) { setTermsAccepted(false); return }
     if (session.userId === null) { setTermsAccepted(true); return } // super admin
-    setTermsAccepted(session.termsAcceptedVersion === CURRENT_TERMS_VERSION)
+    setTermsAccepted(session.termsAcceptedVersion === CURRENT_TERMS_VERSION
+      || (session.isDemo && demoGet(DEMO_TERMS_KEY) === '1'))
   }, [session?.userId, session?.termsAcceptedVersion])
 
   // Track screen changes as GA4 page views
@@ -436,7 +446,11 @@ export default function App() {
     pickerDismissedRef.current = false
     // Demo: always reset activeModules so loadDashboardPrefs doesn't early-return on a stale
     // non-null value left over from a previous role in the same browser session
-    if (session?.isDemo) setActiveModules(null)
+    if (session?.isDemo) {
+      let saved = null
+      try { saved = JSON.parse(demoGet(`labhive_demo_modules_${session.userId}`) || 'null') } catch { /* bad value */ }
+      setActiveModules(Array.isArray(saved) && saved.length ? saved : null)
+    }
     checkFirstLogin(session.userId, session.loginMode)
   }, [session?.loginMode, session?.userId])
 
@@ -446,8 +460,8 @@ export default function App() {
       if (SCAN_EQ_ID || SCAN_ITEM_QR) { setShowIconPicker(false); return }
       // Picker was already dismissed this session — never re-open it
       if (pickerDismissedRef.current) { setShowIconPicker(false); return }
-      // Demo account always sees the picker on login (localStorage/DB checks skipped)
-      if (useAppStore.getState().session?.isDemo) { setShowIconPicker(true); return }
+      // Demo account: the picker once per browser (and per demo role)
+      if (useAppStore.getState().session?.isDemo) { setShowIconPicker(demoGet(`labhive_demo_picker_${userId}`) !== '1'); return }
       if (!userId) {
         // Super admin: show picker only if they haven't set their dashboard yet
         if (localStorage.getItem('ilab_admin_dashboard_set') === 'true') { setShowIconPicker(false); return }
@@ -645,7 +659,7 @@ export default function App() {
         </ScreenErrorBoundary>
       </Layout>
       <Toast />
-      {!termsAccepted && session && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
+      {!termsAccepted && session && <TermsAcceptance session={session} onAccept={() => { if (session.isDemo) demoSet(DEMO_TERMS_KEY, '1'); setTermsAccepted(true) }} />}
       {termsAccepted && session?.mustChangePassword && <ForcePasswordChange />}
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
       <CookieConsent />
@@ -658,8 +672,11 @@ export default function App() {
             pickerDismissedRef.current = true
             if (!session.userId) {
               localStorage.setItem('ilab_admin_dashboard_set', 'true')
-            } else if (!session.isDemo) {
-              // Skip localStorage/DB flags for demo — next login should show picker again
+            } else if (session.isDemo) {
+              // Demo: remembered in this browser only, never in the shared demo row
+              demoSet(`labhive_demo_picker_${session.userId}`, '1')
+              if (modules?.length > 0) demoSet(`labhive_demo_modules_${session.userId}`, JSON.stringify(modules))
+            } else {
               localStorage.setItem(`ilab_picker_done_${session.userId}`, 'true')
               if (session.loginMode === 'solo') {
                 sb.from('solo_users').update({ picker_done: true }).eq('id', session.userId).then(() => {}, () => {})
