@@ -814,10 +814,11 @@ const TOURS = {
         <div class="row ok"><img class="thumb" src="${IMG['eq-centrifuge']}" alt=""><span class="nm"><b>Centrifuge</b><span class="sm">212 of 250 hours since maintenance</span><span class="pb" style="margin-top:4px"><i style="width:85%;background:#f59e0b"></i></span></span><span class="tag amber">DUE SOON</span></div>
         <div class="row ok"><img class="thumb" src="${IMG['eq-load-frame']}" alt=""><span class="nm"><b>Hydraulic Load Frame</b><span class="sm">310 of 300 hours</span><span class="pb" style="margin-top:4px"><i style="width:100%;background:var(--red)"></i></span></span><span class="tag" style="background:#fde8e4;color:var(--red)">EXCEEDED</span></div>`) },
     { kicker: 'Step 5 · Responsibility', title: 'Someone is responsible for each one',
-      body: 'Name the lab managers responsible for maintaining each instrument, so it is always clear who looks after what.',
+      body: 'Name the lab managers responsible for maintaining each instrument. Tick Remind and they are reminded 2 weeks and 1 week before maintenance is due, on the day, and every week it is overdue.',
       scene: () => win('Edit · Hydraulic Load Frame', `
         <span class="lbl">Responsible for Maintenance</span>
-        <div class="row ok">${av('ML', '#1D9E75')}<span class="nm">Maria Lopez<span class="sm">Lab manager</span></span><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span></div>
+        <div class="row ok">${av('ML', '#1D9E75')}<span class="nm">Maria Lopez<span class="sm">Lab manager</span></span><span class="tag amber">🔔 REMIND</span><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span></div>
+        ${notif('🔧 Maintenance due in 1 week: Hydraulic Load Frame', 'Due Nov 5 · you are listed as responsible', '7:00 AM')}
         <div class="row ok">${av('DR', '#534AB7')}<span class="nm">Daniel Ruiz<span class="sm">Lab manager</span></span><span class="box"></span></div>`) },
   ], recap: ['Equipment list with photos', 'Who may use each instrument', 'Calibration status at a glance', 'Maintenance by date or hours used'] },
 

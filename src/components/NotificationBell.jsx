@@ -105,6 +105,8 @@ export default function NotificationBell() {
       setSidebarSubTab('equipment')
       const who = (n.title || '').match(/^(.+?) (requested|accepted|proposed|passed)\b/)?.[1]
       if (who) setPendingTrainingUser(who)
+    } else if (n.type === 'maintenance_reminder') {
+      setScreen('equipment')
     } else if (n.task_id || ['reminder_daily', 'deadline_reminder'].includes(n.type)) {
       // the daily summary of several tasks has no single task_id
       setScreen('pm')
@@ -147,7 +149,7 @@ export default function NotificationBell() {
               const title = n._src === 'booking' ? n.message : n.title
               const icon = n._src === 'booking'
                 ? (BOOKING_ICONS[n.type] || '📅')
-                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️' }[n.type] || '🔔')
+                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', maintenance_reminder: '🔧', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️' }[n.type] || '🔔')
               return (
                 <div key={`${n._src}_${n.id}`} onClick={() => handleClick(n)}
                   style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}

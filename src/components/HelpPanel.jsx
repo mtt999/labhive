@@ -88,6 +88,7 @@ const HELP_CONTENT = {
       T('Untick Request training to let lab users book an item without a training record', 'manager'),
       'Calibration: calibration dates and records',
       T('Maintenance Records: usage hours from bookings, and maintenance history', 'manager'),
+      T('Responsible for Maintenance (in an item\'s Edit form): tick Remind next to a lab manager and they are reminded 2 weeks and 1 week before the next maintenance date, on the day, then weekly while it is overdue', 'manager'),
       T('Import Excel loads a whole equipment list at once', 'manager'),
       'Settings: equipment categories',
     ],
