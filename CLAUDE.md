@@ -2111,3 +2111,23 @@ Terms show again when CURRENT_TERMS_VERSION goes up),
 `labhive_demo_modules_<userId>` (their icon choice, restored at sign-in so the
 dashboard does not reset). Nothing about the visitor is stored anywhere else —
 no IP. The welcome tour was already once per browser (`ilab_tour_done_<uid>`).
+
+## Home page (labhive.app/) and its feature tours (Oct 2026)
+
+The landing page is **`landing/index.html`**. `scripts/post-build.mjs` copies it
+to `docs/index.html` on every build, so never edit `docs/index.html` (it is
+overwritten) and never put the page back as a string in post-build: its tour
+script is full of backticks and `${}`.
+
+- The feature cards use the app's icon names from `ALL_MODULES_META`
+  (Booking Equipment, Training Records, Supply Inventory, Project Workspace,
+  Equipment & Maintenance, Task Board, Lab Messages). Six show; the rest sit
+  behind **More features** (`data-more` + `hidden`).
+- Each card opens a step-by-step tour (`TOURS` in the page script). The last
+  step offers Back · Finish · Next feature; the closing screen Back · Close ·
+  Next feature, with Try it in LabHive / Contact us above.
+- Behind each step's picture is a blurred drawing of that screen (`PAGES`).
+- Photos live in `public/tour/` (served at `/app/tour/`), all public domain or
+  CC0, sources in `public/tour/SOURCES.txt`. Sara's picture is `/app/sara-avatar.jpg`.
+- **Tours must stay true to the app.** When a feature named in a tour changes,
+  change its step text in the same commit.

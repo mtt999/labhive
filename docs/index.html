@@ -22,7 +22,10 @@
       --blue: #3b82f6; --blue-light: #F0F8FF; --blue-border: #bfdbfe;
       --text: #111827; --text2: #4B5563; --border: #e5e7eb;
       --surface: #ffffff; --bg: #f8faf9;
+      --teal-ink: #085041; --text3: #8a93a3; --stage: #f1f5f9; --grey-row: #efeee9;
+      --amber: #b45309; --amber-bg: #fef3c7; --red: #c84b2f;
     }
+    [hidden] { display: none !important; }
     body { font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text); background: var(--surface); line-height: 1.6; }
 
     /* ── Nav ── */
@@ -59,33 +62,287 @@
 
     /* ── Features grid ── */
     .features { background: var(--bg); padding: 80px 24px; }
-    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-    @media (max-width: 768px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 480px) { .features-grid { grid-template-columns: 1fr; } }
-    .feat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; cursor: pointer; transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; }
-    .feat-card:hover { box-shadow: 0 4px 20px rgba(29,158,117,0.15); transform: translateY(-2px); border-color: var(--teal); }
-    .feat-card:hover .feat-hint { opacity: 1; }
+    .features-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+    .features-grid > .feat-card { flex: 0 0 calc((100% - 40px) / 3); }
+    @media (max-width: 768px) { .features-grid > .feat-card { flex-basis: calc((100% - 20px) / 2); } }
+    @media (max-width: 480px) { .features-grid > .feat-card { flex-basis: 100%; } }
+    .more-wrap { text-align: center; margin-top: 24px; }
+    .more-btn { font: inherit; font-size: 14px; font-weight: 600; color: var(--teal-ink); background: var(--teal-light); border: 1px solid #9FE1CB; border-radius: 99px; padding: 9px 22px; cursor: pointer; }
+    .more-btn:hover { border-color: var(--teal); }
+    .more-btn:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
+    .feat-card { font: inherit; color: inherit; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; cursor: pointer; transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; }
+    .feat-card:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
+    .feat-card:hover, .feat-card:focus-visible { box-shadow: 0 4px 20px rgba(29,158,117,0.15); transform: translateY(-2px); border-color: var(--teal); }
+    .feat-card:hover .feat-hint, .feat-card:focus-visible .feat-hint { opacity: 1; }
     .feat-icon { font-size: 28px; margin-bottom: 12px; }
     .feat-card h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
     .feat-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
     .feat-hint { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--teal); font-weight: 600; margin-top: 12px; opacity: 0; transition: opacity 0.15s; }
 
-    /* ── Feature preview modal ── */
-    .feat-modal-bg { display: none; position: fixed; inset: 0; background: rgba(12,17,64,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 24px; }
-    .feat-modal-bg.open { display: flex; }
-    .feat-modal { background: #fff; border-radius: 16px; max-width: 720px; width: 100%; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.25); }
-    .feat-modal-header { background: var(--navy); color: #fff; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; }
-    .feat-modal-header h3 { font-size: 17px; font-weight: 700; }
-    .feat-modal-close { background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px; opacity: 0.7; }
-    .feat-modal-close:hover { opacity: 1; }
-    .feat-modal-body { padding: 0; }
-    .feat-gif-wrap { background: #f1f5f9; min-height: 320px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
-    .feat-gif-wrap img { max-width: 100%; max-height: 400px; object-fit: contain; border-radius: 0; display: block; }
-    .feat-gif-placeholder { text-align: center; padding: 48px 32px; }
-    .feat-gif-placeholder .ph-icon { font-size: 48px; margin-bottom: 12px; }
-    .feat-gif-placeholder p { font-size: 14px; color: #64748b; }
-    .feat-modal-desc { padding: 20px 24px; font-size: 15px; color: var(--text2); line-height: 1.7; border-top: 1px solid var(--border); }
-    .feat-modal-cta { padding: 16px 24px 24px; text-align: center; }
+    /* ── Feature tours (step by step, one per card) ── */
+  /* ── Modal ── */
+  .bg { position: fixed; inset: 0; background: rgba(12,17,64,.7); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { background: var(--surface); border-radius: 16px; max-width: 760px; width: 100%; max-height: calc(100% - 8px); overflow: auto; box-shadow: 0 24px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+  .mh { background: var(--navy); color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .mh h3 { margin: 0; font-size: 17px; font-weight: 700; }
+  .mh .count { font-size: 12px; color: #a5b4fc; font-weight: 600; margin-left: 8px; font-variant-numeric: tabular-nums; }
+  .x { background: none; border: none; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; opacity: .7; padding: 0 4px; }
+  .x:hover, .x:focus-visible { opacity: 1; }
+  .bar { height: 3px; background: #1e2a6b; }
+  .bar i { display: block; height: 100%; background: #6ee7b7; transition: width .3s ease; }
+
+  .stage { position: relative; background: #f4f3ef; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 24px 16px; overflow: hidden; }
+  /* Behind each step: the booking page, out of focus, so the eye stays on the step */
+  .page-bg { position: absolute; inset: -14px; filter: blur(5px); pointer-events: none; display: flex; flex-direction: column; background: #f4f3ef; }
+  .page-bg .ah { height: 30px; background: #0d47a1; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 28px; }
+  .page-bg .ah i { width: 16px; height: 16px; border-radius: 4px; background: #ff6b1a; }
+  .page-bg .ah b { margin-left: auto; width: 90px; height: 16px; border-radius: 99px; background: rgba(255,255,255,.22); }
+  .page-bg .am { flex: 1; display: flex; min-height: 0; }
+  .page-bg .side { width: 96px; background: #fff; border-right: 1px solid #e5e3dc; padding: 18px 10px 0 24px; display: grid; align-content: start; gap: 10px; }
+  .page-bg .side span { height: 9px; border-radius: 4px; background: #e8e6df; }
+  .page-bg .side span.on { background: #9FE1CB; }
+  .page-bg .main { flex: 1; padding: 18px 24px 0 16px; display: flex; gap: 12px; min-width: 0; }
+  .page-bg .eqs { width: 150px; flex-shrink: 0; display: grid; align-content: start; gap: 7px; }
+  .page-bg .eqs .h { height: 14px; width: 75%; border-radius: 5px; background: #0c1140; opacity: .75; margin-bottom: 6px; }
+  .page-bg .eqs .r { height: 26px; border-radius: 7px; background: #fff; border: 1px solid #e5e3dc; }
+  .page-bg .eqs .r.g { background: #e9e8e2; }
+  .page-bg .eqs .r.s { background: #E1F5EE; border-color: #9FE1CB; }
+  .page-bg .week { flex: 1; min-width: 0; background: #fff; border: 1px solid #e5e3dc; border-radius: 10px; display: grid; grid-template-columns: repeat(5, 1fr); position: relative; overflow: hidden; }
+  .page-bg .week div { border-left: 1px solid #eeede8; background: repeating-linear-gradient(180deg, transparent 0 35px, #eeede8 35px 36px); }
+  .page-bg .week em { position: absolute; border-radius: 6px; }
+  .page-bg::after { content: ''; position: absolute; inset: 0; background: rgba(241,245,249,.35); }
+  #t-scene { position: relative; z-index: 1; width: 100%; display: flex; justify-content: center; }
+  @media (max-width: 560px) { .page-bg .side, .page-bg .eqs { display: none; } }
+  .scene { width: 100%; max-width: 560px; animation: in .35s ease both; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .copy { padding: 20px 24px 4px; }
+  .kicker { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--teal); }
+  .copy h4 { margin: 4px 0 6px; font-size: 20px; color: var(--navy); text-wrap: balance; }
+  .copy p { margin: 0; font-size: 15px; color: var(--text2); max-width: 62ch; }
+
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px 20px; flex-wrap: wrap; }
+  .dots { display: flex; gap: 6px; }
+  .dots button { width: 9px; height: 9px; border-radius: 99px; border: none; background: #d6dbe3; padding: 0; cursor: pointer; transition: width .2s, background .2s; }
+  .dots button.on { width: 22px; background: var(--teal); }
+  .dots button.done { background: #9FE1CB; }
+  .nav { display: flex; gap: 8px; margin-left: auto; }
+  .b { font: inherit; font-size: 14px; font-weight: 600; border-radius: 9px; padding: 9px 18px; cursor: pointer; border: 1.5px solid var(--border); background: #fff; color: var(--text); text-decoration: none; display: inline-block; }
+  .b:hover { border-color: #c9ced6; }
+  .b.p { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .b.nf { color: var(--teal-ink); border-color: #9FE1CB; background: var(--teal-light); }
+  .b.nf:hover { border-color: var(--teal); }
+  .nav { flex-wrap: wrap; justify-content: flex-end; }
+  .b.p:hover { background: var(--teal-dark); border-color: var(--teal-dark); }
+  .b:focus-visible, .dots button:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
+  .skip { font-size: 13px; color: var(--text3); background: none; border: none; cursor: pointer; font: inherit; font-size: 13px; padding: 8px 4px; }
+  .skip:hover { color: var(--text2); }
+
+  /* ── Mini booking screen (inert drawings) ── */
+  .win { background: #fff; border: 1px solid #dfe3ea; border-radius: 12px; box-shadow: 0 6px 20px rgba(12,17,64,.08); overflow: hidden; }
+  .win-top { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #eef0f4; font-size: 12px; font-weight: 700; color: var(--navy); }
+  .win-top i { width: 8px; height: 8px; border-radius: 99px; background: #e2e5ea; }
+  .win-top span { margin-left: 6px; }
+  .win-body { padding: 12px; display: grid; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--grey-row); border-radius: 8px; font-size: 13px; }
+  .row.ok { background: #fff; border: 1px solid #e5e7eb; }
+  .row.sel { background: var(--teal-light); border: 1px solid #9FE1CB; }
+  .row .nm { flex: 1; min-width: 0; }
+  .row.lock .nm { color: #9a978f; }
+  .row .sm { display: block; font-size: 11px; color: var(--text3); }
+  .box { width: 15px; height: 15px; border-radius: 4px; border: 2px solid #d4d1c8; flex-shrink: 0; display: grid; place-items: center; font-size: 10px; color: #fff; }
+  .row.sel .box, .row.ok.ticked .box { background: var(--teal); border-color: var(--teal); }
+  .tag { font-size: 10px; font-weight: 700; letter-spacing: .3px; border-radius: 4px; padding: 2px 6px; background: #e3e2dd; color: #6b7280; white-space: nowrap; }
+  .tag.amber { background: var(--amber-bg); color: var(--amber); }
+  .tag.green { background: var(--teal-light); color: var(--teal-ink); }
+  .pulse { animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(29,158,117,.0); } 50% { box-shadow: 0 0 0 4px rgba(29,158,117,.25); } }
+
+  .choice { background: #EEEDFE; border: 1px solid #C5C2F5; border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+  .choice b { font-size: 13px; color: #534AB7; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #C5C2F5; border-radius: 99px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #534AB7; }
+  .pill.on { background: #fff; border-color: #534AB7; }
+
+  /* calendar */
+  .cal { display: grid; grid-template-columns: 44px repeat(5, 1fr); font-size: 11px; }
+  .cal .hd { text-align: center; font-weight: 700; color: var(--text2); padding: 4px 0 6px; }
+  .cal .hr { color: var(--text3); text-align: right; padding-right: 6px; height: 30px; transform: translateY(-7px); font-variant-numeric: tabular-nums; }
+  .col { position: relative; border-left: 1px solid #eef0f4; }
+  .cell { height: 30px; border-top: 1px solid #eef0f4; }
+  .blk { position: absolute; left: 3px; right: 3px; border-radius: 6px; font-size: 10.5px; font-weight: 600; padding: 3px 5px; line-height: 1.25; overflow: hidden; }
+  .blk.mine { background: var(--teal); color: #fff; }
+  .blk.other { background: #dbe4f0; color: #3b4a63; }
+  .blk.ghost { border: 2px dashed var(--teal); background: rgba(29,158,117,.08); color: var(--teal-ink); }
+  .blk.faded { opacity: .35; }
+  .grow { animation: grow 2.4s ease-in-out infinite; }
+  @keyframes grow { 0% { height: 0; } 55%,85% { height: 75px; } 100% { height: 75px; opacity: 0; } }
+  .slide { animation: slide 3s ease-in-out infinite; }
+  @keyframes slide { 0%,15% { transform: translate(0,0); } 60%,90% { transform: translate(calc(100% + 6px), 30px); } 100% { transform: translate(calc(100% + 6px), 30px); opacity: 0; } }
+  .cursor { position: absolute; width: 14px; height: 14px; border-radius: 99px; background: rgba(12,17,64,.55); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+
+  .form { display: grid; gap: 8px; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--text2); }
+  .opts { display: flex; gap: 8px; }
+  .opt { flex: 1; text-align: center; font-size: 13px; font-weight: 700; border-radius: 9px; padding: 8px 4px; border: 1.5px solid #dcdad2; background: #fff; }
+  .opt.on { border: 2px solid var(--teal); background: var(--teal-light); color: var(--teal-ink); }
+  .tick { display: flex; gap: 8px; font-size: 12.5px; color: var(--text2); line-height: 1.45; align-items: flex-start; }
+  .tick .box { margin-top: 2px; background: var(--teal); border-color: var(--teal); }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .two { grid-template-columns: 1fr; } }
+  .who { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+  .notif { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; }
+  .notif .dot { width: 8px; height: 8px; border-radius: 99px; background: #3b82f6; margin-top: 6px; flex-shrink: 0; }
+  .notif b { display: block; color: var(--navy); }
+  .notif span { color: var(--text3); font-size: 11.5px; }
+  .acts { display: flex; gap: 6px; margin-top: 8px; }
+  .mb { font-size: 12px; font-weight: 600; border-radius: 7px; padding: 4px 10px; border: 1px solid #dcdad2; background: #fff; }
+  .mb.g { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .mb.r { color: var(--red); }
+
+  .photo { border-radius: 10px; overflow: hidden; border: 1px solid #dfe3ea; background: #fff; }
+  .shot { height: 110px; background: linear-gradient(180deg, #dbe4ea, #c8d3db); position: relative; }
+  .shot .mach { position: absolute; left: 50%; bottom: 14px; width: 78px; height: 58px; transform: translateX(-50%); background: #6b7a8c; border-radius: 6px; }
+  .shot .mach::before { content: ''; position: absolute; left: 12px; right: 12px; top: -22px; height: 22px; background: #8796a7; border-radius: 4px 4px 0 0; }
+  .shot .mach::after { content: ''; position: absolute; left: 10px; top: 12px; width: 18px; height: 18px; border-radius: 99px; background: #b7f0dc; }
+  .shot .mess { position: absolute; left: 18%; bottom: 10px; width: 26px; height: 8px; border-radius: 99px; background: #9b8b6e; }
+  .cap { padding: 8px 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+
+  .calbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .calbtn { font-size: 12.5px; font-weight: 600; border: 1px solid #dcdad2; border-radius: 8px; padding: 6px 10px; background: #fff; display: inline-flex; gap: 6px; align-items: center; }
+  .sq { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .finale { text-align: center; padding: 8px 0; }
+  .finale .big { width: 64px; height: 64px; border-radius: 18px; background: var(--teal-light); display: grid; place-items: center; margin: 0 auto 12px; font-size: 32px; }
+  .finale ul { list-style: none; padding: 0; margin: 12px auto 0; display: grid; gap: 4px; max-width: 360px; text-align: left; font-size: 13.5px; color: var(--text2); }
+  .finale li::before { content: '✓'; color: var(--teal); font-weight: 700; margin-right: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene, .grow, .slide, .pulse { animation: none !important; }
+    .grow { height: 75px; }
+    .slide { transform: translate(calc(100% + 6px), 30px); }
+  }
+  @media (max-width: 520px) {
+    .mh { padding: 14px 16px; } .copy { padding: 16px 16px 4px; } .foot { padding: 14px 16px 16px; }
+    .nav { width: 100%; } .nav .b { flex: 1; text-align: center; }
+  }
+
+  /* ── More blurred pages (one per feature) ── */
+  .page-bg .cards { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-content: start; }
+  .page-bg .cards span { height: 74px; border-radius: 10px; background: #fff; border: 1px solid #e5e3dc; position: relative; }
+  .page-bg .cards span::before { content: ''; position: absolute; left: 50%; top: 12px; width: 26px; height: 26px; margin-left: -13px; border-radius: 99px; background: #c7d7ee; }
+  .page-bg .cards span::after { content: ''; position: absolute; left: 20%; right: 20%; bottom: 14px; height: 8px; border-radius: 4px; background: #e8e6df; }
+  .page-bg .cards .bar { grid-column: 1 / -1; height: 18px; border-radius: 6px; background: #e0f2fe; }
+  .page-bg .cards.rooms span::before { left: 0; right: 0; top: 0; width: auto; height: 38px; margin: 0; border-radius: 10px 10px 0 0; background: #cdd9cf; }
+  .page-bg .tree { width: 150px; flex-shrink: 0; display: grid; align-content: start; gap: 8px; }
+  .page-bg .tree span { height: 12px; border-radius: 4px; background: #d8d6cf; }
+  .page-bg .tree span.i1 { margin-left: 14px; background: #9FE1CB; }
+  .page-bg .tree span.i2 { margin-left: 28px; }
+  .page-bg .cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .page-bg .cols div { background: #ecebe5; border-radius: 10px; padding: 8px; display: grid; align-content: start; gap: 8px; }
+  .page-bg .cols span { height: 40px; border-radius: 8px; background: #fff; border-left: 4px solid #f59e0b; }
+  .page-bg .cols span.h { border-left-color: #c84b2f; }
+  .page-bg .cols span.l { border-left-color: #1D9E75; }
+  .page-bg .convs { width: 160px; flex-shrink: 0; display: grid; align-content: start; gap: 6px; }
+  .page-bg .convs span { height: 34px; border-radius: 8px; background: #fff; border: 1px solid #e5e3dc; }
+  .page-bg .convs span.on { background: #E1F5EE; border-color: #9FE1CB; }
+  .page-bg .chat { flex: 1; background: #fff; border: 1px solid #e5e3dc; border-radius: 10px; padding: 14px; display: grid; align-content: start; gap: 10px; }
+  .page-bg .chat span { height: 26px; width: 55%; border-radius: 12px; background: #eef0f4; }
+  .page-bg .chat span.me { justify-self: end; background: #1D9E75; width: 45%; }
+  @media (max-width: 560px) { .page-bg .tree, .page-bg .convs { display: none; } .page-bg .cards { grid-template-columns: repeat(3, 1fr); } }
+
+  /* ── Scene parts ── */
+  .av { width: 26px; height: 26px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .adv { background: #e0f2fe; color: #075985; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 6px; }
+  .st { display: inline-flex; gap: 10px; font-size: 11px; color: var(--text3); flex-wrap: wrap; justify-content: flex-end; }
+  .st b { font-weight: 600; } .st .ok { color: var(--teal); } .st .pe { color: var(--amber); }
+  .flow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11.5px; font-weight: 600; }
+  .flow span { padding: 4px 9px; border-radius: 99px; background: var(--teal-light); color: var(--teal-ink); }
+  .flow span.now { background: var(--teal); color: #fff; }
+  .flow span.next { background: #eceef2; color: var(--text3); }
+  .flow i { color: var(--text3); font-style: normal; }
+  .sel-mini { font-size: 12px; font-weight: 600; border: 1px solid #dcdad2; border-radius: 7px; padding: 3px 8px; background: #fff; }
+  .rooms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .room { border-radius: 10px; overflow: hidden; border: 1px solid #dfe3ea; background: #fff; font-size: 12.5px; }
+  .room .ph { height: 62px; }
+  .room div:last-child { padding: 6px 8px; } .room small { display: block; color: var(--text3); font-size: 11px; }
+  .room.pick { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(29,158,117,.2); }
+  .counter { display: flex; align-items: center; gap: 8px; }
+  .stp { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #dcdad2; background: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .cnt { width: 76px; height: 36px; border-radius: 8px; border: 1.5px solid #cfd5dd; display: grid; place-items: center; color: #a3aab5; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .pop { background: #fff; border-radius: 12px; border: 1px solid #f3dfae; box-shadow: 0 10px 28px rgba(12,17,64,.12); padding: 14px; display: grid; gap: 10px; font-size: 13px; }
+  .pop b { color: var(--navy); }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .tbl th { text-align: left; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 4px 6px; }
+  .tbl td { padding: 6px; border-top: 1px solid #eef0f4; }
+  .tbl tbody tr:nth-child(odd) td { background: #f8faff; } .tbl tbody tr:nth-child(even) td { background: #f5f7f2; }
+  .tbl a, .lnk { color: #2563eb; text-decoration: underline; }
+  .num { font-variant-numeric: tabular-nums; }
+  .tr { display: grid; gap: 6px; font-size: 12.5px; }
+  .tr div { padding: 5px 8px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb; }
+  .tr .i1 { margin-left: 18px; border-color: #9FE1CB; background: var(--teal-light); }
+  .tr .i2 { margin-left: 36px; }
+  .frac { display: flex; gap: 6px; flex-wrap: wrap; }
+  .frac span { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 8px; background: #fff; border: 1.5px solid #9FE1CB; color: var(--teal-ink); }
+  .qlabel { width: 230px; margin: 0 auto; background: #fff; border: 1.5px solid #111; border-radius: 4px; padding: 10px 12px; font-family: Arial, sans-serif; font-weight: 700; font-size: 11px; line-height: 1.35; color: #111; }
+  .qlabel .lh { font-size: 12px; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .qlabel u { display: block; margin-top: 6px; }
+  .qr { width: 64px; height: 64px; display: grid; grid-template-columns: repeat(9, 1fr); float: right; margin-left: 8px; }
+  .qr i { display: block; } .qr i.k { background: #111; }
+  .kan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .kan > div { background: #eceef2; border-radius: 10px; padding: 8px; display: grid; gap: 6px; align-content: start; }
+  .kan h5 { margin: 0; font-size: 11px; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+  .tk { background: #fff; border-radius: 8px; padding: 6px 8px; font-size: 11.5px; font-weight: 600; display: grid; gap: 4px; border-left: 4px solid #f59e0b; }
+  .tk.h { border-left-color: var(--red); } .tk.l { border-left-color: var(--teal); }
+  .tk small { font-weight: 500; color: var(--text3); font-size: 10.5px; }
+  .pb { height: 4px; border-radius: 99px; background: #e5e7eb; overflow: hidden; } .pb i { display: block; height: 100%; background: var(--teal); }
+  .month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 11px; text-align: center; }
+  .month b { font-size: 10px; color: var(--text3); font-weight: 700; }
+  .month span { padding: 5px 0; border-radius: 6px; background: #fff; position: relative; font-variant-numeric: tabular-nums; }
+  .month span.d::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 4px; height: 4px; margin-left: -2px; border-radius: 99px; background: var(--teal); }
+  .month span.o { background: #fde8e4; color: var(--red); font-weight: 700; }
+  .month span.t { outline: 2px solid var(--teal); }
+  .gantt { display: grid; grid-template-columns: 110px 1fr; gap: 6px 8px; font-size: 11.5px; align-items: center; }
+  .gantt .tl { position: relative; height: 16px; background: repeating-linear-gradient(90deg, #f1f3f6 0 1px, transparent 1px 14.28%); border-radius: 4px; }
+  .gantt .tl i { position: absolute; top: 2px; height: 12px; border-radius: 4px; background: #93c5fd; }
+  .gantt .tl i.c { background: #fca5a5; outline: 2px solid var(--red); }
+  .gantt .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bubbles { display: grid; gap: 8px; font-size: 12.5px; }
+  .bub { max-width: 78%; padding: 7px 11px; border-radius: 14px; background: #eef0f4; }
+  .bub.me { justify-self: end; background: var(--teal); color: #fff; }
+  .bub small { display: block; font-size: 10.5px; opacity: .75; }
+  .seen { justify-self: end; font-size: 10.5px; font-weight: 700; color: var(--teal); }
+  .bell { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 10px 28px rgba(12,17,64,.1); overflow: hidden; font-size: 12px; }
+  .bell .bh { padding: 8px 12px; font-weight: 700; color: var(--navy); border-bottom: 1px solid #eef0f4; display: flex; justify-content: space-between; }
+  .bell .bh span { color: var(--red); font-size: 11px; }
+  .bell .bi { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #f2f3f6; align-items: flex-start; }
+  .bell .bi.hov { background: #f1f5f9; }
+  .bell .bi b { display: block; color: var(--navy); font-weight: 600; } .bell .bi small { color: var(--text3); }
+  .tg { width: 30px; height: 17px; border-radius: 99px; background: #d6dbe3; position: relative; display: inline-block; }
+  .tg::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 99px; background: #fff; }
+  .tg.on { background: var(--teal); } .tg.on::after { left: 15px; }
+  .field { border: 1px solid #dcdad2; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; background: #fff; }
+  .field small { display: block; font-size: 10.5px; color: var(--text3); font-weight: 600; }
+  .thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid #e5e7eb; background: #fff; }
+  .thumb.lg { width: 64px; height: 64px; }
+  .room img.ph { display: block; width: 100%; height: 72px; object-fit: cover; }
+  .sara-pic { width: 34px; height: 34px; border-radius: 99px; object-fit: cover; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  /* Project folder tree, drawn like the Project Materials page (.pmt-*) */
+  .ptree { overflow-x: auto; padding: 4px 2px; }
+  .pb2 { display: flex; align-items: center; position: relative; padding: 3px 0; }
+  .pk { display: flex; flex-direction: column; padding-left: 28px; position: relative; }
+  .pk::before { content: ''; position: absolute; left: 0; top: 50%; width: 14px; border-top: 1.5px solid #9aa3ae; }
+  .pk > .pb2::before { content: ''; position: absolute; left: -14px; top: 50%; width: 14px; border-top: 1.5px solid #9aa3ae; }
+  .pk > .pb2::after { content: ''; position: absolute; left: -14px; top: 0; bottom: 0; border-left: 1.5px solid #9aa3ae; }
+  .pk > .pb2:first-child::after { top: 50%; } .pk > .pb2:last-child::after { bottom: 50%; } .pk > .pb2:only-child::after { display: none; }
+  .pf { flex-shrink: 0; display: grid; background: #fff; border: 1px solid #e5e7eb; border-radius: 9px; padding: 5px 9px; min-width: 86px; }
+  .pf b { font-size: 12px; white-space: nowrap; } .pf small { font-size: 10px; color: var(--text3); white-space: nowrap; }
+  .pf.proj { border-color: var(--teal); background: var(--teal-light); }
+  .pf.sp { border-color: #c9c5f2; background: #EEEDFE; }
+  .pf.sel { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-light); }
+  .sara { display: flex; gap: 8px; align-items: flex-end; }
+  .sara .av { background: #534AB7; }
 
     /* ── Plans ── */
     .plans { padding: 80px 24px; }
@@ -145,57 +402,33 @@
       }
     })();
 
-    /* Feature card preview modal */
-    var featData = {
-      booking:     { title: 'Equipment Booking', icon: '📅', desc: 'Calendar-based equipment reservations with manager approval workflows, before/after condition photos, and automated email and calendar notifications. Drag existing bookings to reschedule them directly on the calendar.', gif: '/app/screenshots/booking.gif' },
-      training:    { title: 'Training Records', icon: '🎓', desc: 'Track certifications, upload training documents, manage equipment operation approvals, and monitor expiry dates for every lab member — with a per-user hub view.', gif: '/app/screenshots/training.gif' },
-      inspection:  { title: 'Supply Inspections', icon: '🔍', desc: 'Structured room and supply inspection checklists with low-stock alerts, last-count placeholders, full inspection history, and one-click export to PDF or Excel.', gif: '/app/screenshots/inspection.gif' },
-      projects:    { title: 'Project & Material Tracking', icon: '🧪', desc: 'Organize research projects, track material samples with barcode and QR scanning, view storage details, and export test results and records in any format.', gif: '/app/screenshots/projects.gif' },
-      maintenance: { title: 'Preventive Maintenance', icon: '🔧', desc: 'Schedule and track maintenance tasks with a built-in task board, deadline calendar, priority levels, team assignment, and out-of-lab day tracking.', gif: '/app/screenshots/maintenance.gif' },
-      messaging:   { title: 'Team Messaging', icon: '💬', desc: 'Built-in staff-to-user messaging and a real-time notification bell — for booking updates, training approvals, task assignments, and direct messages.', gif: '/app/screenshots/messaging.gif' },
-    };
-
-    function openFeat(key) {
-      var d = featData[key]; if (!d) return;
-      document.getElementById('fm-title').textContent = d.icon + '  ' + d.title;
-      document.getElementById('fm-desc').textContent = d.desc;
-      var wrap = document.getElementById('fm-gif-wrap');
-      wrap.innerHTML = '';
-      var img = document.createElement('img');
-      img.src = d.gif;
-      img.alt = d.title + ' preview';
-      img.onerror = function() {
-        wrap.innerHTML = '<div class="feat-gif-placeholder"><div class="ph-icon">' + d.icon + '</div><p>Preview coming soon.<br>Add <code>' + d.gif + '</code> to public/screenshots/</p></div>';
-      };
-      wrap.appendChild(img);
-      document.getElementById('feat-modal').classList.add('open');
-      document.body.style.overflow = 'hidden';
-    }
-    function closeFeat() {
-      document.getElementById('feat-modal').classList.remove('open');
-      document.body.style.overflow = '';
-    }
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeFeat(); });
   </script>
 </head>
 <body>
 
-  <!-- Feature preview modal -->
-  <div id="feat-modal" class="feat-modal-bg" onclick="if(event.target===this)closeFeat()">
-    <div class="feat-modal">
-      <div class="feat-modal-header">
-        <h3 id="fm-title"></h3>
-        <button class="feat-modal-close" onclick="closeFeat()">×</button>
-      </div>
-      <div class="feat-modal-body">
-        <div class="feat-gif-wrap" id="fm-gif-wrap"></div>
-        <div class="feat-modal-desc" id="fm-desc"></div>
-        <div class="feat-modal-cta">
-          <a href="/app" class="btn-hero" style="font-size:14px;padding:10px 28px;">Try it in LabHive →</a>
-        </div>
-      </div>
+  <!-- Feature tours -->
+<div class="bg" id="tour" role="dialog" aria-modal="true" aria-labelledby="t-title" hidden>
+  <div class="modal">
+    <div class="mh">
+      <h3><span id="t-name"></span><span class="count" id="t-count"></span></h3>
+      <button class="x" id="t-close" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="bar"><i id="t-bar"></i></div>
+    <div class="stage">
+      <div class="page-bg" id="t-page" aria-hidden="true"></div>
+      <div id="t-scene"></div>
+    </div>
+    <div class="copy">
+      <div class="kicker" id="t-kicker"></div>
+      <h4 id="t-title"></h4>
+      <p id="t-body"></p>
+    </div>
+    <div class="foot">
+      <div class="dots" id="t-dots"></div>
+      <div class="nav" id="t-nav"></div>
     </div>
   </div>
+</div>
 
   <nav>
     <a href="/" class="nav-logo">
@@ -231,45 +464,18 @@
     <div class="section-inner">
       <div class="section-label">Features</div>
       <div class="section-title">Everything your lab needs</div>
-      <div class="section-sub">Built for the day-to-day reality of running a research or university lab. Click any card to see it in action.</div>
+      <div class="section-sub">Built for the day-to-day reality of running a research or university lab. Click any card for a step-by-step tour.</div>
       <div class="features-grid">
-        <div class="feat-card" onclick="openFeat('booking')">
-          <div class="feat-icon">📅</div>
-          <h3>Equipment Booking</h3>
-          <p>Calendar-based reservations with manager approval workflows, before/after condition photos, and automated notifications.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
-        <div class="feat-card" onclick="openFeat('training')">
-          <div class="feat-icon">🎓</div>
-          <h3>Training Records</h3>
-          <p>Track certifications, upload training documents, manage equipment approvals, and monitor expiry dates for every member.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
-        <div class="feat-card" onclick="openFeat('inspection')">
-          <div class="feat-icon">🔍</div>
-          <h3>Supply Inspections</h3>
-          <p>Structured room and supply checklists with low-stock alerts, full inspection history, and PDF/Excel export.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
-        <div class="feat-card" onclick="openFeat('projects')">
-          <div class="feat-icon">🧪</div>
-          <h3>Project &amp; Material Tracking</h3>
-          <p>Organize research projects, track samples with barcode and QR scanning, and export test results in any format.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
-        <div class="feat-card" onclick="openFeat('maintenance')">
-          <div class="feat-icon">🔧</div>
-          <h3>Preventive Maintenance</h3>
-          <p>Task board with deadlines, priority levels, team assignment, and a deadline calendar with out-of-lab day tracking.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
-        <div class="feat-card" onclick="openFeat('messaging')">
-          <div class="feat-icon">💬</div>
-          <h3>Team Messaging</h3>
-          <p>Built-in staff-to-user messaging and a real-time notification system to keep your entire lab team in sync.</p>
-          <div class="feat-hint">▶ See how it works</div>
-        </div>
+        <button type="button" class="feat-card" data-tour="booking"><div class="feat-icon">📅</div><h3>Booking Equipment</h3><p>Calendar-based reservations with manager approval workflows, before/after condition photos, and automated notifications.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="training"><div class="feat-icon">🎓</div><h3>Training Records</h3><p>Track certifications, upload training documents, manage equipment approvals, and monitor expiry dates for every member.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="inspection"><div class="feat-icon">📦</div><h3>Supply Inventory</h3><p>Room-by-room supply checklists with photos, low-stock alerts, full inspection history, and PDF/Excel export.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="projects"><div class="feat-icon">🧪</div><h3>Project Workspace</h3><p>Organize research projects with your team, track samples with barcode and QR labels, and export test results in any format.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="equipment"><div class="feat-icon">🔧</div><h3>Equipment &amp; Maintenance</h3><p>Every instrument with its photo, who may use it, calibration due dates, and maintenance by date or by hours used.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="maintenance"><div class="feat-icon">📋</div><h3>Task Board</h3><p>Tasks with deadlines and priorities, team assignment, meetings, a timeline, and a deadline calendar with out-of-lab days.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <!-- More features: kept out of sight until asked for, so six cards show -->
+        <button type="button" class="feat-card" data-tour="messaging" data-more hidden><div class="feat-icon">💬</div><h3>Lab Messages</h3><p>Messages between lab managers and lab users, lab-wide announcements, and a live notification bell to keep your team in sync.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
       </div>
+      <div class="more-wrap"><button type="button" class="more-btn" id="more-btn" aria-expanded="false">More features ▾</button></div>
     </div>
   </section>
 
@@ -361,6 +567,393 @@
     </div>
     <p>© 2026 LabHive. All rights reserved.</p>
   </footer>
+
+  <script>
+const IMG = {
+  'room-chem-lab': '/app/tour/room-chem-lab.jpg',
+  'room-high-bay': '/app/tour/room-high-bay.jpg',
+  'room-chem-storage': '/app/tour/room-chem-storage.jpg',
+  'eq-load-frame': '/app/tour/eq-load-frame.jpg',
+  'eq-drying-oven': '/app/tour/eq-drying-oven.jpg',
+  'eq-centrifuge': '/app/tour/eq-centrifuge.jpg',
+  'eq-fume-hood': '/app/tour/eq-fume-hood.jpg',
+  'item-nitrile-gloves': '/app/tour/item-nitrile-gloves.jpg',
+  'sara': '/app/sara-avatar.jpg',
+}
+const win = (title, inner) => `<div class="win"><div class="win-top"><i></i><i></i><i></i><span>${title}</span></div><div class="win-body">${inner}</div></div>`
+const notif = (title, text, when) => `<div class="notif"><span class="dot"></span><div><b>${title}</b>${text}<br><span>${when}</span></div></div>`
+const av = (t, c) => `<span class="av" style="background:${c}">${t}</span>`
+
+// ── Blurred page behind the pictures: the screen each tour is about ──
+const shell = main => `<div class="ah"><i></i><b></b></div><div class="am"><div class="side"><span></span><span></span><span class="on"></span><span></span><span></span><span></span></div><div class="main">${main}</div></div>`
+const rep = (n, h) => Array.from({ length: n }, h).join('')
+const PAGES = {
+  booking: shell(`<div class="eqs"><div class="h"></div><div class="r s"></div><div class="r s"></div><div class="r"></div><div class="r g"></div><div class="r"></div><div class="r g"></div><div class="r"></div></div>
+    <div class="week">${rep(5, () => '<div></div>')}${[[1,40,70,'#dbe4f0'],[21,120,54,'#1D9E75'],[41,24,90,'#dbe4f0'],[61,160,72,'#dbe4f0'],[81,70,40,'#1D9E75'],[41,220,60,'#dbe4f0']].map(([l,t,h,c]) => `<em style="left:${l}%;top:${t}px;width:18%;height:${h}px;background:${c}"></em>`).join('')}</div>`),
+  training: shell(`<div class="cards"><span class="bar"></span>${rep(4, () => '<span></span>')}<span class="bar"></span>${rep(8, () => '<span></span>')}</div>`),
+  inspection: shell(`<div class="cards rooms">${rep(12, () => '<span></span>')}</div>`),
+  projects: shell(`<div class="tree"><span></span><span class="i1"></span><span class="i2"></span><span class="i2"></span><span class="i1"></span><span class="i2"></span><span></span><span class="i1"></span></div><div class="cards">${rep(8, () => '<span></span>')}</div>`),
+  equipment: shell(`<div class="cards">${rep(8, () => '<span></span>')}</div>`),
+  maintenance: shell(`<div class="cols"><div><span class="h"></span><span></span><span class="l"></span></div><div><span></span><span class="h"></span></div><div><span class="l"></span><span class="l"></span><span></span></div></div>`),
+  messaging: shell(`<div class="convs"><span class="on"></span><span></span><span></span><span></span><span></span><span></span></div><div class="chat"><span></span><span class="me"></span><span></span><span class="me"></span><span></span></div>`),
+}
+
+// Week calendar 8:00–14:00, 30px per hour. blocks: [day 0-4, startHour, hours, cls, label]
+function calendar(blocks, extra = '') {
+  const days = ['Mon 3', 'Tue 4', 'Wed 5', 'Thu 6', 'Fri 7']
+  const hours = [8, 9, 10, 11, 12, 13]
+  let h = '<div class="cal"><div></div>' + days.map(d => `<div class="hd">${d}</div>`).join('')
+  h += '<div>' + hours.map(x => `<div class="hr">${x > 12 ? x - 12 : x}${x >= 12 ? ' PM' : ' AM'}</div>`).join('') + '</div>'
+  days.forEach((_, di) => {
+    h += '<div class="col">' + hours.map(() => '<div class="cell"></div>').join('')
+    blocks.filter(b => b[0] === di).forEach(([, s, len, cls, label]) => {
+      h += `<div class="blk ${cls}" style="top:${(s - 8) * 30}px;height:${len * 30}px">${label}</div>`
+    })
+    h += (extra && extra.day === di ? extra.html : '') + '</div>'
+  })
+  return h + '</div>'
+}
+// A QR-looking pattern (decorative; fixed so it does not change between steps)
+const qr = () => { const bits = '111111101100000101101110101101110101101110101100000101111111101000101011010101101011011110100101101101011'; return `<div class="qr">${rep(81, (_, k) => `<i class="${bits[k % bits.length] === '1' ? 'k' : ''}"></i>`)}</div>` }
+
+const TOURS = {
+  booking: { name: '📅 Booking Equipment', steps: [
+    { kicker: 'Step 1 · Training first', title: 'Only trained people can book',
+      body: 'Equipment someone is not trained on is greyed out and marked TRAINING REQUIRED, so it cannot be booked. Anyone who has not used an instrument for 3 months sees RETRAIN until they are retrained. The lab manager approves training in Training Records.',
+      scene: () => win('Booking Equipment · choose equipment', `
+        <div class="row ok ticked pulse"><span class="box">✓</span><span class="nm">Sieve Shaker<span class="sm">Aggregate lab · trained</span></span><span class="tag green">READY</span></div>
+        <div class="row lock"><span class="box"></span><span class="nm">DSR Rheometer<span class="sm">Binder lab</span></span><span class="tag">TRAINING REQUIRED</span></div>
+        <div class="row lock"><span class="box"></span><span class="nm">Compression Machine<span class="sm">Last used 4 months ago</span></span><span class="tag amber">RETRAIN</span></div>`) },
+    { kicker: 'Step 2 · Several instruments', title: 'Book more than one at a time',
+      body: 'Tick every instrument you need. Choose "Same time for all" to book them together with a single drag, or "One by one" to give each its own time.',
+      scene: () => win('Booking Equipment · 2 selected', `
+        <div class="row sel"><span class="box">✓</span><span class="nm">Sieve Shaker</span></div>
+        <div class="row sel"><span class="box">✓</span><span class="nm">Aggregate Washer</span></div>
+        <div class="choice"><b>📅 2 equipment selected. How do you want to book them?</b>
+          <div class="pills"><span class="pill on">◉ Same time for all</span><span class="pill">○ One by one</span></div></div>`) },
+    { kicker: 'Step 3 · The calendar', title: 'Drag on the calendar to book',
+      body: 'Each instrument has a week calendar showing who has it and when. Drag down over the free time you want. This one is Wednesday, 9:00 to 11:30 AM.',
+      scene: () => win('Sieve Shaker · week of Nov 3', calendar(
+        [[0, 9, 2, 'other', 'Booked · Lee'], [1, 12, 1.5, 'other', 'Booked · Chen'], [3, 10, 3, 'other', 'Booked · Patel']],
+        { day: 2, html: '<div class="blk mine grow" style="top:30px">9:00 – 11:30<br>You</div>' })) },
+    { kicker: 'Step 4 · Purpose', title: 'Say what the booking is for',
+      body: 'Every booking records its purpose (project, thesis or other) and the person confirms they are responsible for it. The lab always knows who used what, and why.',
+      scene: () => win('New booking · Sieve Shaker · Wed 9:00 – 11:30', `
+        <div class="form"><span class="lbl">Purpose of use *</span>
+          <div class="opts"><span class="opt on">🧪 Project</span><span class="opt">📚 Thesis</span><span class="opt">📝 Other</span></div>
+          <div class="row ok" style="font-size:12.5px"><span class="nm">Project: <b>I-55 Pavement Study</b></span></div>
+          <div class="tick"><span class="box">✓</span><span>I am responsible for this booking and confirm it is for the purpose selected.</span></div></div>`) },
+    { kicker: 'Step 5 · Approval', title: 'Lab managers approve when it matters',
+      body: 'Turn on approval for sensitive or expensive equipment. The request waits for a lab manager, who approves or denies it from the notification bell. Equipment without approval is booked straight away.',
+      scene: () => `<div class="two">
+        <div><div class="who">Lab user sees</div>${win('My bookings', `<div class="row ok"><span class="nm">DSR Rheometer<span class="sm">Thu 1:00 – 3:00 PM</span></span><span class="tag amber">PENDING APPROVAL</span></div>`)}</div>
+        <div><div class="who">Lab manager sees</div><div class="notif"><span class="dot"></span><div><b>New booking request</b>Maria: DSR Rheometer, Thu 1:00 – 3:00 PM<br><span>2 min ago</span><div class="acts"><span class="mb g">Approve</span><span class="mb r">Deny</span></div></div></div></div></div>` },
+    { kicker: 'Step 6 · Condition photos', title: 'Before and after photos',
+      body: 'Turn photos on for any instrument, and people take a quick photo of it when they start and when they finish. If something is left dirty or damaged, the lab manager can see who had it last and review the photos.',
+      scene: () => `<div class="two">
+        <div class="photo"><div class="shot"><div class="mach"></div></div><div class="cap"><b>Before</b><span class="tag green">9:02 AM ✓</span></div></div>
+        <div class="photo"><div class="shot"><div class="mach"></div><div class="mess"></div></div><div class="cap"><b>After</b><span class="tag amber">Review</span></div></div></div>` },
+    { kicker: 'Step 7 · Reminders', title: 'Add it to your own calendar',
+      body: 'After booking, add it to Google Calendar or Outlook, or download an .ics file. LabHive confirms each booking and reminds the person to take their before photo when it starts, in the app and by email if they turn email on.',
+      scene: () => `<div style="display:grid;gap:12px">
+        ${win('Booked ✓', `<div style="font-size:13px;color:var(--text2)">Sieve Shaker · Wed Nov 5, 9:00 – 11:30 AM</div>
+          <div class="calbtns"><span class="calbtn"><i class="sq" style="background:#4285f4"></i>Google Calendar</span><span class="calbtn"><i class="sq" style="background:#0a64ad"></i>Outlook</span><span class="calbtn"><i class="sq" style="background:#9aa3ae"></i>Download .ics</span></div>`)}
+        ${notif('Your booking has started', 'Sieve Shaker · open the booking to take your before photo', '9:00 AM')}</div>` },
+    { kicker: 'Step 8 · Plans change', title: 'Move it or cancel it',
+      body: 'Drag a booking to a new time to reschedule it, or cancel it before it starts so someone else can use the instrument. Finished bookings are locked as a record of who used what.',
+      scene: () => win('Sieve Shaker · week of Nov 3', calendar(
+        [[0, 9, 2, 'other', 'Booked · Lee'], [2, 9, 2.5, 'mine faded', 'You'], [4, 12, 1.5, 'other', 'Booked · Chen']],
+        { day: 2, html: '<div class="blk ghost slide" style="top:30px;height:75px">Moving…<br>Thu 10:00</div>' })) },
+  ], recap: ['Training decides who can book', 'Drag-to-book week calendar', 'Approvals and condition photos', 'Calendar links and reminders'] },
+
+  training: { name: '🎓 Training Records', steps: [
+    { kicker: 'Step 1 · Your people', title: 'Every lab user on one page',
+      body: 'See every lab user as cards or a list, grouped by advisor. Each row shows where they stand on safety, documents, equipment and lockers. Click a person to open their full training record.',
+      scene: () => win('Training Records · 24 lab users', `
+        <div class="adv">Prof. Rivera · 3</div>
+        <div class="row ok">${av('ML', '#1D9E75')}<span class="nm">Maria Lopez</span><span class="st"><b class="ok">✓ Safety</b><b class="pe">⏳ Documents</b><b class="ok">✓ Equipment</b></span></div>
+        <div class="row ok">${av('JK', '#3b82f6')}<span class="nm">James Kim</span><span class="st"><b class="ok">✓ Safety</b><b class="ok">✓ Documents</b><b>— Equipment</b></span></div>
+        <div class="adv">Prof. Chen · 5</div>
+        <div class="row ok">${av('AP', '#f59e0b')}<span class="nm">Aisha Patel</span><span class="st"><b class="pe">⏳ Safety</b><b>— Documents</b><b>— Equipment</b></span></div>`) },
+    { kicker: 'Step 2 · Lab safety', title: 'Safety training, one step at a time',
+      body: 'New lab users go through your safety steps in order: orientation, a training video and a policy review. A lab manager approves each step, and the next one opens.',
+      scene: () => win('Safety · Aisha Patel', `
+        <div class="row ok"><span class="nm">Step 1 · Safety orientation</span><span class="tag green">APPROVED</span></div>
+        <div class="row ok"><span class="nm">Step 2 · Required training video</span><span class="tag green">APPROVED</span></div>
+        <div class="row ok pulse"><span class="nm">Step 3 · Policy review and acknowledgment</span><span class="tag amber">WAITING FOR APPROVAL</span></div>
+        <div class="row lock"><span class="nm">Step 4 · Safety training video</span><span class="tag">LOCKED</span></div>`) },
+    { kicker: 'Step 3 · Documents', title: 'Certificates uploaded and approved',
+      body: 'Lab users upload their training certificates. A lab manager approves or rejects each one with a click, and every document stays on file with its date, so an audit takes minutes.',
+      scene: () => win('Lab User Documents · Maria Lopez', `
+        <table class="tbl"><thead><tr><th>Document</th><th>Uploaded</th><th>Status</th></tr></thead><tbody>
+        <tr><td><span class="lnk">Hazardous waste training.pdf</span></td><td class="num">Sep 12</td><td><span class="tag green">APPROVED</span></td></tr>
+        <tr><td><span class="lnk">Fire extinguisher course.pdf</span></td><td class="num">Oct 27</td><td><span class="acts" style="margin:0"><span class="mb g">Approve</span><span class="mb r">Reject</span></span></td></tr>
+        </tbody></table>`) },
+    { kicker: 'Step 4 · Equipment training', title: 'From request to approved, on record',
+      body: 'A lab user requests training on an instrument. The lab manager proposes a time, the lab user accepts, and after the training (and the exam, if the instrument has one) the manager approves it. That approval is what unlocks booking. Training lasts a year, and the record shows when it is expiring.',
+      scene: () => `<div style="display:grid;gap:12px">
+        <div class="flow"><span>Requested</span><i>→</i><span>Time proposed</span><i>→</i><span>Accepted</span><i>→</i><span class="now">Exam passed</span><i>→</i><span class="next">Approved</span></div>
+        ${win('Equipment · Maria Lopez', `
+          <div class="row ok"><span class="nm">Sieve Shaker<span class="sm">Trained Oct 2026 · expires Oct 2027</span></span><span class="tag green">TRAINED</span></div>
+          <div class="row ok"><span class="nm">Compression Machine<span class="sm">Expires Nov 15</span></span><span class="tag amber">EXPIRING SOON</span></div>`)}</div>` },
+    { kicker: 'Step 5 · Lockers', title: 'Lockers by request',
+      body: 'Lab users ask for a locker. Lab managers see the waiting requests, pick a free locker and assign it. Both sides are notified, and a lab user only ever sees their own locker.',
+      scene: () => `<div class="pop" style="border-color:#f3dfae"><b>Locker requests (2)</b>
+        <div class="row ok"><span class="nm">Maria Lopez<span class="sm">Requested Oct 27 · "near the binder lab"</span></span><span class="sel-mini">Locker 14 ▾</span><span class="mb g">Assign</span></div>
+        <div class="row ok"><span class="nm">James Kim<span class="sm">Requested Oct 28</span></span><span class="sel-mini">Choose ▾</span><span class="mb r">Decline</span></div></div>` },
+    { kicker: 'Step 6 · Notifications', title: 'Everyone knows what is waiting',
+      body: 'When someone submits a step, a certificate or a request, lab managers are notified. When it is approved, the lab user is told. Both happen in the app, and by email for anyone who turns email on.',
+      scene: () => `<div class="two">
+        <div><div class="who">Lab manager</div>${notif('Aisha submitted Step 3', 'Policy review is waiting for your approval', '5 min ago')}</div>
+        <div><div class="who">Lab user</div>${notif('Certificate approved', 'Hazardous waste training.pdf', 'Yesterday')}</div></div>` },
+  ], recap: ['Every lab user on one page', 'Safety steps with approvals', 'Certificates and equipment training on record', 'Expiry dates you can see'] },
+
+  inspection: { name: '📦 Supply Inventory', steps: [
+    { kicker: 'Step 1 · Rooms', title: 'Pick a room to inspect',
+      body: 'Every room is a card with its own photo, so anyone can tell the rooms apart at a glance, and the number of supplies kept there. Pick one, and LabHive walks through its supplies one at a time.',
+      scene: () => `<div class="rooms">
+        <div class="room pick"><img class="ph" src="${IMG['room-chem-lab']}" alt=""><div>Lab 2104 · Chemistry<small>8 supplies</small></div></div>
+        <div class="room"><img class="ph" src="${IMG['room-high-bay']}" alt=""><div>High Bay<small>12 supplies</small></div></div>
+        <div class="room"><img class="ph" src="${IMG['room-chem-storage']}" alt=""><div>Chemical storage<small>21 supplies</small></div></div></div>` },
+    { kicker: 'Step 2 · Count', title: 'Count, with last time as your guide',
+      body: 'Each supply has its photo, so nobody counts the wrong box. Enter how many are on the shelf. The last count is shown in grey. Leave the box untouched and that number is saved, and the + and − buttons start from it, so a full room takes a couple of minutes.',
+      scene: () => win('Lab 2104 · item 3 of 8', `
+        <div class="row ok"><img class="thumb" src="${IMG['item-nitrile-gloves']}" alt=""><span class="nm"><b>Nitrile gloves (L)</b><span class="sm">Minimum 10 boxes</span></span></div>
+        <div class="counter"><span class="stp">−</span><span class="cnt">12</span><span class="stp">+</span><span style="font-size:12px;color:var(--text3)">Last inspected: 12 boxes</span></div>`) },
+    { kicker: 'Step 3 · Low stock', title: 'Low stock is never missed',
+      body: 'If a count is under the minimum and nothing has been entered to order, LabHive stops and asks how many to order. Nothing runs out without anyone noticing.',
+      scene: () => `<div class="pop"><div style="display:flex;gap:12px;align-items:center"><img class="thumb lg" src="${IMG['item-nitrile-gloves']}" alt=""><div><b>Nitrile gloves (L) are below the minimum (4 of 10).</b><br><span style="color:var(--text2)">How many need to be ordered?</span></div></div>
+        <div class="acts" style="margin:0"><span class="mb g">Enter amount</span><span class="mb">Next item anyway →</span></div></div>` },
+    { kicker: 'Step 4 · Finish', title: 'Save and go straight to the next room',
+      body: 'At the end you see what was counted and what is low. Save it, or save and start the next room that has supplies.',
+      scene: () => win('Results · Lab 2104', `
+        <div class="row ok"><span class="nm">8 items counted</span><span class="tag amber">2 LOW</span></div>
+        <div class="acts"><span class="mb">Save</span><span class="mb g">Save &amp; next room: Lab 2106 →</span></div>`) },
+    { kicker: 'Step 5 · History', title: 'Every inspection on record',
+      body: 'All inspections are kept with the date, the room and who did them. Found a mistake later? Edit the counts in a record, and its low-stock flags are worked out again.',
+      scene: () => win('Export Data · inspections', `
+        <table class="tbl"><thead><tr><th>Date</th><th>Room</th><th>By</th><th>Low</th><th></th></tr></thead><tbody>
+        <tr><td class="num">Oct 28</td><td>Lab 2104</td><td>Maria</td><td class="num">2</td><td><span class="mb">Edit</span></td></tr>
+        <tr><td class="num">Oct 21</td><td>Lab 2104</td><td>James</td><td class="num">0</td><td><span class="mb">Edit</span></td></tr>
+        <tr><td class="num">Oct 21</td><td>Storage B</td><td>James</td><td class="num">1</td><td><span class="mb">Edit</span></td></tr></tbody></table>`) },
+    { kicker: 'Step 6 · Reports', title: 'Reports ready for ordering',
+      body: 'Export any inspection to PDF or Excel. Each item has a clickable purchase link, so whoever orders supplies can go straight to the product page.',
+      scene: () => win('Report · Lab 2104 · Oct 28', `
+        <div class="acts" style="margin:0"><span class="mb">⬇ PDF</span><span class="mb">⬇ Excel</span></div>
+        <table class="tbl"><thead><tr><th>Item</th><th>Count</th><th>Order</th><th>Link</th></tr></thead><tbody>
+        <tr><td>Nitrile gloves (L)</td><td class="num">4</td><td class="num">6</td><td><span class="lnk">fishersci.com</span></td></tr>
+        <tr><td>Kimwipes</td><td class="num">2</td><td class="num">8</td><td><span class="lnk">vwr.com</span></td></tr></tbody></table>`) },
+  ], recap: ['Room-by-room checklists', 'Last count as a guide', 'Low-stock prompts', 'PDF and Excel with purchase links'] },
+
+  projects: { name: '🧪 Project Workspace', steps: [
+    { kicker: 'Step 1 · Projects', title: 'Projects, sub projects and folders',
+      body: 'Each project branches into sub projects (Lot 3, Phase II) and material folders. When a material is reduced, its fractions branch off it the same way, so you can follow any container back to where it came from. Click a folder to open it.',
+      scene: () => `<div class="ptree">
+        <div class="pb2"><span class="pf proj"><b>I-55 Pavement Study</b><small>PI Prof. Rivera</small></span>
+          <div class="pk"><div class="pb2"><span class="pf sp"><b>Lot 3</b><small>sub project</small></span>
+            <div class="pk"><div class="pb2"><span class="pf sel"><b>📁 Limestone CM-11</b><small>Aggregate</small></span>
+              <div class="pk"><div class="pb2"><span class="pf"><b>3/4"</b><small>fraction</small></span></div><div class="pb2"><span class="pf"><b>1/2"</b><small>fraction</small></span></div><div class="pb2"><span class="pf"><b>#4</b><small>fraction</small></span></div><div class="pb2"><span class="pf"><b>Pan</b><small>fraction</small></span></div></div></div></div></div>
+          </div></div></div>` },
+    { kicker: 'Step 2 · Your team', title: 'Work on projects together',
+      body: 'Invite people to your project team by name. Once they accept, they work in your projects with you, and you can see the teams you have joined. Remove someone with one click when they move on.',
+      scene: () => win('Project Members', `
+        <div class="field"><small>Invite a team member</small>Type a name or nickname…</div>
+        <div class="row ok">${av('JK', '#3b82f6')}<span class="nm">James Kim<span class="sm">Lab user · member</span></span><span class="mb r">Remove</span></div>
+        <div class="row ok">${av('AP', '#f59e0b')}<span class="nm">Aisha Patel<span class="sm">Invite sent Oct 28</span></span><span class="tag amber">PENDING</span></div>
+        <div class="row ok"><span class="nm">Teams I joined<span class="sm">Prof. Chen's project team</span></span></div>`) },
+    { kicker: 'Step 3 · Materials', title: 'Every container on record',
+      body: 'Each material is a record with its type, quantity, containers, storage location and photos. Anyone can find out what you have and where it is without walking the high bay.',
+      scene: () => win('Material · Limestone CM-11', `
+        <div class="row ok"><span class="nm"><b>Limestone CM-11</b><span class="sm">Aggregate · sampled Sep 30</span></span><span class="tag green">IN STORAGE</span></div>
+        <div class="two"><div class="field"><small>Quantity</small>6 buckets</div><div class="field"><small>Location</small>High bay A · shelf 3</div></div>`) },
+    { kicker: 'Step 4 · Material reduction', title: 'Split a material into fractions',
+      body: 'Sieve an aggregate into fractions and each size becomes its own record under the parent, with its own quantity, location and label. Nothing gets mixed up when the buckets multiply.',
+      scene: () => `<div style="display:grid;gap:10px;justify-items:center">
+        <div class="row ok" style="width:100%"><span class="nm"><b>Limestone CM-11</b><span class="sm">Fractionated Oct 2</span></span><span class="tag green">4 REDUCTIONS</span></div>
+        <div class="frac"><span>3/4"</span><span>1/2"</span><span>#4</span><span>Pan</span></div></div>` },
+    { kicker: 'Step 5 · Labels and QR', title: 'Print a label, scan it with a phone',
+      body: 'Print a 4×6 label for any container. Each one has its own barcode and QR code, so scanning it with a phone opens that material\'s record straight away.',
+      scene: () => `<div class="qlabel"><div class="lh"><span>LabHive</span><span>IPS-0A41C7</span></div>${qr()}<u>Project info:</u>I-55 Pavement Study<br>Lot 3<u>Original Material:</u>Limestone CM-11<br>Sieve 1/2"</div>` },
+    { kicker: 'Step 6 · Tested samples', title: 'Tested samples get their own identity',
+      body: 'A sample that has been tested gets its own label and barcode, separate from the material it came from, with the test name, date and where it is stored.',
+      scene: () => `<div class="qlabel"><div class="lh"><span>Tested Material</span><span>IPS-TST-8F3A21</span></div>${qr()}<u>Test:</u>Hamburg wheel tracking<br>Oct 28, 2026<u>Stored:</u>High bay B</div>` },
+    { kicker: 'Step 7 · Results and export', title: 'Results and files, ready to share',
+      body: 'Record test results against the project, attach the data files, and export the project\'s materials and results to Excel whenever a sponsor or report needs them.',
+      scene: () => win('Project Test Results', `
+        <table class="tbl"><thead><tr><th>Test</th><th>Sample</th><th>File</th></tr></thead><tbody>
+        <tr><td>Hamburg wheel</td><td>TST-8F3A21</td><td><span class="lnk">hwt_results.xlsx</span></td></tr>
+        <tr><td>Gradation</td><td>CM-11</td><td><span class="lnk">sieve_analysis.pdf</span></td></tr></tbody></table>
+        <div class="acts" style="margin:0"><span class="mb g">⬇ Export to Excel</span></div>`) },
+  ], recap: ['Projects, sub projects and folders', 'Your project team', 'Fractions under their parent', 'QR labels for every container'] },
+
+  equipment: { name: '🔧 Equipment & Maintenance', steps: [
+    { kicker: 'Step 1 · Your equipment', title: 'Every instrument, with its photo',
+      body: 'Keep the whole lab\'s equipment in one list: photo, location, category, model and serial number. Bring an existing list in from Excel, and export it again whenever you need to.',
+      scene: () => win('List of Equipment · 4 items', `
+        ${[['eq-load-frame','Hydraulic Load Frame','High Bay · Structural','SN 77-4120'],['eq-drying-oven','Drying Oven','Lab 2104 · Ovens','SN DO-2231'],['eq-centrifuge','Centrifuge','Lab 2106 · Centrifuges','SN 1516-08'],['eq-fume-hood','Fume Hood','Lab 2104 · Hoods','SN FH-0093']].map(([k,n,l,sn]) =>
+          `<div class="row ok"><img class="thumb" src="${IMG[k]}" alt=""><span class="nm"><b>${n}</b><span class="sm">${l}</span></span><span class="sm num" style="font-size:11px;color:var(--text3)">${sn}</span></div>`).join('')}`) },
+    { kicker: 'Step 2 · Who may use it', title: 'Decide who sees each instrument',
+      body: 'For each instrument, choose what lab users can see: its SOP, the booking calendar, training requests and the exam. Or mark it Lab only, for calibration and maintenance staff. New items wait for a decision until someone sets one.',
+      scene: () => win('Edit · Centrifuge · Lab user access', `
+        <div class="row ok"><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span><span class="nm">Equipment SOP</span></div>
+        <div class="row ok"><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span><span class="nm">Booking calendar</span></div>
+        <div class="row ok"><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span><span class="nm">Request training</span></div>
+        <div class="row ok"><span class="box"></span><span class="nm">Exam</span></div>
+        <div class="acts" style="margin:0"><span class="tag green">LAB USERS</span><span class="tag">LAB ONLY</span><span class="tag amber">WAITING FOR DECISION</span></div>`) },
+    { kicker: 'Step 3 · Calibration', title: 'Calibration that does not lapse',
+      body: 'Record each calibration with its interval and certificate number. LabHive works out the next due date and shows every instrument as Current, Due Soon or Overdue.',
+      scene: () => win('Calibration', `
+        <table class="tbl"><thead><tr><th>Equipment</th><th>Next due</th><th>Certificate</th><th>Status</th></tr></thead><tbody>
+        <tr><td>Hydraulic Load Frame</td><td class="num">Mar 2027</td><td class="num">NIST-2026-0412</td><td><span class="tag green">CURRENT</span></td></tr>
+        <tr><td>Centrifuge</td><td class="num">Nov 12</td><td class="num">CAL-8821</td><td><span class="tag amber">DUE SOON</span></td></tr>
+        <tr><td>Drying Oven</td><td class="num">Oct 2</td><td class="num">CAL-7710</td><td><span class="tag" style="background:#fde8e4;color:var(--red)">OVERDUE</span></td></tr></tbody></table>`) },
+    { kicker: 'Step 4 · Maintenance', title: 'Maintenance by date, or by hours used',
+      body: 'Set a maintenance interval in days, or a maximum number of hours. Hours are counted from the bookings, so an instrument that is used heavily comes due sooner, and one over its limit is marked Exceeded.',
+      scene: () => win('Maintenance Records', `
+        <div class="row ok"><img class="thumb" src="${IMG['eq-drying-oven']}" alt=""><span class="nm"><b>Drying Oven</b><span class="sm">Every 90 days · next Dec 1</span></span><span class="tag green">ON TRACK</span></div>
+        <div class="row ok"><img class="thumb" src="${IMG['eq-centrifuge']}" alt=""><span class="nm"><b>Centrifuge</b><span class="sm">212 of 250 hours since maintenance</span><span class="pb" style="margin-top:4px"><i style="width:85%;background:#f59e0b"></i></span></span><span class="tag amber">DUE SOON</span></div>
+        <div class="row ok"><img class="thumb" src="${IMG['eq-load-frame']}" alt=""><span class="nm"><b>Hydraulic Load Frame</b><span class="sm">310 of 300 hours</span><span class="pb" style="margin-top:4px"><i style="width:100%;background:var(--red)"></i></span></span><span class="tag" style="background:#fde8e4;color:var(--red)">EXCEEDED</span></div>`) },
+    { kicker: 'Step 5 · Responsibility', title: 'Someone is responsible for each one',
+      body: 'Name the lab managers responsible for maintaining each instrument, so it is always clear who looks after what.',
+      scene: () => win('Edit · Hydraulic Load Frame', `
+        <span class="lbl">Responsible for Maintenance</span>
+        <div class="row ok">${av('ML', '#1D9E75')}<span class="nm">Maria Lopez<span class="sm">Lab manager</span></span><span class="box" style="background:var(--teal);border-color:var(--teal)">✓</span></div>
+        <div class="row ok">${av('DR', '#534AB7')}<span class="nm">Daniel Ruiz<span class="sm">Lab manager</span></span><span class="box"></span></div>`) },
+  ], recap: ['Equipment list with photos', 'Who may use each instrument', 'Calibration status at a glance', 'Maintenance by date or hours used'] },
+
+  maintenance: { name: '📋 Task Board', steps: [
+    { kicker: 'Step 1 · The board', title: 'Every task in one board',
+      body: 'Tasks move from To do to In progress to Done. Each has a priority, a deadline and a progress bar, so everyone can see what is on track and what is slipping.',
+      scene: () => `<div class="kan">
+        <div><h5>To do</h5><div class="tk h">Calibrate DSR<small>Due Nov 3 · High</small></div><div class="tk">Order sieve brushes<small>Due Nov 10</small></div></div>
+        <div><h5>In progress</h5><div class="tk">Clean ovens<small>Due Oct 31</small><span class="pb"><i style="width:60%"></i></span></div></div>
+        <div><h5>Done</h5><div class="tk l">Replace filter<small>Done Oct 24</small><span class="pb"><i style="width:100%"></i></span></div></div></div>` },
+    { kicker: 'Step 2 · Team and meetings', title: 'Assign work, and turn meetings into tasks',
+      body: 'Admins assign tasks to anyone on the team, and that person is notified. Action items added during a lab meeting become tasks for the person they are given to, so nothing agreed in the room is forgotten.',
+      scene: () => `<div class="two">
+        ${win('Calibrate DSR', `<div class="row ok">${av('JK', '#3b82f6')}<span class="nm">Assigned to James Kim<span class="sm">by Maria · priority High</span></span></div>`)}
+        ${win('Weekly lab meeting · Oct 28', `<div class="row ok"><span class="nm">Check oven thermometers</span>${av('AP', '#f59e0b')}</div><div class="row ok"><span class="nm">Update SOP binder</span>${av('ML', '#1D9E75')}</div>`)}</div>` },
+    { kicker: 'Step 3 · Calendar', title: 'Deadlines and out-of-lab days together',
+      body: 'The calendar shows deadlines as dots. People mark the days they will be out of the lab, shown in red, so work is not assigned to someone who is away.',
+      scene: () => win('November', `<div class="month">${['M','T','W','T','F','S','S'].map(d => `<b>${d}</b>`).join('')}
+        ${[...Array(28)].map((_, k) => { const d = k + 1, c = [3,10,14,21].includes(d) ? 'd' : [12,13].includes(d) ? 'o' : d === 5 ? 't' : ''; return `<span class="${c}">${c === 'o' ? '✕' : d}</span>` }).join('')}</div>`) },
+    { kicker: 'Step 4 · Timeline', title: 'See what drives the finish date',
+      body: 'The timeline draws every task from start to deadline. Say which task waits on which, and LabHive marks the critical path (the tasks that move the finish date if they slip) in red.',
+      scene: () => win('Timeline · DSR upgrade', `<div class="gantt">
+        <span class="nm">Order parts</span><span class="tl"><i class="c" style="left:0;width:28%"></i></span>
+        <span class="nm">Install</span><span class="tl"><i class="c" style="left:29%;width:28%"></i></span>
+        <span class="nm">Write SOP</span><span class="tl"><i style="left:29%;width:20%"></i></span>
+        <span class="nm">Calibrate</span><span class="tl"><i class="c" style="left:58%;width:28%"></i></span></div>`) },
+    { kicker: 'Step 5 · Reminders', title: 'Reminders that come to you',
+      body: 'Each morning LabHive sends a summary of what is due and overdue, and a reminder the day before a deadline, in the app and by email for anyone who turns email on.',
+      scene: () => `<div style="display:grid;gap:10px">${notif('Daily reminder: 3 tasks', '1 overdue · Calibrate DSR, Clean ovens, Order sieve brushes', '7:00 AM')}${notif('⏰ Task due tomorrow', '"Clean ovens" is due tomorrow', '7:00 AM')}</div>` },
+  ], recap: ['Board with priorities and progress', 'Team tasks and meeting action items', 'Deadline calendar with out-of-lab days', 'Timeline, critical path and reminders'] },
+
+  messaging: { name: '💬 Lab Messages', steps: [
+    { kicker: 'Step 1 · Write', title: 'Message one person, or the whole lab',
+      body: 'Send a message to one lab user or lab manager, or to everyone in the lab at once. No email lists to keep up to date.',
+      scene: () => win('New message', `
+        <div class="field"><small>To</small>📣 All Demo Lab users (broadcast)</div>
+        <div class="field"><small>Subject</small>High bay closed Friday</div>
+        <div class="field" style="min-height:48px"><small>Message</small>The high bay is closed Friday for crane inspection. Please plan bookings around it.</div>`) },
+    { kicker: 'Step 2 · Conversations', title: 'Replies stay together, and you see when it is read',
+      body: 'Each conversation keeps every reply in one thread. Your last message shows "Seen" once the other person has read it.',
+      scene: () => win('Maria Lopez', `<div class="bubbles">
+        <div class="bub">Is the Sieve Shaker free Thursday morning?<small>Maria · 9:14 AM</small></div>
+        <div class="bub me">Yes, 9 to 12 is open. Book it on the calendar.<small>You · 9:20 AM</small></div>
+        <div class="seen">✓✓ Seen</div></div>`) },
+    { kicker: 'Step 3 · Notifications', title: 'One bell for everything',
+      body: 'Bookings, training, tasks and messages all arrive in the bell, live. Click one and it opens the page where you deal with it.',
+      scene: () => `<div class="bell"><div class="bh">Notifications<span>3 new</span></div>
+        <div class="bi hov">🎓<div><b>Maria requested equipment training</b><small>Sieve Shaker · 10 min ago</small></div></div>
+        <div class="bi">📅<div><b>New booking request</b><small>DSR Rheometer · Thu 1:00 PM</small></div></div>
+        <div class="bi">💬<div><b>James replied to your message</b><small>1 h ago</small></div></div></div>` },
+    { kicker: 'Step 4 · Your choice', title: 'Email only for what you want',
+      body: 'Each person chooses, event by event, what they see in the app and what also comes by email. Nobody is buried in messages they did not ask for.',
+      scene: () => win('Profile · Notifications', `
+        <table class="tbl"><thead><tr><th>Event</th><th>In app</th><th>Email</th></tr></thead><tbody>
+        <tr><td>Booking confirmed</td><td><span class="tg on"></span></td><td><span class="tg on"></span></td></tr>
+        <tr><td>Task assigned to me</td><td><span class="tg on"></span></td><td><span class="tg"></span></td></tr>
+        <tr><td>Reply to my message</td><td><span class="tg on"></span></td><td><span class="tg on"></span></td></tr></tbody></table>`) },
+    { kicker: 'Step 5 · Help', title: 'Help without leaving the page',
+      body: 'Sara, the built-in assistant, answers common questions about LabHive. Every page also has a "?" with tips for that page, and Contact Us reaches the LabHive team.',
+      scene: () => `<div class="bubbles">
+        <div class="bub me">How do I book two instruments at once?</div>
+        <div class="sara"><img class="sara-pic" src="${IMG['sara']}" alt="Sara"><div class="bub">Tick both instruments, choose "Same time for all", then drag once on the calendar.<small>Sara</small></div></div></div>` },
+  ], recap: ['Direct messages and lab-wide broadcasts', 'Read receipts', 'One live notification bell', 'Email only when people want it'] },
+}
+
+let tour = null, tourKey = null, i = 0
+const ORDER = Object.keys(TOURS)
+const nextKey = () => ORDER[(ORDER.indexOf(tourKey) + 1) % ORDER.length]
+const shortName = k => TOURS[k].name.slice(TOURS[k].name.indexOf(' ') + 1)
+const $ = id => document.getElementById(id)
+
+function render() {
+  const steps = tour.steps, total = steps.length
+  const s = i < total ? steps[i] : {
+    kicker: 'Your turn', title: 'Ready to try it?',
+    body: 'Open LabHive and try it yourself. Want it set up for your lab? Contact us and we will set up your equipment, users and rules.',
+    scene: () => `<div class="finale"><div class="big">${tour.name.split(' ')[0]}</div>
+      <div style="font-size:18px;font-weight:700;color:var(--navy)">That is ${tour.name.slice(tour.name.indexOf(' ') + 1)}</div>
+      <ul>${tour.recap.map(r => `<li>${r}</li>`).join('')}</ul>
+      <div class="acts" style="justify-content:center;margin-top:16px">
+        <a class="b" href="/app?support=1">Contact us</a>
+        <a class="b p" href="/app">Try it in LabHive →</a></div></div>`,
+  }
+  $('t-scene').innerHTML = `<div class="scene">${s.scene()}</div>`
+  $('t-kicker').textContent = s.kicker
+  $('t-title').textContent = s.title
+  $('t-body').textContent = s.body
+  $('t-count').textContent = i < total ? `Step ${i + 1} of ${total}` : ''
+  $('t-bar').style.width = `${Math.min(i + 1, total) / total * 100}%`
+  $('t-dots').innerHTML = steps.map((_, k) => `<button type="button" aria-label="Step ${k + 1}" class="${k === i ? 'on' : k < i ? 'done' : ''}" data-k="${k}"></button>`).join('')
+  const nextFeat = `<button class="b nf" type="button" data-a="feature">Next: ${shortName(nextKey())} →</button>`
+  $('t-nav').innerHTML = i < total - 1
+    ? `${i === 0 ? '<button class="skip" type="button" data-a="skip">Skip tour</button>' : '<button class="b" type="button" data-a="back">← Back</button>'}
+       <button class="b p" type="button" data-a="next">Next →</button>`
+    : i === total - 1
+    ? `<button class="b" type="button" data-a="back">← Back</button>
+       <button class="b p" type="button" data-a="next">Finish</button>${nextFeat}`
+    : `<button class="b" type="button" data-a="back">← Back</button>
+       <button class="b" type="button" data-a="close">Close</button>${nextFeat}`
+}
+function go(n) { i = Math.max(0, Math.min(tour.steps.length, n)); render() }
+function open(key) {
+  tour = TOURS[key]; if (!tour) return
+  tourKey = key
+  $('t-name').textContent = tour.name
+  $('t-page').innerHTML = PAGES[key]
+  $('tour').hidden = false
+  document.body.style.overflow = 'hidden'
+  go(0)
+}
+function close() { $('tour').hidden = true; document.body.style.overflow = '' }
+
+$('t-nav').addEventListener('click', e => {
+  const a = e.target.closest('[data-a]')?.dataset.a
+  if (a === 'next') go(i + 1); else if (a === 'back') go(i - 1); else if (a === 'skip') go(tour.steps.length)
+  else if (a === 'close') close(); else if (a === 'feature') open(nextKey())
+})
+$('t-dots').addEventListener('click', e => { const k = e.target.dataset.k; if (k !== undefined) go(+k) })
+$('t-close').addEventListener('click', close)
+$('tour').addEventListener('click', e => { if (e.target.id === 'tour') close() })
+document.querySelectorAll('[data-tour]').forEach(c => c.addEventListener('click', () => open(c.dataset.tour)))
+document.addEventListener('keydown', e => {
+  if ($('tour').hidden) return
+  if (e.key === 'Escape') close()
+  if (e.key === 'ArrowRight') go(i + 1)
+  if (e.key === 'ArrowLeft') go(i - 1)
+})
+// More features: reveals the cards kept back so the grid shows six
+document.getElementById('more-btn').addEventListener('click', function () {
+  const extra = document.querySelectorAll('[data-more]')
+  const show = extra[0].hidden
+  extra.forEach(el => { el.hidden = !show })
+  this.textContent = show ? 'Fewer features ▴' : 'More features ▾'
+  this.setAttribute('aria-expanded', String(show))
+})
+</script>
 
 </body>
 </html>

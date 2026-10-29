@@ -1,0 +1,12 @@
+Photos used by the feature tours on the LabHive home page (docs/index.html).
+All are public domain or CC0 on Wikimedia Commons; no credit is required.
+Cropped and resized for the web (Oct 2026).
+
+room-chem-lab.jpg        CC0            https://commons.wikimedia.org/wiki/File:Chemistry_Laboratory,_Augustine_University,_Ilara_Epe.jpg  (cropped to remove the phone watermark)
+room-high-bay.jpg        Public domain  https://commons.wikimedia.org/wiki/File:2024_Around_the_Forest_Products_Laboratory_(20240305-FS-DP-0105).jpg  (USDA Forest Service)
+room-chem-storage.jpg    CC0            https://commons.wikimedia.org/wiki/File:Flammable_cabinet_black_open.jpg
+eq-load-frame.jpg        Public domain  https://commons.wikimedia.org/wiki/File:2024_Around_the_Forest_Products_Laboratory_(20240305-FS-DP-0104).jpg  (USDA Forest Service)
+eq-drying-oven.jpg       Public domain  https://commons.wikimedia.org/wiki/File:Drying_owen_1.jpg
+eq-centrifuge.jpg        CC0            https://commons.wikimedia.org/wiki/File:Centrifuge_in_Laboratory_1.jpg
+eq-fume-hood.jpg         Public domain  https://commons.wikimedia.org/wiki/File:Fume_hood.jpg
+item-nitrile-gloves.jpg  Public domain  https://commons.wikimedia.org/wiki/File:Disposable_nitrile_glove.jpg
