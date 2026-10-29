@@ -34,6 +34,92 @@ not a full transcript of every conversation.
 
 ## Log
 
+### 2026-10-28–29 — Home page feature tours, maintenance reminders, bell routing
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- Notifications for equipment training requests did nothing when clicked — fix in both apps
+- Turn the home page feature cards into step-by-step tours (like the ICT-Lab booking tour), with a blurred view of each page behind the pictures, Back / Finish / Next feature buttons, and a "Try it in LabHive" ending
+- Card names must match the real icon names; real photos (labs, gloves, equipment) and Sara's picture; Project Workspace shows the folder tree and team members; add Equipment & Maintenance as its own card; show six cards and put Lab Messages under "More features"
+- Make the "Remind" tick under Responsible for Maintenance actually send reminders
+
+**Resulting changes (files/features affected):**
+- Bell (both apps): `training_request` / `training_confirmed` open Training Records → Equipment with the requester open (name read from the title); proposed / confirmed training dates go there too; the daily task summary opens the Task Board
+- Home page: moved out of a template string in `scripts/post-build.mjs` into `landing/index.html` (copied to `docs/index.html` at build). Seven tours (Booking Equipment 8 steps, Training Records 6, Supply Inventory 6, Project Workspace 7, Equipment & Maintenance 5, Task Board 5, Lab Messages 5), each with a blurred drawing of that screen. Public-domain / CC0 photos in `public/tour/` (sources in `SOURCES.txt`)
+- Maintenance reminders (both apps): 2 weeks and 1 week before `next_maintenance_date`, on the day, then weekly while overdue, to managers ticked Remind; in-app + opt-in email; from the `daily-reminders` Edge Function at 7am with a sign-in fallback, deduplicated in `reminder_sends`. Replaced a dashboard-made pg_cron job (`send_maintenance_reminders()`) that ignored the tick, ran at 3am and queued emails with no address — `maintenance_reminder_setup.sql`, run in both databases
+- ICT-Lab reminder emails linked to `ictlab.app` (no such domain) → now `ictlab.labhive.app`
+
+**Related git commit(s):** LabHive 58e43853, 7f102678, 31c6440e · ICT-Lab 67af245, fdfc573
+
+---
+
+### 2026-10-23–26 — Pinned toolbars, safety steps, vehicles in booking, equipment naming
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- Keep search boxes, filters and buttons in view while long lists scroll
+- A lab user required to do Steps 1 and 3 was sent to Step 2 after finishing Step 1; lab users excused from Step 2 should not be told to upload certificates
+- ICT vehicles bookable only after an approved vehicle request; tell managers about vehicle requests and forms; show usage for every instrument
+- Filter the equipment list by lab user access; use the equipment name everywhere, nickname second
+- A refresh should return to the page you were on; clearer booking calendar hour labels
+- Demo account: show Terms and the icon picker once; remove Metal Bucket and Plastic Bucket container types
+
+**Resulting changes (files/features affected):**
+- `.sticky-tools` on Lab Users, Training Records, Booking history, Projects, Admin users, QR Labels, Equipment SOP and Equipment list
+- Safety `StepPanel`: opens on the first unfinished required step; Next follows the required steps only
+- `isVehicle()` + confirmed `vehicle_access` gate in Booking; `lib/vehicleNotify.js` (ICT-Lab). Fixed a crash where a hook named state above its `useState`
+- Equipment access filter; `equipment_name || nickname` across all screens; `?screen=` kept in the address
+- `containerOptions(current)` keeps an old saved container type visible
+
+**Related git commit(s):** LabHive 2f5fe139..78f56e97 · ICT-Lab 427095f..3d73ad3
+
+---
+
+### 2026-10-21–22 — Import lab users, yearly re-safety, Cards / List views, organization settings lock
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- Import lab users from an Excel template (max 50), review and fix the list, save and finish later, choose when welcome emails go out, edit an import afterwards
+- Yearly safety retraining; choose which safety steps each person needs; imported users approve their own steps
+- Supply Inventory for lab managers and admins only
+- Cards / List views with advisor filter and sort on Lab Users and Training Records, details opening under the person
+- Only admins and lab managers may change organization settings
+- Add equipment training for several instruments at once
+
+**Resulting changes (files/features affected):**
+- `ImportLabUsers.jsx`, Edge Function `create-lab-users`, `lab_user_imports`, `send_after` on the email queue, `lab_user_import_setup.sql`
+- `annual_safety_reset()` pg_cron job, `required_safety_steps` with the `[0]` no-steps sentinel, `zz_safety_self_approve` trigger, `guard_user_admin_fields`
+- `neverLabUser` on Supply; icon box shows the organization's pool when nothing is narrowed
+- `org_settings_managers_only.sql`; explicit table GRANTs in every new SQL file (Supabase change of Oct 30)
+- Sign-in page and header link back to labhive.app; a missing stylesheet after a deploy reloads once
+
+**Related git commit(s):** LabHive f1f6807a..d54f7483 · ICT-Lab f9484a4..eb069b6
+
+---
+
+### 2026-10-15–16 — Booking tour, guided tours menu, guide v3.0, backups and restore (ICT-Lab)
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- A first-visit tour of Booking Equipment for every lab user; retraining locks; book several instruments at the same time; a responsibility tick box
+- A list of guided tours under the header "?"
+- Rewrite the Lab Manager Guide for the app as it is now
+- ICT-Lab: weekly database + file backups to S3, a tested one-click restore, and a Monday backup notice; lock down the S3 link function
+
+**Resulting changes (files/features affected):**
+- `BookingTour.jsx`, `lib/tours.js`, `HelpTourButton`; Help "?" sits beside the green tip banner
+- Lab Manager Guide v3.0 from one template for both apps
+- `backup-weekly.yml`, `restore.yml` (test-run target passed 103/103 tables), `backup-notice.yml`; `s3-presign` requires a signed-in user and refuses `backups/`
+- Equipment SOP photo and name fixes
+
+**Related git commit(s):** LabHive f3d6e544..b1f83b2f · ICT-Lab 6dacb5b..3c8680a
+
+---
+
 ### 2026-09-13 — Module-visibility resolver, RLS determinism, terminology rename, avatars
 
 **Tool used:** Claude Code
