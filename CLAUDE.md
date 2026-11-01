@@ -2127,6 +2127,9 @@ script is full of backticks and `${}`.
   step offers Back · Finish · Next feature; the closing screen Back · Close ·
   Next feature, with Try it in LabHive / Contact us above.
 - Behind each step's picture is a blurred drawing of that screen (`PAGES`).
+- **Cards are photo cards** (Oct 31 2026): each feature card is a real lab
+  photograph (`public/tour/card-<tour key>.jpg`, 640×440) with the text over a
+  dark fade and a one-word tag. A new card needs its own photo file.
 - Photos live in `public/tour/` (served at `/app/tour/`), all public domain or
   CC0, sources in `public/tour/SOURCES.txt`. Sara's picture is `/app/sara-avatar.jpg`.
 - **Tours must stay true to the app.** When a feature named in a tour changes,

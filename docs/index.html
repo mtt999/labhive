@@ -70,14 +70,25 @@
     .more-btn { font: inherit; font-size: 14px; font-weight: 600; color: var(--teal-ink); background: var(--teal-light); border: 1px solid #9FE1CB; border-radius: 99px; padding: 9px 22px; cursor: pointer; }
     .more-btn:hover { border-color: var(--teal); }
     .more-btn:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
-    .feat-card { font: inherit; color: inherit; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; cursor: pointer; transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; }
-    .feat-card:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
-    .feat-card:hover, .feat-card:focus-visible { box-shadow: 0 4px 20px rgba(29,158,117,0.15); transform: translateY(-2px); border-color: var(--teal); }
-    .feat-card:hover .feat-hint, .feat-card:focus-visible .feat-hint { opacity: 1; }
-    .feat-icon { font-size: 28px; margin-bottom: 12px; }
-    .feat-card h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
-    .feat-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
-    .feat-hint { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--teal); font-weight: 600; margin-top: 12px; opacity: 0; transition: opacity 0.15s; }
+    /* Feature cards: a real lab photograph fills the card, the text sits over a
+       dark fade at the bottom. Photos: public/tour/card-*.jpg (SOURCES.txt). */
+    .feat-card { position: relative; overflow: hidden; font: inherit; text-align: left; cursor: pointer;
+      min-height: 300px; padding: 0; border: none; border-radius: 16px; background: var(--navy); color: #fff;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      box-shadow: 0 6px 18px rgba(12,17,64,.12); transition: box-shadow .2s, transform .2s; }
+    .feat-card .ph { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform .6s ease; }
+    .feat-card::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(12,17,64,0) 25%, rgba(12,17,64,.55) 55%, rgba(12,17,64,.93) 100%); }
+    .feat-card .tag { position: absolute; z-index: 1; top: 14px; left: 14px; font-size: 11px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; background: rgba(255,255,255,.93); color: var(--navy); border-radius: 99px; padding: 3px 10px; }
+    .feat-card .txt { position: relative; z-index: 1; padding: 22px; }
+    .feat-card:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 3px; }
+    .feat-card:hover, .feat-card:focus-visible { box-shadow: 0 14px 32px rgba(12,17,64,.24); transform: translateY(-3px); }
+    .feat-card:hover .ph, .feat-card:focus-visible .ph { transform: scale(1.07); }
+    .feat-card h3 { font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .feat-card p { font-size: 14px; color: #dbe1f5; line-height: 1.6; }
+    .feat-hint { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #6ee7b7; font-weight: 700; margin-top: 10px; }
+    @media (prefers-reduced-motion: reduce) { .feat-card, .feat-card .ph { transition: none; } }
 
     /* ── Feature tours (step by step, one per card) ── */
   /* ── Modal ── */
@@ -466,14 +477,14 @@
       <div class="section-title">Everything your lab needs</div>
       <div class="section-sub">Built for the day-to-day reality of running a research or university lab. Click any card for a step-by-step tour.</div>
       <div class="features-grid">
-        <button type="button" class="feat-card" data-tour="booking"><div class="feat-icon">📅</div><h3>Booking Equipment</h3><p>Calendar-based reservations with manager approval workflows, before/after condition photos, and automated notifications.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
-        <button type="button" class="feat-card" data-tour="training"><div class="feat-icon">🎓</div><h3>Training Records</h3><p>Track certifications, upload training documents, manage equipment approvals, and monitor expiry dates for every member.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
-        <button type="button" class="feat-card" data-tour="inspection"><div class="feat-icon">📦</div><h3>Supply Inventory</h3><p>Room-by-room supply checklists with photos, low-stock alerts, full inspection history, and PDF/Excel export.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
-        <button type="button" class="feat-card" data-tour="projects"><div class="feat-icon">🧪</div><h3>Project Workspace</h3><p>Organize research projects with your team, track samples with barcode and QR labels, and export test results in any format.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
-        <button type="button" class="feat-card" data-tour="equipment"><div class="feat-icon">🔧</div><h3>Equipment &amp; Maintenance</h3><p>Every instrument with its photo, who may use it, calibration due dates, and maintenance by date or by hours used.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
-        <button type="button" class="feat-card" data-tour="maintenance"><div class="feat-icon">📋</div><h3>Task Board</h3><p>Tasks with deadlines and priorities, team assignment, meetings, a timeline, and a deadline calendar with out-of-lab days.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="booking"><span class="ph" style="background-image:url('/app/tour/card-booking.jpg')"></span><span class="tag">Book</span><span class="txt"><h3>Booking Equipment</h3><p>Calendar-based reservations with manager approval workflows, before/after condition photos, and automated notifications.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
+        <button type="button" class="feat-card" data-tour="training"><span class="ph" style="background-image:url('/app/tour/card-training.jpg')"></span><span class="tag">Train</span><span class="txt"><h3>Training Records</h3><p>Track certifications, upload training documents, manage equipment approvals, and monitor expiry dates for every member.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
+        <button type="button" class="feat-card" data-tour="inspection"><span class="ph" style="background-image:url('/app/tour/card-inspection.jpg')"></span><span class="tag">Stock</span><span class="txt"><h3>Supply Inventory</h3><p>Room-by-room supply checklists with photos, low-stock alerts, full inspection history, and PDF/Excel export.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
+        <button type="button" class="feat-card" data-tour="projects"><span class="ph" style="background-image:url('/app/tour/card-projects.jpg')"></span><span class="tag">Track</span><span class="txt"><h3>Project Workspace</h3><p>Organize research projects with your team, track samples with barcode and QR labels, and export test results in any format.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
+        <button type="button" class="feat-card" data-tour="equipment"><span class="ph" style="background-image:url('/app/tour/card-equipment.jpg')"></span><span class="tag">Maintain</span><span class="txt"><h3>Equipment &amp; Maintenance</h3><p>Every instrument with its photo, who may use it, calibration due dates, and maintenance by date or by hours used.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
+        <button type="button" class="feat-card" data-tour="maintenance"><span class="ph" style="background-image:url('/app/tour/card-maintenance.jpg')"></span><span class="tag">Plan</span><span class="txt"><h3>Task Board</h3><p>Tasks with deadlines and priorities, team assignment, meetings, a timeline, and a deadline calendar with out-of-lab days.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
         <!-- More features: kept out of sight until asked for, so six cards show -->
-        <button type="button" class="feat-card" data-tour="messaging" data-more hidden><div class="feat-icon">💬</div><h3>Lab Messages</h3><p>Messages between lab managers and lab users, lab-wide announcements, and a live notification bell to keep your team in sync.</p><div class="feat-hint">▶ Take the step-by-step tour</div></button>
+        <button type="button" class="feat-card" data-tour="messaging" data-more hidden><span class="ph" style="background-image:url('/app/tour/card-messaging.jpg')"></span><span class="tag">Talk</span><span class="txt"><h3>Lab Messages</h3><p>Messages between lab managers and lab users, lab-wide announcements, and a live notification bell to keep your team in sync.</p><div class="feat-hint">▶ Take the step-by-step tour</div></span></button>
       </div>
       <div class="more-wrap"><button type="button" class="more-btn" id="more-btn" aria-expanded="false">More features ▾</button></div>
     </div>

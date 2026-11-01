@@ -10,3 +10,12 @@ eq-drying-oven.jpg       Public domain  https://commons.wikimedia.org/wiki/File:
 eq-centrifuge.jpg        CC0            https://commons.wikimedia.org/wiki/File:Centrifuge_in_Laboratory_1.jpg
 eq-fume-hood.jpg         Public domain  https://commons.wikimedia.org/wiki/File:Fume_hood.jpg
 item-nitrile-gloves.jpg  Public domain  https://commons.wikimedia.org/wiki/File:Disposable_nitrile_glove.jpg
+
+Feature card photos (card-*.jpg, 640x440, cropped):
+card-booking.jpg      CC0            https://commons.wikimedia.org/wiki/File:Centrifuge_in_Laboratory_1.jpg
+card-training.jpg     Public domain  https://commons.wikimedia.org/wiki/File:Medical_Laboratory_Scientist_US_NIH.jpg  (National Institutes of Health)
+card-inspection.jpg   CC0            https://commons.wikimedia.org/wiki/File:Flammable_cabinet_black_open.jpg
+card-projects.jpg     CC0            https://commons.wikimedia.org/wiki/File:Biology_lab.jpg
+card-equipment.jpg    Public domain  https://commons.wikimedia.org/wiki/File:Drying_owen_1.jpg
+card-maintenance.jpg  Public domain  https://commons.wikimedia.org/wiki/File:2024_Around_the_Forest_Products_Laboratory_(20240305-FS-DP-0105).jpg  (USDA Forest Service)
+card-messaging.jpg    Public domain  https://commons.wikimedia.org/wiki/File:ARS_National_Laboratory_for_Genetic_Resources_Preservation_(20160916-ARS-NP-0006).jpg  (USDA ARS)
