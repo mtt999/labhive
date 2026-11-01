@@ -359,9 +359,18 @@
     .plans { padding: 80px 24px; }
     .plans-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
     @media (max-width: 640px) { .plans-grid { grid-template-columns: 1fr; } }
-    .plan-card { border: 1.5px solid var(--border); border-radius: 16px; padding: 32px; }
-    .plan-card.team { border-color: #a7dcc9; background: var(--teal-light); }
-    .plan-card.solo { border-color: var(--blue-border); background: var(--blue-light); }
+    /* Account cards: a photo across the top (a team / one researcher) fading
+       into the card, a small 3D figure on its edge. public/tour/plan-*. */
+    .plan-card { position: relative; overflow: hidden; border: 1.5px solid var(--border); border-radius: 16px; padding: 0; }
+    .plan-ph { height: 200px; background-size: cover; background-position: center; position: relative; transition: transform .6s ease; }
+    .plan-ph::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, var(--plan-bg) 100%); }
+    .plan-card:hover .plan-ph { transform: scale(1.04); }
+    .plan-3d { position: absolute; right: 22px; top: 148px; width: 78px; height: 78px; z-index: 2; filter: drop-shadow(0 12px 14px rgba(12,17,64,.22)); transition: transform .3s ease; }
+    .plan-card:hover .plan-3d { transform: translateY(-6px) scale(1.06); }
+    .plan-body { position: relative; padding: 0 32px 32px; margin-top: -26px; }
+    @media (prefers-reduced-motion: reduce) { .plan-ph, .plan-3d { transition: none; } }
+    .plan-card.team { --plan-bg: var(--teal-light); border-color: #a7dcc9; background: var(--teal-light); }
+    .plan-card.solo { --plan-bg: var(--blue-light); border-color: var(--blue-border); background: var(--blue-light); }
     .plan-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; border-radius: 6px; padding: 3px 10px; margin-bottom: 16px; }
     .plan-tag.team { color: #085041; background: rgba(29,158,117,0.15); }
     .plan-tag.solo { color: #1d4ed8; background: rgba(59,130,246,0.15); }
@@ -497,29 +506,37 @@
       <div class="section-title">Built for teams and individuals</div>
       <div class="plans-grid">
         <div class="plan-card team">
-          <div class="plan-tag team">Team</div>
-          <h3>LabHive Team</h3>
-          <p class="plan-desc">Organisation-based accounts for labs with multiple members, managed by a lab administrator.</p>
-          <ul class="plan-list team">
-            <li>Multi-user with role-based access control</li>
-            <li>Lab manager and lab user roles</li>
-            <li>Equipment booking with approval workflows</li>
-            <li>Training record management for the whole team</li>
-            <li>Supply inspection and maintenance tracking</li>
-            <li>Admin panel for full lab management</li>
-          </ul>
+          <div class="plan-ph" style="background-image:url('/app/tour/plan-team.jpg')"></div>
+          <img class="plan-3d" src="/app/tour/plan-team-3d.png" alt="">
+          <div class="plan-body">
+            <div class="plan-tag team">Team</div>
+            <h3>LabHive Team</h3>
+            <p class="plan-desc">Organisation-based accounts for labs with multiple members, managed by a lab administrator.</p>
+            <ul class="plan-list team">
+              <li>Multi-user with role-based access control</li>
+              <li>Lab manager and lab user roles</li>
+              <li>Equipment booking with approval workflows</li>
+              <li>Training record management for the whole team</li>
+              <li>Supply inspection and maintenance tracking</li>
+              <li>Admin panel for full lab management</li>
+            </ul>
+          </div>
         </div>
         <div class="plan-card solo">
-          <div class="plan-tag solo">Solo</div>
-          <h3>LabHive Solo</h3>
-          <p class="plan-desc">Personal lab workspace for individual researchers who need to track their own projects and materials.</p>
-          <ul class="plan-list solo">
-            <li>Personal project and material management</li>
-            <li>Barcode and QR scanning for sample tracking</li>
-            <li>Workspace sharing with collaborators</li>
-            <li>Cloud storage integration (Google Drive, OneDrive)</li>
-            <li>Inspection and maintenance tracking</li>
-          </ul>
+          <div class="plan-ph" style="background-image:url('/app/tour/plan-solo.jpg')"></div>
+          <img class="plan-3d" src="/app/tour/plan-solo-3d.png" alt="">
+          <div class="plan-body">
+            <div class="plan-tag solo">Solo</div>
+            <h3>LabHive Solo</h3>
+            <p class="plan-desc">Personal lab workspace for individual researchers who need to track their own projects and materials.</p>
+            <ul class="plan-list solo">
+              <li>Personal project and material management</li>
+              <li>Barcode and QR scanning for sample tracking</li>
+              <li>Workspace sharing with collaborators</li>
+              <li>Cloud storage integration (Google Drive, OneDrive)</li>
+              <li>Inspection and maintenance tracking</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

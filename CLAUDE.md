@@ -2130,6 +2130,9 @@ script is full of backticks and `${}`.
 - **Cards are photo cards** (Oct 31 2026): each feature card is a real lab
   photograph (`public/tour/card-<tour key>.jpg`, 640×440) with the text over a
   dark fade and a one-word tag. A new card needs its own photo file.
+- **Account cards (Team / Solo)**: a photo across the top fading into the
+  card's colour (`plan-team.jpg` / `plan-solo.jpg`) and a small 3D figure on
+  its edge (`plan-*-3d.png`, Microsoft Fluent Emoji, MIT — see SOURCES.txt).
 - Photos live in `public/tour/` (served at `/app/tour/`), all public domain or
   CC0, sources in `public/tour/SOURCES.txt`. Sara's picture is `/app/sara-avatar.jpg`.
 - **Tours must stay true to the app.** When a feature named in a tour changes,
