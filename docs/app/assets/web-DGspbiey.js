@@ -1,1 +1,0 @@
-import{af as e}from"./index-DQj-t_iR.js";class t extends e{async requestReview(){}}export{t as RateAppWeb};

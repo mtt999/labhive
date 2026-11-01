@@ -18,4 +18,4 @@ card-inspection.jpg   CC0            https://commons.wikimedia.org/wiki/File:Fla
 card-projects.jpg     CC0            https://commons.wikimedia.org/wiki/File:Biology_lab.jpg
 card-equipment.jpg    Public domain  https://commons.wikimedia.org/wiki/File:Drying_owen_1.jpg
 card-maintenance.jpg  Public domain  https://commons.wikimedia.org/wiki/File:2024_Around_the_Forest_Products_Laboratory_(20240305-FS-DP-0105).jpg  (USDA Forest Service)
-card-messaging.jpg    Public domain  https://commons.wikimedia.org/wiki/File:ARS_National_Laboratory_for_Genetic_Resources_Preservation_(20160916-ARS-NP-0006).jpg  (USDA ARS)
+card-messaging.jpg    Public domain  https://commons.wikimedia.org/wiki/File:Researchers_review_documents.jpg  (cropped to the two people talking)
