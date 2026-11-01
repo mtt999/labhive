@@ -2161,3 +2161,27 @@ sends. Keep their stage rules (`maintenanceStage`) in step.
   `send_maintenance_reminders()` (ignored the tick, exact 14th/7th day only,
   3am Chicago, emails with no to_email). `maintenance_reminder_setup.sql`
   unschedules and drops it — run it in BOTH projects.
+
+## Request a demo — personal Demo Lab logins (Nov 2026)
+
+Home page → Pricing → Team Plan → **Request a demo →** (beside Request a
+quote) opens a form in `landing/index.html` (name, organization type, email
+= their username, meeting?, only exploring?, note). It POSTs to
+`demo_requests` with the publishable key; `/?demo=1` opens the form.
+
+- **demo_requests_setup.sql** (LabHive only): the table (anon may INSERT a
+  fresh row only; super admin reads/manages), `users.demo_request_id`, the
+  trigger that alerts the super admin bell (`admin_notifications` type
+  `demo_request`) AND emails `settings.admin_email` (unless the bell's email
+  switch for Demo Requests is off), `demo_access_check()`, and the nightly
+  `demo-expiry` job.
+- Super admin home → **🧪 Demo Requests** (`src/components/DemoRequests.jsx`):
+  Send demo access (create-lab-users `demo` action: login + lab manager row in
+  the org with slug `demo-lab`; the same email asked before reopens its old
+  demo account) → welcome email design A (`demoWelcomeEmail` in
+  `src/lib/demoAccess.js`, table layout so Outlook renders it); Decline;
+  Extend 7 days; End now.
+- **The 15 days are back end only** — never shown to visitors. They start at
+  the FIRST sign-in (`demo_access_check()` from Login and session restore).
+  Ended → signed out with "Request a quote, run a demo again, or contact us"
+  (all links). Demo visitors get the public-demo locks (`session.isDemo`).

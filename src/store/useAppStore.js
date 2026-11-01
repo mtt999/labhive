@@ -89,6 +89,9 @@ export const useAppStore = create((set, get) => ({
   setPendingProfileTab: (tab) => set({ pendingProfileTab: tab }),
   // A guided tour to start on arrival at its screen (lib/tours.js)
   pendingTour: null,
+  // Super admin bell → open Demo Requests on the home page
+  openDemoRequests: false,
+  setOpenDemoRequests: (v) => set({ openDemoRequests: v }),
   // Lab user to open in Training Records (by name — a training request
   // notification carries only the requester's name in its title)
   pendingTrainingUser: null,

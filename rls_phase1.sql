@@ -1457,6 +1457,8 @@ DECLARE
     'admin_notif_insert','admin_notif_select','admin_notif_update',
     'feedback_responses_policy','notification_prefs_policy','notification_prefs_select_org',
     'support_messages_insert','support_messages_select','support_messages_update','support_messages_delete',
+    -- demo_requests_setup.sql (Request a demo, Nov 2026)
+    'demo_requests_insert','demo_requests_admin',
     'account_deletion_policy','email_queue_insert','email_queue_select','email_queue_update_managers',
     'lab_user_imports_policy','lab_safety_history_read',
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',

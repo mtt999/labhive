@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { setPublicDemo, isPublicDemo } from '../../lib/demoMode'
+import { checkDemoAccess, QUOTE_MAILTO, DEMO_AGAIN_URL, DEMO_ENDED_FLAG } from '../../lib/demoAccess'
 import { useState, useEffect, useRef } from 'react'
 import AboutModal from '../../components/AboutModal'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
@@ -246,6 +247,11 @@ export default function Login({ linkError = null }) {
   const [helpResult, setHelpResult] = useState(null)
   const [helpLoading, setHelpLoading] = useState(false)
   const [failCount, setFailCount] = useState(0)
+  // A personal demo whose access has ended ("Request a demo"): set on sign-in,
+  // or by App when it signs out an ended demo during session restore.
+  const [demoEnded, setDemoEnded] = useState(() => {
+    try { const v = sessionStorage.getItem(DEMO_ENDED_FLAG) === '1'; sessionStorage.removeItem(DEMO_ENDED_FLAG); return v } catch { return false }
+  })
   const [lockUntil, setLockUntil] = useState(0)
   const [showAbout, setShowAbout]   = useState(false)
   const [showContact, setShowContact] = useState(false)
@@ -271,7 +277,7 @@ export default function Login({ linkError = null }) {
   function applyTeamSession(user) {
     const adminLevel = user.admin_level || 0
     const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
-    const isDemo = isPublicDemo(user.email)
+    const isDemo = isPublicDemo(user.email) || !!user.demo_request_id
     // Remember exactly which row was chosen — a single auth_id can have multiple
     // `users` rows (e.g. demo's Manager + Lab User, or an admin added as another
     // role). Without this, a hard refresh can't disambiguate which one was active
@@ -388,6 +394,18 @@ export default function Login({ linkError = null }) {
       return
     }
     setFailCount(0); setLockUntil(0)
+    // Personal demo logins: the first sign-in starts the clock; an ended one
+    // is signed straight back out with the links to carry on.
+    if (!isDemoLogin) {
+      const demo = await checkDemoAccess()
+      if (demo.ended) {
+        await sb.auth.signOut()
+        setDemoEnded(true)
+        setLoading(false)
+        return
+      }
+    }
+    setDemoEnded(false)
     // Demo: clear tour/picker state so every demo login starts fresh
     if (isDemoLogin) {
       Object.keys(localStorage)
@@ -640,6 +658,14 @@ export default function Login({ linkError = null }) {
                   </div>
                 )}
 
+                {demoEnded && (
+                  <div role="alert" style={{ fontSize: 13.5, color: '#a32d2d', background: '#fdecea', borderRadius: 8, padding: '10px 12px', marginBottom: 16, lineHeight: 1.55 }}>
+                    <b>Your demo access has ended.</b><br />
+                    <a href={QUOTE_MAILTO} style={{ color: '#a32d2d', fontWeight: 700 }}>Request a quote</a>,{' '}
+                    <a href={DEMO_AGAIN_URL} style={{ color: '#a32d2d', fontWeight: 700 }}>run a demo again</a>, or{' '}
+                    <a href="#" onClick={e => { e.preventDefault(); setShowContact(true) }} style={{ color: '#a32d2d', fontWeight: 700 }}>contact us</a>.
+                  </div>
+                )}
                 {error && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent2)', background: 'var(--accent2-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}><IconAlert size={16} /> {error}</div>
                 )}

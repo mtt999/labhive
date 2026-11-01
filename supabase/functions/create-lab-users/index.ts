@@ -22,6 +22,12 @@
 //   email  { orgId, userId, email } → { ok }       correct the email (login and
 //            account) of someone who has not signed in yet (Edit list); their
 //            unsent welcome email is retired — the app sends a new one.
+//   demo   { orgId, requestId, password } → { ok, userId, email, reused }
+//            SUPER ADMIN ONLY (Nov 2026, "Request a demo"). A login + lab
+//            manager account in the Demo Lab (orgId) for a demo request; the
+//            app emails the login. The same email asked before → that demo
+//            account is reopened with the new password. An email that belongs
+//            to a real account is refused. See demo_requests_setup.sql.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const MAX = 50
@@ -197,6 +203,66 @@ Deno.serve(async (req) => {
         .update({ attempts: 99, error: 'Email address changed' })
         .eq('user_id', u.id).eq('type', 'welcome').eq('sent', false)
       return json({ ok: true })
+    }
+
+    if (action === 'demo') {
+      if (me.id !== null) return json({ error: 'Only the super admin can send demo access' }, 403)
+      const { requestId, password } = body
+      if (typeof password !== 'string' || password.length < 8) return json({ error: 'password required' }, 400)
+      const { data: r } = await admin.from('demo_requests').select('*').eq('id', requestId).maybeSingle()
+      if (!r) return json({ error: 'Demo request not found' }, 404)
+      if (r.status === 'sent' && r.user_id) return json({ error: 'Demo access was already sent for this request' }, 409)
+      const email = String(r.email ?? '').trim().toLowerCase()
+      if (!okEmail(email)) return json({ error: 'The request has no valid email' }, 400)
+
+      // Any account already using this email
+      const { data: rows, error: lErr } = await admin.from('users')
+        .select('id, auth_id, email, organization_id, demo_request_id').ilike('email', email)
+      if (lErr) return json({ error: lErr.message }, 500)
+      const same = (rows ?? []).filter(x => (x.email ?? '').toLowerCase() === email)
+      const demoRow = same.find(x => x.organization_id === orgId && x.demo_request_id)
+      if (same.length && !demoRow) return json({ error: 'This email already has a LabHive account, so no demo login was created' }, 409)
+
+      let userId, reused = false
+      if (demoRow) {
+        // Asked for a demo again: reopen their demo account with the new password
+        if (demoRow.auth_id) {
+          const { error } = await admin.auth.admin.updateUserById(String(demoRow.auth_id), { password })
+          if (error) return json({ error: error.message }, 500)
+        } else {
+          const authId = await createLogin(email, password)
+          await admin.from('users').update({ auth_id: authId }).eq('id', demoRow.id)
+        }
+        const { error } = await admin.from('users').update({
+          is_active: true, demo_request_id: r.id, must_change_password: false,
+          name: clean(r.first_name, 60), last_name: clean(r.last_name, 60),
+        }).eq('id', demoRow.id)
+        if (error) return json({ error: error.message }, 500)
+        userId = demoRow.id
+        reused = true
+      } else {
+        const authId = await createLogin(email, password)
+        const { data: row, error } = await admin.from('users').insert({
+          name: clean(r.first_name, 60), last_name: clean(r.last_name, 60), email,
+          // Lab manager: sees nearly every feature. The app applies the
+          // public-demo locks to demo visitors (no admin panel, no password change).
+          role: 'user', organization_id: orgId, is_active: true, admin_level: 0, pin: '',
+          must_change_password: false, terms_accepted_version: null, auth_id: authId,
+          demo_request_id: r.id,
+        }).select('id').single()
+        if (error) {
+          await admin.auth.admin.deleteUser(authId).catch(() => {})
+          return json({ error: error.message }, 500)
+        }
+        userId = row.id
+      }
+      // The 15 days start at their first sign-in (demo_access_check)
+      const { error: uErr } = await admin.from('demo_requests').update({
+        status: 'sent', sent_at: new Date().toISOString(), user_id: userId,
+        first_login_at: null, expires_at: null, ended_at: null,
+      }).eq('id', r.id)
+      if (uErr) return json({ error: uErr.message }, 500)
+      return json({ ok: true, userId, email, reused })
     }
 
     return json({ error: 'unknown action' }, 400)

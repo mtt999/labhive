@@ -396,6 +396,41 @@
     .price-cta.solo { background: var(--blue); color: #fff; }
     .price-cta.solo:hover { background: #155a99; }
 
+    /* ── Request a demo (Pricing → Team Plan) ── */
+    .price-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+    button.price-cta { font: inherit; font-size: 14px; font-weight: 600; border: none; cursor: pointer; }
+    .dm-bg { position: fixed; inset: 0; z-index: 9999; background: rgba(12,17,64,.6); display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; overflow-y: auto; }
+    .dm { background: #fff; border-radius: 16px; width: 100%; max-width: 560px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.25); margin: auto 0; }
+    .dm-h { background: var(--navy); color: #fff; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .dm-h h3 { font-size: 17px; font-weight: 700; }
+    .dm-x { background: none; border: none; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; opacity: .75; padding: 0 4px; }
+    .dm-x:hover { opacity: 1; }
+    .dm form, .dm .dm-done { padding: 20px 22px 22px; display: grid; gap: 14px; }
+    .dm .intro { font-size: 14px; color: var(--text2); line-height: 1.6; }
+    .dm .q { display: grid; gap: 6px; border: none; padding: 0; margin: 0; min-width: 0; }
+    .dm .q > label, .dm .q > legend { font-size: 13px; font-weight: 700; color: var(--navy); padding: 0; }
+    .dm .num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 99px; background: var(--teal-light); color: var(--teal-ink); font-size: 11px; margin-right: 6px; }
+    .dm input[type=text], .dm input[type=email], .dm textarea { font: inherit; font-size: 14px; border: 1.5px solid var(--border); border-radius: 9px; padding: 9px 12px; width: 100%; background: #fff; color: var(--text); }
+    .dm textarea { min-height: 76px; resize: vertical; }
+    .dm input:focus-visible, .dm textarea:focus-visible, .dm button:focus-visible, .dm .seg label:focus-within { outline: 3px solid #6ee7b7; outline-offset: 2px; }
+    .dm .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 480px) { .dm .two { grid-template-columns: 1fr; } }
+    .dm .hint { font-size: 12px; color: var(--teal-ink); background: var(--teal-light); border-radius: 8px; padding: 6px 10px; }
+    .dm .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+    .dm .seg label { position: relative; flex: 1; min-width: 110px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px solid var(--border); border-radius: 9px; padding: 8px 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: #fff; color: var(--text); }
+    .dm .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .dm .seg label:has(input:checked) { border-color: var(--teal); background: var(--teal-light); color: var(--teal-ink); }
+    .dm .reveal { border-left: 3px solid var(--teal-light); padding-left: 12px; }
+    .dm .err { font-size: 13px; color: #a32d2d; background: #fdecea; border-radius: 8px; padding: 8px 12px; }
+    .dm .acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .dm .b { font: inherit; font-size: 14px; font-weight: 700; border-radius: 9px; padding: 10px 18px; cursor: pointer; border: 1.5px solid var(--border); background: #fff; color: var(--text); }
+    .dm .b.p { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .dm .b.p:hover { background: var(--teal-dark); }
+    .dm .b:disabled { opacity: .6; cursor: default; }
+    .dm .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .dm .dm-done { text-align: center; padding: 30px 22px; }
+    .dm .dm-done .big { font-size: 40px; }
+
     /* ── CTA section ── */
     .cta-section { background: var(--navy); color: #fff; padding: 80px 24px; text-align: center; }
     .cta-section h2 { font-size: clamp(22px, 4vw, 36px); font-weight: 700; margin-bottom: 16px; }
@@ -425,6 +460,39 @@
   </script>
 </head>
 <body>
+
+  <!-- Request a demo (Pricing → Team Plan). Saved to demo_requests; the super
+       admin is told in the app and by email (demo_requests_setup.sql). -->
+  <div class="dm-bg" id="demo-modal" role="dialog" aria-modal="true" aria-labelledby="dm-title" hidden>
+    <div class="dm">
+      <div class="dm-h"><h3 id="dm-title">Request a demo</h3><button type="button" class="dm-x" id="demo-x" aria-label="Close">×</button></div>
+      <form id="demo-form" novalidate>
+        <p class="intro">Get your own login to a sample lab and explore every LabHive feature with real-looking data: equipment booking, training records, projects, QR labels and more. Fill in the form and we'll email your demo login within one business day.</p>
+        <div class="q"><label for="dm-first"><span class="num">1</span>Your name</label>
+          <div class="two"><input type="text" id="dm-first" placeholder="First name" maxlength="60" autocomplete="given-name" required><input type="text" id="dm-last" placeholder="Last name" maxlength="60" autocomplete="family-name" required aria-label="Last name"></div></div>
+        <fieldset class="q"><legend><span class="num">2</span>Organization type</legend>
+          <div class="seg"><label><input type="radio" name="dm-org" value="University">🎓 University</label><label><input type="radio" name="dm-org" value="Industry">🏭 Industry</label><label><input type="radio" name="dm-org" value="Government">🏛️ Government</label></div></fieldset>
+        <div class="q"><label for="dm-email"><span class="num">3</span>Email address</label>
+          <input type="email" id="dm-email" placeholder="you@university.edu" maxlength="160" autocomplete="email" required>
+          <span class="hint">This email will be your <b>username</b> for the demo.</span></div>
+        <fieldset class="q"><legend><span class="num">4</span>Would you like to set up a virtual meeting with us?</legend>
+          <div class="seg"><label><input type="radio" name="dm-meet" value="yes">Yes, set up a meeting</label><label><input type="radio" name="dm-meet" value="no">No</label></div></fieldset>
+        <fieldset class="q reveal" id="dm-q5" hidden><legend><span class="num">5</span>Do you only want to check out the website's features?</legend>
+          <div class="seg"><label><input type="radio" name="dm-feat" value="yes">Yes, just explore</label><label><input type="radio" name="dm-feat" value="no">No, I have questions</label></div></fieldset>
+        <div class="q"><label for="dm-note"><span class="num" id="dm-n6">6</span>Anything else for our team? <span style="font-weight:500;color:var(--text2)">(optional)</span></label>
+          <textarea id="dm-note" maxlength="2000" placeholder="Lab size, what you would like to see, questions…"></textarea></div>
+        <div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" id="dm-hp" tabindex="-1" autocomplete="off"></label></div>
+        <div class="err" id="dm-err" role="alert" hidden></div>
+        <div class="acts"><button type="button" class="b" id="demo-cancel">Cancel</button><button type="submit" class="b p" id="dm-send">Submit request</button></div>
+      </form>
+      <div class="dm-done" id="demo-done" hidden>
+        <div class="big">✅</div>
+        <h3 style="font-size:18px;color:var(--navy);margin:8px 0 6px">Request received</h3>
+        <p style="color:var(--text2);font-size:14px">We'll email your demo login to <b id="dm-done-email"></b> within one business day.</p>
+        <div class="acts" style="justify-content:center;margin-top:14px"><button type="button" class="b" id="demo-done-close">Close</button></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Feature tours -->
 <div class="bg" id="tour" role="dialog" aria-modal="true" aria-labelledby="t-title" hidden>
@@ -552,7 +620,10 @@
         <div class="price-card team">
           <h4>Team Plan</h4>
           <p>For university and research labs with multiple members. Pricing is based on the number of users and active modules. Includes full admin panel, all features, and email support.</p>
-          <a href="mailto:quote@labhive.app?subject=LabHive%20Team%20Plan%20Quote%20Request" class="price-cta team">Request a quote →</a>
+          <div class="price-ctas">
+            <a href="mailto:quote@labhive.app?subject=LabHive%20Team%20Plan%20Quote%20Request" class="price-cta team">Request a quote →</a>
+            <button type="button" class="price-cta team" id="demo-open">Request a demo →</button>
+          </div>
         </div>
         <div class="price-card solo">
           <h4>Solo Plan</h4>
@@ -974,6 +1045,67 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(i + 1)
   if (e.key === 'ArrowLeft') go(i - 1)
 })
+
+// ── Request a demo ──
+// Signed-out visitors save a row in demo_requests with LabHive's public
+// (publishable) key; the table accepts only fresh requests from them.
+;(function () {
+  var SUPA = 'https://qhsxtpywfczqopcimykk.supabase.co'
+  var KEY = 'sb_publishable_eXj0rGtAqMRX2Q3B9kgc1w_CE8rzWei'
+  var $ = function (id) { return document.getElementById(id) }
+  var modal = $('demo-modal'), form = $('demo-form'), done = $('demo-done'), err = $('dm-err')
+  function val(name) { var c = document.querySelector('input[name="' + name + '"]:checked'); return c ? c.value : '' }
+  function open() {
+    form.hidden = false; done.hidden = true; err.hidden = true
+    modal.hidden = false; document.body.style.overflow = 'hidden'
+    setTimeout(function () { $('dm-first').focus() }, 50)
+  }
+  function close() { modal.hidden = true; document.body.style.overflow = '' }
+  $('demo-open').addEventListener('click', open)
+  $('demo-x').addEventListener('click', close)
+  $('demo-cancel').addEventListener('click', close)
+  $('demo-done-close').addEventListener('click', close)
+  modal.addEventListener('click', function (e) { if (e.target === modal) close() })
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) close() })
+  // Question 5 only when they do not want a meeting
+  document.querySelectorAll('input[name="dm-meet"]').forEach(function (r) {
+    r.addEventListener('change', function () { $('dm-q5').hidden = val('dm-meet') !== 'no' })
+  })
+  function fail(msg) { err.textContent = msg; err.hidden = false }
+  form.addEventListener('submit', function (e) {
+    e.preventDefault(); err.hidden = true
+    var first = $('dm-first').value.trim(), last = $('dm-last').value.trim(), email = $('dm-email').value.trim().toLowerCase()
+    var org = val('dm-org'), meet = val('dm-meet'), feat = val('dm-feat')
+    if (!first || !last) return fail('Please enter your first and last name.')
+    if (!org) return fail('Please choose your organization type.')
+    if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email)) return fail('Please enter a valid email address — it will be your demo username.')
+    if (!meet) return fail('Please tell us whether you would like a virtual meeting.')
+    if (meet === 'no' && !feat) return fail('Please tell us whether you only want to check out the features.')
+    if ($('dm-hp').value) { form.hidden = true; done.hidden = false; return }   // a bot filled the hidden field
+    var btn = $('dm-send'); btn.disabled = true; btn.textContent = 'Sending…'
+    fetch(SUPA + '/rest/v1/demo_requests', {
+      method: 'POST',
+      headers: { apikey: KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        first_name: first.slice(0, 60), last_name: last.slice(0, 60), org_type: org, email: email,
+        wants_meeting: meet === 'yes', explore_only: meet === 'no' ? feat === 'yes' : null,
+        note: $('dm-note').value.trim().slice(0, 2000) || null,
+      }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error('status ' + r.status)
+      $('dm-done-email').textContent = email
+      form.hidden = true; done.hidden = false; form.reset(); $('dm-q5').hidden = true
+    }).catch(function () {
+      fail('Your request could not be sent. Please try again, or contact us at labhive.app/app?support=1.')
+    }).then(function () { btn.disabled = false; btn.textContent = 'Submit request' })
+  })
+  // labhive.app/?demo=1 opens the form (the "run a demo again" link)
+  if (/[?&]demo=1/.test(location.search)) {
+    var pricing = $('pricing'); if (pricing) pricing.scrollIntoView()
+    open()
+  }
+})()
+
 // More features: reveals the cards kept back so the grid shows six
 document.getElementById('more-btn').addEventListener('click', function () {
   const extra = document.querySelectorAll('[data-more]')

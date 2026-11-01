@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, lazy, Suspense, Component } from 'react'
 import { useAppStore } from './store/useAppStore'
 import { sb } from './lib/supabase'
 import { isPublicDemo } from './lib/demoMode'
+import { checkDemoAccess, DEMO_ENDED_FLAG } from './lib/demoAccess'
 
 // A screen that cannot load its code after a deploy (an open tab asking for a
 // chunk the new build no longer has) is not a bug in that screen: reload once
@@ -325,7 +326,7 @@ export default function App() {
   function applyRestoredTeamSession(teamUser) {
     const adminLevel = teamUser.admin_level || 0
     const role = teamUser.role === 'admin' || adminLevel >= 1 ? 'admin' : teamUser.role
-    const isDemo = isPublicDemo(teamUser.email)
+    const isDemo = isPublicDemo(teamUser.email) || !!teamUser.demo_request_id
     localStorage.setItem('ilab_active_identity', JSON.stringify({ kind: 'team', id: teamUser.id }))
     setSession({ role, dbRole: teamUser.role, username: teamUser.nick_name?.trim() || teamUser.name, userId: teamUser.id, email: teamUser.email, adminLevel, photoUrl: teamUser.photo_url, avatar: teamUser.avatar, loginMode: 'team', organizationId: teamUser.organization_id || null, projectGroup: teamUser.project_group || null, mustChangePassword: teamUser.must_change_password === true, termsAcceptedVersion: isDemo ? null : (teamUser.terms_accepted_version || null), tourDone: isDemo ? false : (teamUser.tour_done === true), pickerDone: isDemo ? false : (teamUser.picker_done === true), isDemo })
   }
@@ -345,6 +346,13 @@ export default function App() {
   }
 
   async function restoreSessionFromAuth(authUser) {
+    // A personal demo past its end date: sign out, and the sign-in page says so
+    const demo = await checkDemoAccess()
+    if (demo.ended) {
+      try { sessionStorage.setItem(DEMO_ENDED_FLAG, '1') } catch {}
+      await sb.auth.signOut()
+      return
+    }
     const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
     const isSuperAdmin = saRow?.value === authUser.id
 

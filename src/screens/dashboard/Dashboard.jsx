@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
+import DemoRequests from '../../components/DemoRequests'
 import { useAppStore } from '../../store/useAppStore'
 import { capabilityPool, orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
@@ -581,8 +582,16 @@ function SupportInbox({ onClose, onRead }) {
 function SuperAdminDashboard({ session, setScreen, greeting, dateStr }) {
   const [inboxOpen, setInboxOpen]     = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const { openDemoRequests, setOpenDemoRequests } = useAppStore()
+  const [demoCount, setDemoCount]     = useState(0)
 
-  useEffect(() => { loadUnread() }, [])
+  useEffect(() => { loadUnread(); loadDemoCount() }, [])
+
+  // "Request a demo" (labhive.app): requests still waiting for an answer
+  async function loadDemoCount() {
+    const { count } = await sb.from('demo_requests').select('id', { count: 'exact', head: true }).eq('status', 'new')
+    setDemoCount(count || 0)
+  }
 
   async function loadUnread() {
     const { count } = await sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open')
@@ -612,9 +621,11 @@ function SuperAdminDashboard({ session, setScreen, greeting, dateStr }) {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {card(() => setScreen('orgadmin'), 'var(--accent)', '#fff', null, '⚙️', 'Admin Panel', 0)}
         {card(() => setInboxOpen(true),    'var(--surface2)', 'var(--text)', '1px solid var(--border)', '💬', 'Customer Service', unreadCount)}
+        {card(() => setOpenDemoRequests(true), 'var(--surface2)', 'var(--text)', '1px solid var(--border)', '🧪', 'Demo Requests', demoCount)}
         {card(() => setScreen('profile'),  'var(--surface2)', 'var(--text)', '1px solid var(--border)', '🔐', 'Profile', 0)}
       </div>
       {inboxOpen && <SupportInbox onClose={() => setInboxOpen(false)} onRead={loadUnread} />}
+      {openDemoRequests && <DemoRequests onClose={() => setOpenDemoRequests(false)} onChanged={loadDemoCount} />}
     </div>
   )
 }
