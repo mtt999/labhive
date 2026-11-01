@@ -2192,3 +2192,30 @@ quote) opens a form in `landing/index.html` (name, organization type, email
 colour, 3D object `public/tour/mod-<key>.png`, turn toward the mouse). Names
 follow the dashboard icons (Equipment & Maintenance, Equipment SOP). The
 home page About section is unchanged (plain text) on purpose.
+
+## Owner emails: one subject label per activity (Nov 2026)
+
+labhive.app mail is forwarded to the owner's Gmail by Cloudflare Email
+Routing (a catch-all / per-address rules → motlagh999@gmail.com). Every email
+that reaches the owner starts with **`[LabHive · <type>]`** so Gmail can
+filter and label it, and Reply answers the person (`email_notifications_queue.reply_to`,
+passed to Resend by `send-emails`):
+
+| Subject | Sent by | Reply → |
+|---|---|---|
+| `[LabHive · Customer Service] <subject>` | `queue_support_email()` → support@ | the person |
+| `[LabHive · Solo support] <subject>` | same → solo@ | the person |
+| `[LabHive · Problem report] Problem report from …` | same (Sara's reportIssue inserts the support_messages row) | the reporter |
+| `[LabHive · Demo request] <name> — <org type>` | `demo_request_notify()` → admin_email | the visitor |
+| `[LabHive · Settings report] N changes` | `queue_change_digest()` → admin_email | — |
+| `[LabHive · Quote request] Team Plan` | visitor's own mail app (mailto quote@) | the visitor |
+
+- `reportIssue.js` no longer queues its own email — the trigger already sent
+  one, so every problem report arrived twice.
+- Demo welcome / decline emails set Reply-To `support@labhive.app`
+  (`DEMO_REPLY_TO`): the welcome says "Reply to this email", and noreply@ is
+  not read.
+- SQL: `email_routing_setup.sql` (LabHive). The functions are also updated in
+  their home files so re-running those does not undo it. Run it BEFORE the
+  app build goes live: the demo emails write `reply_to`, and a missing column
+  rejects the whole insert.

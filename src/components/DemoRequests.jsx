@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
-import { DEMO_LAB_SLUG, DEMO_DAYS, demoPassword, demoWelcomeEmail, demoDeclineEmail } from '../lib/demoAccess'
+import { DEMO_LAB_SLUG, DEMO_DAYS, DEMO_REPLY_TO, demoPassword, demoWelcomeEmail, demoDeclineEmail } from '../lib/demoAccess'
 
 // Super admin → Demo Requests (Nov 2026). Requests come from "Request a demo"
 // on labhive.app (landing/index.html) into demo_requests. Send demo access
@@ -50,7 +50,9 @@ export default function DemoRequests({ onClose, onChanged }) {
   }
 
   async function queueEmail(to, { subject, text, html }, type) {
-    const { error } = await sb.from('email_notifications_queue').insert({ to_email: to, subject, body: text, html_body: html, type })
+    // Reply-To support@ — the welcome email says "Reply to this email" to book a
+    // meeting, and noreply@ is not read. Cloudflare forwards support@ to Gmail.
+    const { error } = await sb.from('email_notifications_queue').insert({ to_email: to, subject, body: text, html_body: html, type, reply_to: DEMO_REPLY_TO })
     if (error) throw new Error('The email could not be queued: ' + error.message)
     kickSender()
   }

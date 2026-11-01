@@ -7,8 +7,10 @@ import { sb } from './supabase'
 
 export const DEMO_LAB_SLUG = 'demo-lab'
 export const DEMO_DAYS = 15
+// Where a visitor's Reply to the welcome / decline email goes
+export const DEMO_REPLY_TO = 'support@labhive.app'
 // The links on the "demo access has ended" message
-export const QUOTE_MAILTO = 'mailto:quote@labhive.app?subject=LabHive%20Team%20Plan%20Quote%20Request'
+export const QUOTE_MAILTO = 'mailto:quote@labhive.app?subject=%5BLabHive%20%C2%B7%20Quote%20request%5D%20Team%20Plan'
 export const DEMO_AGAIN_URL = 'https://labhive.app/?demo=1#pricing'
 // Set before signing out an ended demo on session restore, read once by Login
 export const DEMO_ENDED_FLAG = 'labhive_demo_ended'
@@ -120,7 +122,7 @@ export function demoDeclineEmail({ firstName }) {
     <tr><td style="padding:30px 36px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#4b5563">
       <p style="margin:0 0 14px;font-size:18px;font-weight:700;color:#0C1140">Hi ${esc(firstName)},</p>
       <p style="margin:0 0 14px">Thank you for your interest in LabHive. We are not able to set up a demo login for this request, but we would be glad to help another way.</p>
-      <p style="margin:0"><a href="mailto:quote@labhive.app?subject=LabHive%20Team%20Plan%20Quote%20Request" style="color:#1D9E75;font-weight:700">Request a quote</a> · <a href="https://labhive.app/app?support=1" style="color:#1D9E75;font-weight:700">Contact us</a></p>
+      <p style="margin:0"><a href="mailto:quote@labhive.app?subject=%5BLabHive%20%C2%B7%20Quote%20request%5D%20Team%20Plan" style="color:#1D9E75;font-weight:700">Request a quote</a> · <a href="https://labhive.app/app?support=1" style="color:#1D9E75;font-weight:700">Contact us</a></p>
     </td></tr>
   </table>
 </td></tr></table></body></html>`

@@ -1,5 +1,4 @@
 import { sb } from './supabase'
-import { buildEmailHtml } from './emailTemplate'
 
 // One place that turns "something is broken" into a report an admin will
 // actually see. Used by Sara; the Customer Service modal predates it and still
@@ -10,14 +9,12 @@ import { buildEmailHtml } from './emailTemplate'
 //   support_messages    the record and the queue an admin works through
 //   admin_notifications the super admin bell, in-app
 //   notifications       the org's own admins, in-app
-//   email               so it is seen without the app being open
+//   email               so it is seen without the app being open (trigger)
 //
 // Failures are collected, not thrown. A screenshot that will not upload must
 // not lose the description the person just typed, and an email that will not
 // queue must not discard the report itself.
 
-const SUPPORT_EMAIL = 'support@labhive.app'
-const APP_URL       = 'https://labhive.app/app'
 
 export async function reportIssue({ session, message, file, screen }) {
   const problems = []
@@ -87,22 +84,13 @@ export async function reportIssue({ session, message, file, screen }) {
     }
   }
 
-  // 5. email, so it lands without the app being open
-  const { error: mailErr } = await sb.from('email_notifications_queue').insert({
-    to_email: SUPPORT_EMAIL,
-    subject: `[LabHive] ${subject}`,
-    body,
-    html_body: buildEmailHtml({
-      title: subject, body,
-      ctaLabel: 'Open LabHive →', ctaUrl: `${APP_URL}/?screen=dashboard`,
-      prefsUrl: `${APP_URL}/?screen=profile`,
-    }),
-  })
-  if (mailErr) problems.push('the notification email was not queued')
-  // Nudge the sender rather than waiting up to a minute for the cron.
-  else fetch(`${sb.supabaseUrl}/functions/v1/send-emails`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-      }).catch(() => {})
+  // 5. email: sent by the support_messages trigger (queue_support_email),
+  // subject "[LabHive · Problem report] …", Reply → the reporter. Queuing a
+  // second copy here sent every report twice. Nudge the sender rather than
+  // waiting up to a minute for the cron.
+  fetch(`${sb.supabaseUrl}/functions/v1/send-emails`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }).catch(() => {})
 
   return { ok: true, problems, attachment_url }
 }

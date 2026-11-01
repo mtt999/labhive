@@ -79,6 +79,7 @@ Deno.serve(async () => {
           from: RESEND_FROM,
           to: [recipient],
           subject: row.subject ?? "(no subject)",
+          reply_to: row.reply_to || undefined,   // Reply answers the visitor, not noreply@
           html: row.html_body || undefined,
           text: row.body || undefined,
         }),

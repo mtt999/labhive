@@ -73,21 +73,30 @@ SELECT cron.schedule(
 -- ================================================================
 
 ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS login_mode TEXT;
+ALTER TABLE email_notifications_queue ADD COLUMN IF NOT EXISTS reply_to TEXT;
 
 CREATE OR REPLACE FUNCTION queue_support_email()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   dest text := CASE WHEN NEW.login_mode = 'solo' THEN 'solo@labhive.app' ELSE 'support@labhive.app' END;
+  -- Sara's "report a problem" (src/lib/reportIssue.js) arrives here too; this
+  -- trigger is its ONLY email, so it gets its own label.
+  kind text := CASE WHEN NEW.subject LIKE 'Problem report from %' THEN 'Problem report'
+                    WHEN NEW.login_mode = 'solo' THEN 'Solo support'
+                    ELSE 'Customer Service' END;
 BEGIN
-  INSERT INTO email_notifications_queue (to_email, subject, body, user_id, type)
+  -- "[LabHive · Customer Service] <subject>" so Gmail can label it; Reply
+  -- answers the person who wrote (reply_to), not noreply@.
+  INSERT INTO email_notifications_queue (to_email, subject, body, user_id, type, reply_to)
   VALUES (
     dest,
-    'New support message: ' || NEW.subject,
+    '[LabHive · ' || kind || '] ' || NEW.subject,
     'From: ' || COALESCE(NEW.user_name, 'Guest') || ' <' || NEW.user_email || '>' || E'\n\n' ||
     NEW.message ||
     CASE WHEN NEW.attachment_url IS NOT NULL THEN E'\n\nAttachment: ' || NEW.attachment_url ELSE '' END,
     NEW.user_id,
-    'support_message'
+    'support_message',
+    NULLIF(NEW.user_email, '')
   );
   RETURN NEW;
 END;

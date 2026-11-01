@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS demo_requests (
 CREATE INDEX IF NOT EXISTS demo_requests_status_idx ON demo_requests (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS demo_requests_user_idx   ON demo_requests (user_id);
 
+-- Reply-To for emails sent to the owner (email_routing_setup.sql adds it too)
+ALTER TABLE email_notifications_queue ADD COLUMN IF NOT EXISTS reply_to TEXT;
+
 -- The demo users row points back at its request (also how the app knows a
 -- signed-in person is a demo visitor and applies the public-demo locks).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS demo_request_id UUID;
@@ -87,9 +90,10 @@ BEGIN
       || '</table>'
       || '<p style="margin:18px 0 0"><a href="https://labhive.app/app" style="background:#1D9E75;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:700">Open Demo Requests →</a></p>'
       || '<p style="color:#9ca3af;font-size:12px">Sign in as the super admin → Demo Requests to send access or decline.</p></div>';
-    INSERT INTO email_notifications_queue (to_email, subject, body, html_body, type)
-    VALUES (to_addr, 'New demo request — ' || who, 'New demo request from ' || who || ' (' || what || ').'
-            || CASE WHEN NEW.note IS NOT NULL AND NEW.note <> '' THEN E'\nNote: ' || NEW.note ELSE '' END, html, 'demo_request');
+    INSERT INTO email_notifications_queue (to_email, subject, body, html_body, type, reply_to)
+    VALUES (to_addr, '[LabHive · Demo request] ' || who || ' — ' || NEW.org_type, 'New demo request from ' || who || ' (' || what || ').'
+            || CASE WHEN NEW.note IS NOT NULL AND NEW.note <> '' THEN E'\nNote: ' || NEW.note ELSE '' END, html, 'demo_request',
+            NEW.email);   -- Reply goes straight to the visitor
   END IF;
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
