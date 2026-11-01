@@ -25,3 +25,7 @@ plan-team.jpg         Public domain  https://commons.wikimedia.org/wiki/File:Res
 plan-solo.jpg         Public domain  https://commons.wikimedia.org/wiki/File:ARS_National_Laboratory_for_Genetic_Resources_Preservation_(20160916-ARS-NP-0008).jpg  (USDA ARS)
 plan-team-3d.png, plan-solo-3d.png — Microsoft Fluent Emoji (Office building, Scientist), MIT License,
   Copyright (c) Microsoft Corporation. https://github.com/microsoft/fluentui-emoji
+
+About window in the app (mod-*.png): Microsoft Fluent Emoji 3D (Package, Wrench, Books,
+  Calendar, Graduation cap, Test tube, Clipboard, Speech balloon), MIT License,
+  Copyright (c) Microsoft Corporation. https://github.com/microsoft/fluentui-emoji
