@@ -2185,3 +2185,10 @@ quote) opens a form in `landing/index.html` (name, organization type, email
   the FIRST sign-in (`demo_access_check()` from Login and session restore).
   Ended → signed out with "Request a quote, run a demo again, or contact us"
   (all links). Demo visitors get the public-demo locks (`session.isDemo`).
+
+## About window (in the app) — 3D tilt tiles (Nov 2026)
+
+`src/components/AboutModal.jsx`: the eight modules are tilt cards (module
+colour, 3D object `public/tour/mod-<key>.png`, turn toward the mouse). Names
+follow the dashboard icons (Equipment & Maintenance, Equipment SOP). The
+home page About section is unchanged (plain text) on purpose.

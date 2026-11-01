@@ -34,6 +34,30 @@ not a full transcript of every conversation.
 
 ## Log
 
+### 2026-10-30 – 11-01 — Storage places, booking Day view, home page redesign, Request a demo
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- ICT-Lab storage: pick a shelf straight from the spot's window; shelves lettered from the top (A, B, C…) with places A1/A2/A3; Walk-in Coolers 1 and 2 and the Big10 racks divided into 3 places; the first person to use a place owns it; lab managers can move anyone's material and the owner is notified; "Add storage to spot" becomes a setup screen; removing a material is confirmed like storing
+- A Day view for the booking calendar in both apps
+- Remove the duplicate Demo Lab admin (LabHive)
+- LabHive home page: real-photo feature cards; Lab Messages photo of two people talking; Team / Solo cards with a photo header and a 3D figure
+- "Request a demo" beside "Request a quote": a form → the super admin is told in the app and by email → a personal Demo Lab login emailed in a clean card design; 15 days from the first sign-in, back end only; afterwards "request a quote, run a demo again, or contact us"
+- The in-app About window as 3D tilt cards
+
+**Resulting changes (files/features affected):**
+- ICT-Lab `FloorPlanPicker.jsx`: spot window picks shelves / places (divided shelves open a list of A1–A3); Set up shelves (racks, shelves, places per shelf; refuses to remove a place holding material; re-files shelf → place 1); one storage row per material, owner = first to store (`occupied_by_id`, `storage_owner_setup.sql`); Move with a `storage_moved` notification; confirm box for Store / Move / Remove
+- Both apps `BookingEquipment.jsx`: Day · Week · Month; a weekday heading opens that day
+- LabHive `landing/index.html`: photo feature cards (`public/tour/card-*.jpg`), photo account cards (`plan-*`), Request a demo form (`?demo=1` opens it)
+- LabHive `demo_requests_setup.sql` (table, trigger → bell + email, `demo_access_check()`, nightly `demo-expiry`), create-lab-users `demo` action, `src/components/DemoRequests.jsx` (Send / Decline / Extend / End now), `src/lib/demoAccess.js` (welcome email design A), Login / App ended-demo handling
+- LabHive `AboutModal.jsx`: eight 3D tilt tiles (`public/tour/mod-*.png`, Fluent Emoji MIT); names match the dashboard icons
+- Photos are public domain / CC0, 3D objects MIT — all listed in `public/tour/SOURCES.txt`
+
+**Related git commit(s):** ICT-Lab d8fd792..816aa33 · LabHive d6302dcb..b4bb2644
+
+---
+
 ### 2026-10-28–29 — Home page feature tours, maintenance reminders, bell routing
 
 **Tool used:** Claude Code
