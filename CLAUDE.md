@@ -2133,6 +2133,9 @@ script is full of backticks and `${}`.
 - **Account cards (Team / Solo)**: a photo across the top fading into the
   card's colour (`plan-team.jpg` / `plan-solo.jpg`) and a small 3D figure on
   its edge (`plan-*-3d.png`, Microsoft Fluent Emoji, MIT — see SOURCES.txt).
+- **About section = 3D tilt cards** (Nov 2026): four gradient cards (`.tilt`)
+  that turn with the mouse; 3D objects `about-*.png` (Fluent, MIT). Wording
+  uses "lab users", never "students".
 - Photos live in `public/tour/` (served at `/app/tour/`), all public domain or
   CC0, sources in `public/tour/SOURCES.txt`. Sara's picture is `/app/sara-avatar.jpg`.
 - **Tours must stay true to the app.** When a feature named in a tour changes,

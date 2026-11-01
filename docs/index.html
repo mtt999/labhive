@@ -438,8 +438,27 @@
 
     /* ── About section ── */
     .about { padding: 72px 24px; }
-    .about-inner { max-width: 720px; margin: 0 auto; }
-    .about p { font-size: 15px; color: var(--text2); line-height: 1.8; margin-bottom: 16px; }
+    /* About: bold cards that turn in 3D with the mouse; the 3D object pops out
+       of each card and a soft light follows the cursor (Nov 2026). */
+    .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 44px 22px; margin-top: 52px; perspective: 1100px; }
+    @media (max-width: 720px) { .about-grid { grid-template-columns: 1fr; } }
+    .tilt { position: relative; border-radius: 18px; padding: 30px 28px 28px; color: #fff; min-height: 210px;
+      background: var(--grad); box-shadow: 0 16px 34px rgba(12,17,64,.18);
+      transform-style: preserve-3d; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+      transition: transform .15s ease-out, box-shadow .2s; }
+    .tilt::before { content: ''; position: absolute; inset: 0; border-radius: 18px; pointer-events: none;
+      background: radial-gradient(circle at var(--mx, 50%) var(--my, 25%), rgba(255,255,255,.32), transparent 46%); }
+    .tilt:hover { box-shadow: 0 22px 40px rgba(12,17,64,.24); }
+    .tilt img { position: absolute; right: 18px; top: -34px; width: 104px; height: 104px; transform: translateZ(70px);
+      filter: drop-shadow(0 14px 16px rgba(0,0,0,.28)); pointer-events: none; }
+    .tilt .t { position: relative; transform: translateZ(34px); max-width: 82%; }
+    .tilt h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; text-shadow: 0 1px 2px rgba(0,0,0,.2); }
+    .tilt p { font-size: 15px; line-height: 1.7; color: rgba(255,255,255,.92); }
+    .tilt a.pill { display: inline-block; margin-top: 14px; background: #fff; color: var(--navy); font-weight: 700; font-size: 14px;
+      text-decoration: none; border-radius: 99px; padding: 8px 18px; }
+    .tilt a.pill:hover { background: #f0fdf8; }
+    .tilt a.pill:focus-visible { outline: 3px solid #6ee7b7; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .tilt { transition: none; } }
 
     /* ── Footer ── */
     footer { background: #0a0e2e; color: #cbd5e1; padding: 32px 24px; text-align: center; font-size: 13px; }
@@ -648,10 +667,23 @@
     <div class="section-inner">
       <div class="section-label">About LabHive</div>
       <div class="section-title">Built by researchers, for researchers</div>
-      <div class="about-inner" style="max-width:800px;margin-top:24px;">
-        <p>LabHive was designed from the ground up for the real challenges of running a university or research laboratory — from tracking who is trained on which equipment, to managing material samples with QR codes, to keeping supply rooms inspection-ready.</p>
-        <p>The platform supports both team-based labs (with role-based access for lab managers and students) and individual researchers working independently through LabHive Solo. All data is securely stored in the cloud with full row-level security.</p>
-        <p style="margin-bottom:0;">Have questions or want to request a feature? <a href="/app?support=1" style="color:var(--teal);font-weight:600;">Contact us</a> — we typically reply within one business day.</p>
+      <div class="about-grid" id="about-grid">
+        <div class="tilt" style="--grad:linear-gradient(140deg,#0b6b50,#34d399)">
+          <img src="/app/tour/about-research.png" alt="">
+          <div class="t"><h3>Built for real labs</h3><p>Designed from the ground up for running a university or research lab: who is trained on which equipment, material samples tracked with QR codes, and supply rooms kept inspection-ready.</p></div>
+        </div>
+        <div class="tilt" style="--grad:linear-gradient(140deg,#1e40af,#60a5fa)">
+          <img src="/app/tour/about-teams.png" alt="">
+          <div class="t"><h3>For teams and individuals</h3><p>Team labs get role-based access for lab managers and lab users. Individual researchers work on their own with LabHive Solo.</p></div>
+        </div>
+        <div class="tilt" style="--grad:linear-gradient(140deg,#5b21b6,#a78bfa)">
+          <img src="/app/tour/about-secure.png" alt="">
+          <div class="t"><h3>Secure by design</h3><p>All data is stored securely in the cloud, with row-level security keeping every lab's records to its own members.</p></div>
+        </div>
+        <div class="tilt" style="--grad:linear-gradient(140deg,#c2410c,#fbbf24)">
+          <img src="/app/tour/about-talk.png" alt="">
+          <div class="t"><h3>Talk to us</h3><p>Have a question or a feature to request? We typically reply within one business day.</p><a class="pill" href="/app?support=1">Contact us →</a></div>
+        </div>
       </div>
     </div>
   </section>
@@ -1104,6 +1136,22 @@ document.addEventListener('keydown', e => {
     var pricing = $('pricing'); if (pricing) pricing.scrollIntoView()
     open()
   }
+})()
+
+// About: the cards turn toward the mouse
+;(function () {
+  var grid = document.getElementById('about-grid'); if (!grid) return
+  grid.addEventListener('mousemove', function (e) {
+    var card = e.target.closest('.tilt'); if (!card) return
+    var r = card.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
+    card.style.setProperty('--ry', ((x - .5) * 14).toFixed(1) + 'deg')
+    card.style.setProperty('--rx', ((.5 - y) * 10).toFixed(1) + 'deg')
+    card.style.setProperty('--mx', (x * 100).toFixed(0) + '%'); card.style.setProperty('--my', (y * 100).toFixed(0) + '%')
+  })
+  grid.addEventListener('mouseout', function (e) {
+    var card = e.target.closest('.tilt')
+    if (card && !card.contains(e.relatedTarget)) { card.style.setProperty('--rx', '0deg'); card.style.setProperty('--ry', '0deg') }
+  })
 })()
 
 // More features: reveals the cards kept back so the grid shows six
