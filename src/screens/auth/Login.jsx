@@ -75,7 +75,7 @@ function SelectorCard({ mode, selected, onSelect }) {
 function SignUpForm({ onSuccess, onCancel }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [error, setError]     = useState(linkError || '')
+  const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSignUp(e) {
@@ -237,7 +237,9 @@ export default function Login({ linkError = null }) {
     // such account" would let anyone test which emails are registered.
     setResetSent(true)
   }
-  const [error, setError]           = useState('')
+  // A failed / expired password-reset link (App.jsx) is shown here. It sat in
+  // SignUpForm, which has no linkError, so opening sign-up crashed the page.
+  const [error, setError]           = useState(linkError || '')
   const [loading, setLoading]       = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showSignUp, setShowSignUp] = useState(false)
