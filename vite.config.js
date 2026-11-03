@@ -28,6 +28,7 @@ export default defineConfig(({ command }) => ({
         // and relative paths so code-splitting keeps working.
         reservedStrings: [
           '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$', '^jszip$',
+          '^pdfjs-dist$',
           '^@capacitor/', '^@capacitor-mlkit/', '^@basecom-gmbh/', '^capacitor-rate-app$',
           '^\\./', '^\\.\\./',
         ],
