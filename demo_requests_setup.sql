@@ -101,11 +101,6 @@ EXCEPTION WHEN OTHERS THEN
   RETURN NEW;
 END $$;
 
--- A trigger function, not an API: nobody may call it through /rpc (the
--- Supabase security advisor flagged it). Revoking EXECUTE does not stop the
--- trigger from firing.
-REVOKE EXECUTE ON FUNCTION demo_request_notify() FROM PUBLIC, anon, authenticated;
-
 DROP TRIGGER IF EXISTS demo_request_notify_trg ON demo_requests;
 CREATE TRIGGER demo_request_notify_trg AFTER INSERT ON demo_requests
   FOR EACH ROW EXECUTE FUNCTION demo_request_notify();
