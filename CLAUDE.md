@@ -21,7 +21,8 @@ This file applies to every session working on the `labhive` project. Read it in 
 ### URLs & deployment
 - **Local dev:** `http://localhost:5174/` | Admin: `http://localhost:5174/admin`
 - **Production:** `https://labhive.app` | Admin: `https://labhive.app/admin`
-- **Git repo:** `https://github.com/mtt999/ilab`
+- **Git repo:** `https://github.com/mtt999/labhive` (ICT-Lab is a separate repo: `ictuillinois/ictuillinois.github.io`)
+- Hosting: GitHub Pages from `docs/` on `main`, custom domain via `docs/CNAME`. Check deploys with `gh run list` (gh is in `~/.local/bin`; its login is in the macOS keychain, so it must run outside the Bash sandbox).
 - Vite base: `/` (both web and mobile — custom domain serves from root)
 - Build output: `docs/` (web) | `dist/` (mobile)
 - CNAME: `labhive.app` (recreated by post-build script on every build)
@@ -980,8 +981,8 @@ chunk 404s after deploys — do not remove it.
 
 ### Current deployment (web)
 The app is a static SPA served from GitHub Pages:
-- Production URL: `https://mtt999.github.io/ilab/`
-- Admin URL: `https://mtt999.github.io/ilab/admin`
+- Production URL: `https://labhive.app/`
+- Admin URL: `https://labhive.app/admin`
 - All routing is handled client-side (SPA) — only `docs/index.html` and `docs/admin/index.html` are physical HTML files
 
 ### iOS App Store — recommended path: Capacitor
