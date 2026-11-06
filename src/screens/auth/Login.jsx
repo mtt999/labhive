@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { setPublicDemo, isPublicDemo } from '../../lib/demoMode'
 import { checkDemoAccess, QUOTE_MAILTO, DEMO_AGAIN_URL, DEMO_ENDED_FLAG } from '../../lib/demoAccess'
 import { useState, useEffect, useRef } from 'react'
+import { breachedPasswordError } from '../../lib/passwordPolicy'
 import AboutModal from '../../components/AboutModal'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
 import SaraChat from '../../components/SaraChat'
@@ -87,6 +88,7 @@ function SignUpForm({ onSuccess, onCancel }) {
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
     if (!termsAccepted)                 { setError('Please read and accept the Privacy Policy and Terms of Service to continue.'); return }
     setLoading(true)
+    { const b = await breachedPasswordError(form.password); if (b) { setError(b); setLoading(false); return } }
 
     const emailLC = form.email.trim().toLowerCase()
     let authUserId = null
