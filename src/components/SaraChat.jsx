@@ -79,6 +79,13 @@ const FAQ = [
     followups: ['qr', 'equipment', 'mobile'],
   },
   {
+    id: 'booking_layout',
+    q: 'How do I see who booked which equipment?',
+    a: 'On Booking Equipment, use Layout above the calendar. It is saved to your account, so your phone and laptop match:\n• Classic — the Day / Week / Month calendar\n• Timeline — one row per instrument, each booking showing who booked it, the time and the purpose. Switch Rows to People to see what each person is using. Choose Day, then drag along a row to book that instrument, or down across rows to book several at the same time\n• Agenda — every booking of the week in time order, with a search box\n• Calendar — the week grid with overlapping bookings grouped into one block\nPoint at any booking to see its details; click it to open it.',
+    keywords: ['layout', 'booking layout', 'booking view', 'booking page', 'change layout', 'timeline', 'agenda', 'who booked', 'who has', 'view', 'classic', 'see bookings', 'which equipment', 'which instrument', 'all equipment', 'select all', 'display'],
+    followups: ['booking'],
+  },
+  {
     id: 'training',
     q: 'How does training tracking work?',
     a: 'Training Records holds everything a lab user completes and keeps current: safety steps, documents and certificates, vehicle, equipment training, building alarm, a locker, and knowledge-check exams. A lab manager approves each submission. Training records are private: only the person and their lab managers can see them.',
