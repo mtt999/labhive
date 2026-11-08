@@ -34,6 +34,31 @@ not a full transcript of every conversation.
 
 ## Log
 
+### 2026-11-06 – 11-08 — Booking page layouts (Classic · Timeline · Agenda), pinned headings, Calendar merged into Classic
+
+**Tool used:** Claude Code
+
+**What I asked for (summary, not full transcript):**
+- With every instrument selected, the booking week view gave no way to see who booked which equipment — show me other options as a mockup first
+- I chose the Timeline idea, but its short names only explained themselves on a slow hover: give the full info at first look; show how drag-to-book works there
+- Offer the views as a layout each lab user / lab manager picks for the booking page, and keep the existing view as one of them
+- Pin the top of the page (dates, toolbar) and the column headings in the new layouts while scrolling
+- The existing view stays everyone's default until they change it; from then on their choice is saved to the account and follows them to any computer
+- Timeline's per-person view only for lab managers and admins
+- Calendar and Classic turned out to be the same week grid, so merge Calendar into Classic
+
+**Resulting changes (files/features affected):**
+- New `src/screens/equipment/BookingLayouts.jsx`: Layout switch; Timeline (a row per instrument with cards showing name, time and purpose; Day zoom: drag along a row to book it, down across rows to book several at once; Rows: People for managers); Agenda (the week's bookings in time order with search); an instant hover card with the full booking details
+- `BookingEquipment.jsx` (both apps): layouts wired in, reusing the existing booking form and "Confirm N bookings" bar; Classic's week grid gained a pinned Multi-day band and groups crowded overlaps into one listed block ("+N more"); the several-instruments bar now loads projects (picking Project there crashed the page)
+- Saved per person in `users.booking_layout` (LabHive also `solo_users`) — `booking_layout_setup.sql`, applied in both databases
+- Pinned toolbar + headings (`.sticky-tools`, `.bkl-stick`, `--bk-top`) in `index.css`; layout icons in `Icons.jsx`
+- Help tips, Sara answer, Lab Manager Guide and CLAUDE.md updated; CLAUDE.md now names each app's real repository and hosting
+- Mockups: https://claude.ai/artifact/A4GqJzKGsWk6aihvBsNRTv
+
+**Related git commit(s):** ICT-Lab e959fc0..9a8a9b0 · LabHive eb6c82b4..50bae27e
+
+---
+
 ### 2026-10-30 – 11-01 — Storage places, booking Day view, home page redesign, Request a demo
 
 **Tool used:** Claude Code
