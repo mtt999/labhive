@@ -34,6 +34,13 @@ not a full transcript of every conversation.
 
 ## Log
 
+## 2026-11-08 — Several tests per instrument, per-test SOPs and exams, exam explanations
+
+Directed by the owner: an instrument that runs several standard tests holds a
+separate SOP and exam per test; lab users pick the tests they need when
+requesting training and pass only those exams; exams show the right answer and
+an explanation after each question. Design chosen from a mockup.
+
 ### 2026-11-06 – 11-08 — Booking page layouts (Classic · Timeline · Agenda), pinned headings, Calendar merged into Classic
 
 **Tool used:** Claude Code
