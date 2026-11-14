@@ -990,20 +990,16 @@ function MaterialQRTab({ material, project, parent }) {
           <button className="btn btn-sm btn-purple" onClick={() => printLabelById(`print-label-${material.id}`)}>🖨 Print Label (4"×6")</button>
           {material.locations?.length > 0 && (
             <button className="btn btn-sm" onClick={() => setShowMap(v => !v)}>
-              {showMap ? 'Hide floor map' : '📍 Show on floor map'}
+              📍 Show on floor map
             </button>
           )}
         </div>
       </div>
 
+      {/* The real map, read-only: this material's spot is highlighted, and
+          clicking it shows the shelf and place (it used to list text chips) */}
       {showMap && material.locations?.length > 0 && (
-        <div style={{ marginTop: 16, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {material.locations.map((l, i) => (
-            <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>
-              {formatLocation(l) || l.location_id}
-            </span>
-          ))}
-        </div>
+        <FloorPlanPicker viewOnly materialId={material.id} currentLocations={material.locations} onClose={() => setShowMap(false)} />
       )}
     </div>
   )
