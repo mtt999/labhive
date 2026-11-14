@@ -997,17 +997,93 @@ async function chartSvgToPng(svgEl, w, h) {
 
 const NUM_TYPES = ['number', 'percentage', 'temperature', 'ratio']
 
+// ── Axes (Nov 2026) ──
+// Tick labels carry as many decimals as the spread needs: rounding every
+// tick to one decimal printed Gmm 2.505–2.520 as "2.5, 2.5, 2.5".
+function tickFormatter(lo, hi, ticks = 4) {
+  const step = Math.abs(hi - lo) / ticks || 1
+  const dec = Math.min(4, Math.max(0, Math.ceil(-Math.log10(step))))
+  return v => Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(dec)
+}
+
+// Round-number ticks (steps of 1, 2, 2.5 or 5 × 10ⁿ) inside [lo, hi], each
+// label exact: evenly spaced ticks at arbitrary values had to be rounded for
+// display, so "5" sat where the value was 5.2.
+function niceTicks(lo, hi, count = 4) {
+  const span = (hi - lo) || Math.abs(hi) || 1
+  const raw = span / count
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(st => st >= raw - 1e-12)
+  const ticks = []
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) ticks.push(+v.toPrecision(12))
+  const dec = (String(+step.toPrecision(6)).split('.')[1] || '').length
+  return { ticks, fmt: v => Math.abs(v) >= 1000 && dec === 0 ? Math.round(v).toLocaleString() : v.toFixed(dec) }
+}
+
+// What a test's chart measures (the Y axis is the test name, which carries
+// the quantity and unit) and the AASHTO specification limits to draw where
+// one is standard: M 320 binder grading, M 332 MSCR grades, M 323 / R 35 mix
+// design. Agency-specific limits (Hamburg, LA abrasion, Micro-Deval…) are
+// not drawn — they differ from one DOT to the next.
+const SPEC_LIMITS = [
+  { re: /G\*\s*\/\s*sin/i,         limits: [{ v: 1.0, label: 'AASHTO M 320 min 1.00 kPa (original binder)' }] },
+  { re: /G\*\s*[·x×]?\s*sin/i,     limits: [{ v: 5000, label: 'AASHTO M 320 max 5000 kPa (PAV residue)' }] },
+  { re: /creep stiffness/i,        limits: [{ v: 300, label: 'AASHTO M 320 max 300 MPa' }] },
+  { re: /RTFO mass change/i,       limits: [{ v: -1.0, label: 'AASHTO M 320 max 1.00% mass loss' }] },
+  { re: /viscosity at 135/i,       limits: [{ v: 3, label: 'AASHTO M 320 max 3 Pa·s' }] },
+  { re: /flash point/i,            limits: [{ v: 230, label: 'AASHTO M 320 min 230 °C' }] },
+  { re: /Jnr\s*3\.?2/i,            limits: [{ v: 4.5, label: 'AASHTO M 332 S grade max 4.5' }, { v: 2.0, label: 'H grade max 2.0' }, { v: 1.0, label: 'V grade max 1.0' }] },
+  { re: /air voids at N\s*des/i,   limits: [{ v: 4.0, label: 'AASHTO R 35 design target 4.0%' }] },
+  { re: /tensile strength ratio|\bTSR\b/i, limits: [{ v: 80, label: 'AASHTO M 323 min 80%' }] },
+]
+function testInfo(name, resultType) {
+  const n = name || 'Result'
+  return {
+    yTitle: n + (resultType === 'percentage' && !/%/.test(n) ? ' (%)' : ''),
+    limits: SPEC_LIMITS.find(s => s.re.test(n))?.limits || [],
+  }
+}
+// Limits near the data are drawn as lines; one far off would squash the
+// results into a strip, so it is listed under the chart instead.
+function splitLimits(limits, lo, hi) {
+  const span = (hi - lo) || Math.abs(hi) || 1
+  const near = l => l.v >= lo - 2 * span && l.v <= hi + 2 * span
+  return { shown: (limits || []).filter(near), hidden: (limits || []).filter(l => !near(l)) }
+}
+const LIMIT_COLOR = '#534AB7'
+function LimitLines({ limits, toY, x1, x2 }) {
+  return limits.map((l, i) => (
+    <g key={i}>
+      <line x1={x1} y1={toY(l.v)} x2={x2} y2={toY(l.v)} stroke={LIMIT_COLOR} strokeWidth={1.4} strokeDasharray="8 4" />
+      <text x={x1 + 4} y={toY(l.v) - 4} fontSize={8.5} fill={LIMIT_COLOR} fontWeight="600">{l.label}</text>
+    </g>
+  ))
+}
+function AxisTitles({ W, H, pad, x, y }) {
+  return (
+    <>
+      <text x={pad.l} y={pad.t - 12} fontSize={10} fontWeight="600" fill="var(--text2)">↑ {y}</text>
+      <text x={pad.l + (W - pad.l - pad.r) / 2} y={H - 4} textAnchor="middle" fontSize={10} fontWeight="600" fill="var(--text2)">{x} →</text>
+    </>
+  )
+}
+const HiddenLimits = ({ hidden }) => hidden.length > 0 && (
+  <div style={{ fontSize: 10, color: LIMIT_COLOR, marginTop: 4 }}>
+    Off this scale: {hidden.map(l => `${l.label} (${l.v})`).join(' · ')}
+  </div>
+)
+
 const ChartNote = ({ children }) => (
   <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '24px 0' }}>{children}</div>
 )
 
 const CHART_SVG_STYLE = { width: '100%', maxWidth: 960, height: 'auto', overflow: 'visible', display: 'block', margin: '0 auto' }
 
-function PointChart({ results, isOutlier, svgRef }) {
+function PointChart({ results, isOutlier, svgRef, info }) {
   if (!results.length) return null
 
-  const W = 560, H = 220
-  const pad = { t: 28, r: 20, b: 52, l: 50 }
+  const W = 560, H = 240
+  const pad = { t: 30, r: 20, b: 66, l: 56 }
   const cW = W - pad.l - pad.r
   const cH = H - pad.t - pad.b
 
@@ -1036,15 +1112,17 @@ function PointChart({ results, isOutlier, svgRef }) {
     ...numericVals,
     ...Object.values(specimenStats).flatMap(s => [s.mean + s.std, s.mean - s.std, s.min, s.max]),
   ]
-  const rawMin = allY.length ? Math.min(...allY) : 0
-  const rawMax = allY.length ? Math.max(...allY) : 1
+  const dataMin = allY.length ? Math.min(...allY) : 0
+  const dataMax = allY.length ? Math.max(...allY) : 1
+  const { shown: limits, hidden: farLimits } = splitLimits(info?.limits, dataMin, dataMax)
+  const rawMin = Math.min(dataMin, ...limits.map(l => l.v))
+  const rawMax = Math.max(dataMax, ...limits.map(l => l.v))
   const padY   = (rawMax - rawMin) * 0.15 || 0.5
   const yMin   = rawMin - padY
   const yMax   = rawMax + padY
   const toY = v => pad.t + ((yMax - v) / (yMax - yMin)) * cH
 
-  const ticks = 4
-  const tickVals = Array.from({ length: ticks + 1 }, (_, i) => yMin + (i / ticks) * (yMax - yMin))
+  const { ticks: tickVals, fmt } = niceTicks(yMin, yMax, 5)
 
   const testNames = [...new Set(results.map(r => r.test_name || r.sample_name || 'Result'))]
   const colorOf   = n => PALETTE[testNames.indexOf(n) % PALETTE.length]
@@ -1089,13 +1167,15 @@ function PointChart({ results, isOutlier, svgRef }) {
           <g key={i}>
             <line x1={pad.l} y1={toY(v)} x2={W - pad.r} y2={toY(v)} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="3 3" />
             <text x={pad.l - 5} y={toY(v)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--text3)">
-              {Math.abs(v) < 100 ? (v % 1 === 0 ? v : v.toFixed(1)) : Math.round(v)}
+              {fmt(v)}
             </text>
           </g>
         ))}
         {/* Axes */}
         <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
         <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
+        <AxisTitles W={W} H={H} pad={pad} x="Specimen" y={info?.yTitle || 'Result'} />
+        <LimitLines limits={limits} toY={toY} x1={pad.l} x2={W - pad.r} />
 
         {/* Trend line */}
         {trendLine && (
@@ -1228,24 +1308,30 @@ function PointChart({ results, isOutlier, svgRef }) {
           </span>
         )}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>● Numeric · ◆ Pass/Fail · Red = outlier (&gt;2σ) · Hover points for details</div>
+      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>● Numeric · ◆ Pass/Fail · Red = outlier (&gt;2σ) · Hover points for details{limits.length ? ' · Purple dashed = AASHTO specification limit' : ''}</div>
+      <HiddenLimits hidden={farLimits} />
     </div>
   )
 }
 
 // ── Box plot: per-specimen median/quartiles/whiskers/outliers ──
-function BoxPlotChart({ results, svgRef }) {
-  const W = 560, H = 220
-  const pad = { t: 20, r: 20, b: 52, l: 50 }
+// One box per specimen when specimens are tested repeatedly; when each
+// specimen has a single result (the usual case) a box per specimen is just
+// a dot, so the boxes are drawn per project instead.
+function BoxPlotChart({ results, svgRef, info, projectLabel = id => id || 'No project' }) {
+  const W = 560, H = 240
+  const pad = { t: 30, r: 20, b: 66, l: 56 }
   const cW = W - pad.l - pad.r
   const cH = H - pad.t - pad.b
 
+  const numeric = results.filter(r => NUM_TYPES.includes(r.result_type) && !isNaN(parseFloat(r.result_value)))
   const getSpecimen = r => r.specimen_name || r.sample_name || 'Unknown'
+  const perSpecimen = {}
+  numeric.forEach(r => { perSpecimen[getSpecimen(r)] = (perSpecimen[getSpecimen(r)] || 0) + 1 })
+  const byProject = !Object.values(perSpecimen).some(n => n >= 3)
+  const groupOf = r => byProject ? projectLabel(r.project_id) : getSpecimen(r)
   const bySpec = {}
-  results.filter(r => NUM_TYPES.includes(r.result_type)).forEach(r => {
-    const v = parseFloat(r.result_value)
-    if (!isNaN(v)) (bySpec[getSpecimen(r)] = bySpec[getSpecimen(r)] || []).push(v)
-  })
+  numeric.forEach(r => { (bySpec[groupOf(r)] = bySpec[groupOf(r)] || []).push(parseFloat(r.result_value)) })
   const specimens = Object.keys(bySpec)
   if (!specimens.length) return <ChartNote>No numeric results to plot.</ChartNote>
 
@@ -1264,14 +1350,15 @@ function BoxPlotChart({ results, svgRef }) {
   })
 
   const allY = stats.flatMap(s => s.vals)
-  const rawMin = Math.min(...allY), rawMax = Math.max(...allY)
+  const dataMin = Math.min(...allY), dataMax = Math.max(...allY)
+  const { shown: limits, hidden: farLimits } = splitLimits(info?.limits, dataMin, dataMax)
+  const rawMin = Math.min(dataMin, ...limits.map(l => l.v)), rawMax = Math.max(dataMax, ...limits.map(l => l.v))
   const padY = (rawMax - rawMin) * 0.15 || 0.5
   const yMin = rawMin - padY, yMax = rawMax + padY
   const toY = v => pad.t + ((yMax - v) / (yMax - yMin)) * cH
   const xOf = i => pad.l + (specimens.length <= 1 ? cW / 2 : (i / (specimens.length - 1)) * cW * 0.9 + cW * 0.05)
   const boxW = Math.max(14, Math.min(34, (cW / specimens.length) * 0.5))
-  const ticks = 4
-  const tickVals = Array.from({ length: ticks + 1 }, (_, i) => yMin + (i / ticks) * (yMax - yMin))
+  const { ticks: tickVals, fmt } = niceTicks(yMin, yMax, 5)
   const anyBox = stats.some(s => s.vals.length >= 3)
 
   return (
@@ -1281,12 +1368,14 @@ function BoxPlotChart({ results, svgRef }) {
           <g key={i}>
             <line x1={pad.l} y1={toY(v)} x2={W - pad.r} y2={toY(v)} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="3 3" />
             <text x={pad.l - 5} y={toY(v)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--text3)">
-              {Math.abs(v) < 100 ? (v % 1 === 0 ? v : v.toFixed(1)) : Math.round(v)}
+              {fmt(v)}
             </text>
           </g>
         ))}
         <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
         <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
+        <AxisTitles W={W} H={H} pad={pad} x={byProject ? 'Project' : 'Specimen'} y={info?.yTitle || 'Result'} />
+        <LimitLines limits={limits} toY={toY} x1={pad.l} x2={W - pad.r} />
 
         {stats.map((s, i) => {
           const x = xOf(i)
@@ -1324,22 +1413,23 @@ function BoxPlotChart({ results, svgRef }) {
         {specimens.map((sp, i) => (
           <text key={i} x={xOf(i)} y={H - pad.b + 13} textAnchor="middle" fontSize={9} fill="var(--text2)"
             transform={specimens.length > 5 ? `rotate(-32,${xOf(i)},${H - pad.b + 13})` : ''}>
-            {sp.length > 12 ? sp.slice(0, 11) + '…' : sp}
+            {sp.length > 18 ? sp.slice(0, 17) + '…' : sp}
           </text>
         ))}
       </svg>
       <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
-        Box = Q1–Q3 (IQR) · Dark line = median · Whiskers = range within 1.5×IQR · Red = outlier
-        {!anyBox && ' · Boxes appear once a specimen has 3+ results'}
+        {byProject ? 'One box per project (each specimen has a single result)' : 'One box per specimen'} · Box = Q1–Q3 (IQR) · Dark line = median · Whiskers = range within 1.5×IQR · Red = outlier
+        {!anyBox && ' · A box needs 3+ results'}{limits.length ? ' · Purple dashed = AASHTO specification limit' : ''}
       </div>
+      <HiddenLimits hidden={farLimits} />
     </div>
   )
 }
 
 // ── Control chart: results over time vs mean ±2σ/±3σ limits ──
-function ControlChart({ results, svgRef }) {
-  const W = 560, H = 220
-  const pad = { t: 20, r: 34, b: 52, l: 50 }
+function ControlChart({ results, svgRef, info }) {
+  const W = 560, H = 240
+  const pad = { t: 30, r: 34, b: 66, l: 56 }
   const cW = W - pad.l - pad.r
   const cH = H - pad.t - pad.b
 
@@ -1352,10 +1442,12 @@ function ControlChart({ results, svgRef }) {
   const mean = pts.reduce((a, p) => a + p.v, 0) / pts.length
   const sd = Math.sqrt(pts.reduce((s, p) => s + (p.v - mean) ** 2, 0) / pts.length)
   const allY = [...pts.map(p => p.v), mean + 3 * sd, mean - 3 * sd]
-  const rawMin = Math.min(...allY), rawMax = Math.max(...allY)
+  const { shown: specLimits, hidden: farLimits } = splitLimits(info?.limits, Math.min(...allY), Math.max(...allY))
+  const rawMin = Math.min(...allY, ...specLimits.map(l => l.v)), rawMax = Math.max(...allY, ...specLimits.map(l => l.v))
   const padY = (rawMax - rawMin) * 0.1 || 0.5
   const yMin = rawMin - padY, yMax = rawMax + padY
   const toY = v => pad.t + ((yMax - v) / (yMax - yMin)) * cH
+  const { ticks: yTickVals, fmt } = niceTicks(yMin, yMax, 5)
   const xOf = i => pad.l + (i / (pts.length - 1)) * cW
 
   const fmtD = d => {
@@ -1378,6 +1470,8 @@ function ControlChart({ results, svgRef }) {
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={CHART_SVG_STYLE}>
         <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
         <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
+        <AxisTitles W={W} H={H} pad={pad} x="Test date (in the order tested)" y={info?.yTitle || 'Result'} />
+        <LimitLines limits={specLimits} toY={toY} x1={pad.l} x2={W - pad.r} />
 
         {limits.map((l, i) => (
           <g key={i}>
@@ -1402,23 +1496,24 @@ function ControlChart({ results, svgRef }) {
           </text>
         ) : null)}
 
-        {[yMin, (yMin + yMax) / 2, yMax].map((v, i) => (
+        {yTickVals.map((v, i) => (
           <text key={i} x={pad.l - 5} y={toY(v)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--text3)">
-            {Math.abs(v) < 100 ? v.toFixed(1) : Math.round(v)}
+            {fmt(v)}
           </text>
         ))}
       </svg>
       <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
-        Results in date order · Green = mean · Amber = ±2σ warning · Red = ±3σ control limit · Point color shows zone
+        Results in date order · Green = mean · Amber = ±2σ warning · Red = ±3σ control limit · Point color shows zone{specLimits.length ? ' · Purple dashed = AASHTO specification limit' : ''}
       </div>
+      <HiddenLimits hidden={farLimits} />
     </div>
   )
 }
 
 // ── Histogram: value distribution + fitted normal curve ──
-function HistogramChart({ results, svgRef }) {
-  const W = 560, H = 220
-  const pad = { t: 20, r: 20, b: 40, l: 50 }
+function HistogramChart({ results, svgRef, info }) {
+  const W = 560, H = 240
+  const pad = { t: 30, r: 20, b: 46, l: 56 }
   const cW = W - pad.l - pad.r
   const cH = H - pad.t - pad.b
 
@@ -1429,6 +1524,13 @@ function HistogramChart({ results, svgRef }) {
   const n = vals.length
   let lo = Math.min(...vals), hi = Math.max(...vals)
   if (hi === lo) { lo -= 0.5; hi += 0.5 }
+  // A specification limit near the data widens the value axis to show it
+  const { shown: limits, hidden: farLimits } = splitLimits(info?.limits, lo, hi)
+  if (limits.length) {
+    const lim = limits.map(l => l.v), span = hi - lo
+    lo = Math.min(lo, Math.min(...lim) - span * 0.05)
+    hi = Math.max(hi, Math.max(...lim) + span * 0.05)
+  }
   const bins = Math.max(5, Math.min(12, Math.ceil(Math.sqrt(n))))
   const bw = (hi - lo) / bins
   const counts = Array(bins).fill(0)
@@ -1444,7 +1546,11 @@ function HistogramChart({ results, svgRef }) {
   const toY = c => pad.t + ((yTop - c) / yTop) * cH
   const toX = x => pad.l + ((x - lo) / (hi - lo)) * cW
 
-  const yTicks = Array.from({ length: 4 }, (_, i) => Math.round((yTop / 3) * i)).filter((v, i, a) => a.indexOf(v) === i)
+  // Whole-number counts, evenly spaced
+  const yStep = Math.max(1, Math.ceil(Math.max(...counts) / 4))
+  const yTicks = Array.from({ length: Math.floor(yTop / yStep) + 1 }, (_, i) => i * yStep)
+  const { ticks: xTickVals, fmt: xFmt } = niceTicks(lo, hi, 5)
+  const statFmt = tickFormatter(lo, hi, 50)
 
   return (
     <div>
@@ -1457,6 +1563,13 @@ function HistogramChart({ results, svgRef }) {
         ))}
         <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
         <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--text3)" strokeWidth={1} />
+        <AxisTitles W={W} H={H} pad={pad} x={info?.yTitle || 'Result'} y="Number of results" />
+        {limits.map((l, i) => (
+          <g key={'lim' + i}>
+            <line x1={toX(l.v)} y1={pad.t} x2={toX(l.v)} y2={H - pad.b} stroke={LIMIT_COLOR} strokeWidth={1.4} strokeDasharray="8 4" />
+            <text x={toX(l.v) + 4} y={pad.t + 10 + i * 11} fontSize={8.5} fill={LIMIT_COLOR} fontWeight="600">{l.label}</text>
+          </g>
+        ))}
 
         {counts.map((c, i) => {
           const x0 = toX(lo + i * bw)
@@ -1464,7 +1577,7 @@ function HistogramChart({ results, svgRef }) {
           return (
             <rect key={i} x={x0 + 1} y={toY(c)} width={barW} height={Math.max(0, toY(0) - toY(c))}
               fill="rgba(29,158,117,0.35)" stroke="#1D9E75" strokeWidth={1} rx={1.5}>
-              <title>{(lo + i * bw).toFixed(2)} – {(lo + (i + 1) * bw).toFixed(2)}: {c} result{c !== 1 ? 's' : ''}</title>
+              <title>{statFmt(lo + i * bw)} – {statFmt(lo + (i + 1) * bw)}: {c} result{c !== 1 ? 's' : ''}</title>
             </rect>
           )
         })}
@@ -1474,22 +1587,23 @@ function HistogramChart({ results, svgRef }) {
             fill="none" stroke="#b45309" strokeWidth={1.8} strokeOpacity={0.85} />
         )}
 
-        {Array.from({ length: 6 }, (_, i) => lo + (i / 5) * (hi - lo)).map((v, i) => (
+        {xTickVals.map((v, i) => (
           <text key={i} x={toX(v)} y={H - pad.b + 13} textAnchor="middle" fontSize={9} fill="var(--text2)">
-            {Math.abs(v) < 100 ? v.toFixed(1) : Math.round(v)}
+            {xFmt(v)}
           </text>
         ))}
       </svg>
       <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
-        Bars = result frequency ({bins} bins, n={n}){sd > 0 ? ` · Curve = normal fit (μ=${mean.toFixed(2)}, σ=${sd.toFixed(2)})` : ''} · Two peaks usually mean two operators, batches or methods
+        Bars = result frequency ({bins} bins, n={n}){sd > 0 ? ` · Curve = normal fit (μ=${statFmt(mean)}, σ=${tickFormatter(0, sd * 4, 40)(sd)})` : ''} · Two peaks usually mean two operators, batches or methods{limits.length ? ' · Purple dashed = AASHTO specification limit' : ''}
       </div>
+      <HiddenLimits hidden={farLimits} />
     </div>
   )
 }
 
 const CHART_TYPES = [
   { key: 'points',  label: 'Points',    title: 'Results by Specimen' },
-  { key: 'box',     label: 'Box plot',  title: 'Box Plot by Specimen' },
+  { key: 'box',     label: 'Box plot',  title: 'Box Plot' },
   { key: 'control', label: 'Control',   title: 'Control Chart' },
   { key: 'hist',    label: 'Histogram', title: 'Distribution Histogram' },
 ]
@@ -1508,6 +1622,9 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   const [postingCmt, setPostingCmt] = useState(false)
   const [filterDate, setFilterDate] = useState('')
   const [filterProject, setFilterProject] = useState('')  // '' = all projects
+  // One machine can run several tests (TA - DHR: DSR and MSCR) whose results
+  // have different units; the charts show one test at a time.
+  const [filterTest, setFilterTest] = useState('')        // '' = all tests (table only)
   const [selectedRow, setSelectedRow] = useState(null)
   const [mobile, setMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
 
@@ -1566,6 +1683,15 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
       setLoadingRes(false)
     })
   }, [selected, allowedNames])
+
+  // A machine with several tests opens on its first one, so a chart never
+  // mixes units; a test no longer in the results is dropped
+  const testOf = r => r.test_name || r.sample_name || 'Result'
+  const testNamesAll = [...new Set(results.map(testOf))]
+  useEffect(() => {
+    if (filterTest && testNamesAll.includes(filterTest)) return
+    setFilterTest(testNamesAll.length > 1 ? testNamesAll[0] : '')
+  }, [results])
 
   async function saveResult() {
     if (!addForm.test_name.trim()) { toast('Test name is required.'); return }
@@ -1631,7 +1757,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
 
       doc.setFontSize(16)
       doc.setFont(undefined, 'bold')
-      doc.text(`${selected.equipment_name} — ${CHART_TYPES.find(t => t.key === chartType)?.title || 'Test Results'}`, 40, 48)
+      doc.text(`${selected.equipment_name}${chartTest ? ` · ${chartTest}` : ''} — ${CHART_TYPES.find(t => t.key === chartType)?.title || 'Test Results'}`, 40, 48)
       doc.setFontSize(10)
       doc.setFont(undefined, 'normal')
       doc.setTextColor(120)
@@ -1707,10 +1833,14 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
   const activeProjects = allProjects.filter(p => !p.status || p.status === 'active')
   const resultProjects = [...new Set(results.map(r => r.project_id).filter(Boolean))]
   const filteredResults = results.filter(r =>
-    (!filterDate || r.date === filterDate) && (!filterProject || r.project_id === filterProject)
+    (!filterDate || r.date === filterDate) && (!filterProject || r.project_id === filterProject) && (!filterTest || testOf(r) === filterTest)
   )
+  // The test the charts and statistics are about (none while "All tests" mixes units)
+  const chartTest = filterTest || (testNamesAll.length === 1 ? testNamesAll[0] : '')
+  const chartInfo = chartTest ? testInfo(chartTest, filteredResults.find(r => testOf(r) === chartTest)?.result_type) : null
+  const projShort = id => allProjects.find(x => x.id === id)?.name || 'No project'
 
-  const numericVals = filteredResults.filter(r => r.result_type === 'number' || r.result_type === 'percentage').map(r => parseFloat(r.result_value)).filter(v => !isNaN(v))
+  const numericVals = !chartTest ? [] : filteredResults.filter(r => r.result_type === 'number' || r.result_type === 'percentage').map(r => parseFloat(r.result_value)).filter(v => !isNaN(v))
   const pfResults   = filteredResults.filter(r => r.result_type === 'pass_fail')
   const passRate    = pfResults.length ? Math.round((pfResults.filter(r => r.result_value === 'Pass').length / pfResults.length) * 100) : null
 
@@ -1744,7 +1874,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
                   {items.map(e => {
                     const active = selected?.id === e.id
                     return (
-                      <div key={e.id} onClick={() => { setSelected(e); setFilterDate(''); setFilterProject('') }}
+                      <div key={e.id} onClick={() => { setSelected(e); setFilterDate(''); setFilterProject(''); setFilterTest('') }}
                         style={{ padding: '8px 12px', cursor: 'pointer', background: active ? 'var(--accent3-light)' : 'transparent', borderLeft: `3px solid ${active ? 'var(--accent3)' : 'transparent'}` }}>
                         <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'var(--accent3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.equipment_name}</div>
                       </div>
@@ -1786,6 +1916,13 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
                     style={{ fontSize: 12, padding: '4px 8px', maxWidth: 200, border: filterProject ? '1.5px solid var(--accent3)' : undefined }}>
                     <option value="">All projects ({resultProjects.length})</option>
                     {resultProjects.map(pid => <option key={pid} value={pid}>{projName(pid)}</option>)}
+                  </select>
+                )}
+                {testNamesAll.length > 1 && (
+                  <select value={filterTest} onChange={e => setFilterTest(e.target.value)} aria-label="Test"
+                    style={{ fontSize: 12, padding: '4px 8px', maxWidth: 260, border: filterTest ? '1.5px solid var(--accent3)' : undefined }}>
+                    {testNamesAll.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="">All tests ({testNamesAll.length}) · table only</option>
                   </select>
                 )}
                 <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }} />
@@ -1884,12 +2021,16 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
                 {[
                   { label: 'Total Results', value: filteredResults.length, color: 'var(--accent3)' },
-                  ...(stats ? [
-                    { label: 'Average', value: stats.avg.toFixed(2), color: '#0369a1' },
-                    { label: 'Min',     value: stats.min.toFixed(2), color: '#1D9E75' },
-                    { label: 'Max',     value: stats.max.toFixed(2), color: '#c84b2f' },
-                    { label: 'Std Dev', value: stats.std.toFixed(2), color: '#534AB7' },
-                  ] : []),
+                  ...(stats ? (() => {
+                    // one decimal more than the spread needs, so Gmm 2.512 does not read 2.51
+                    const f = tickFormatter(stats.min, stats.max, 40)
+                    return [
+                      { label: 'Average', value: f(stats.avg), color: '#0369a1' },
+                      { label: 'Min',     value: f(stats.min), color: '#1D9E75' },
+                      { label: 'Max',     value: f(stats.max), color: '#c84b2f' },
+                      { label: 'Std Dev', value: f(stats.std), color: '#534AB7' },
+                    ]
+                  })() : []),
                   ...(passRate !== null ? [{ label: 'Pass Rate', value: passRate + '%', color: passRate >= 80 ? '#1D9E75' : '#c84b2f' }] : []),
                 ].map(s => (
                   <div key={s.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', textAlign: 'center' }}>
@@ -1903,7 +2044,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', maxWidth: 1000, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   {/* Chart named after the equipment — every result here is the same test */}
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{selected.equipment_name}{filterProject ? ` · ${projName(filterProject)}` : ''} — {CHART_TYPES.find(t => t.key === chartType)?.title}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{selected.equipment_name}{chartTest ? ` · ${chartTest}` : ''}{filterProject ? ` · ${projName(filterProject)}` : ''} — {CHART_TYPES.find(t => t.key === chartType)?.title}</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     {CHART_TYPES.map(t => (
                       <button key={t.key} onClick={() => setChartType(t.key)}
@@ -1919,10 +2060,14 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
                     ⚠ Results from {resultProjects.length} projects are mixed in this chart — pick a project above to analyse one at a time.
                   </div>
                 )}
-                {chartType === 'points'  && <PointChart results={filteredResults} isOutlier={isOutlier} svgRef={chartSvgRef} />}
-                {chartType === 'box'     && <BoxPlotChart results={filteredResults} svgRef={chartSvgRef} />}
-                {chartType === 'control' && <ControlChart results={filteredResults} svgRef={chartSvgRef} />}
-                {chartType === 'hist'    && <HistogramChart results={filteredResults} svgRef={chartSvgRef} />}
+                {!chartTest ? (
+                  <ChartNote>These results come from {testNamesAll.length} tests with different units. Pick a test above to chart it.</ChartNote>
+                ) : <>
+                  {chartType === 'points'  && <PointChart results={filteredResults} isOutlier={isOutlier} svgRef={chartSvgRef} info={chartInfo} />}
+                  {chartType === 'box'     && <BoxPlotChart results={filteredResults} svgRef={chartSvgRef} info={chartInfo} projectLabel={projShort} />}
+                  {chartType === 'control' && <ControlChart results={filteredResults} svgRef={chartSvgRef} info={chartInfo} />}
+                  {chartType === 'hist'    && <HistogramChart results={filteredResults} svgRef={chartSvgRef} info={chartInfo} />}
+                </>}
               </div>
 
               {/* Results table + sample info panel */}

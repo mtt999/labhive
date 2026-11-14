@@ -2479,3 +2479,27 @@ https://claude.ai/artifact/JriVDb6Z2Bygx6ndwTw2KE
 - Old `floor_plans` rows were converted by the setup SQL: each zone a room
   with one floor spot that keeps the zone id. The ICT / MPF hand-drawn maps
   (ICT org only) are unchanged.
+
+## Workspace charts: one test at a time, axes from the test (Nov 2026, LabHive)
+
+`DataAnalysis` + `PointChart` / `BoxPlotChart` / `ControlChart` /
+`HistogramChart` in ProjectMaterial.jsx (test_result_entries).
+- **Test filter** beside the project filter: a machine with several tests
+  (TA - DHR: DSR + MSCR) opens on its first test; "All tests" is table-only
+  (the charts and stat tiles would mix units).
+- **Axes:** Y title = the test name, which carries quantity + unit
+  ("DSR G*/sinδ at 64 °C (kPa)"); X = Specimen / Project / Test date / the
+  value (histogram). `testInfo()`; percentage results get "(%)".
+- **Ticks** are round numbers (`niceTicks`, steps 1 / 2 / 2.5 / 5 × 10ⁿ) with
+  exact labels; rounding every tick to one decimal printed Gmm 2.505–2.520
+  as "2.5, 2.5, 2.5". Stat tiles use `tickFormatter` precision.
+- **Box plot** groups by PROJECT when no specimen has 3+ results (one box per
+  single-result specimen drew nothing).
+- **AASHTO limits** (`SPEC_LIMITS`, purple dashed): M 320 (DSR ≥ 1.00 kPa
+  original, PAV G*·sinδ ≤ 5000 kPa, BBR S ≤ 300 MPa, RTFO mass loss ≤ 1.00%,
+  viscosity ≤ 3 Pa·s, flash point ≥ 230 °C), M 332 Jnr3.2 grades, R 35 air
+  voids 4.0%, M 323 TSR ≥ 80%. Matched on the test name. A limit far from
+  the data is listed under the chart instead of squashing it. Agency limits
+  (Hamburg, LA, Micro-Deval) are deliberately not drawn.
+- Demo Lab: 636 demo results (12 per test, 53 tests) recorded by
+  "Demo Manager" so both demo roles see them.

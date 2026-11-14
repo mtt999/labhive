@@ -49,7 +49,7 @@ const HELP_CONTENT = {
       T('Manage Projects: create projects and assign lab users. Material Types: the types offered in the Add material form', 'manager'),
       T('Manage Projects: create and edit your projects', 'solo'),
       'Project Test Results: record results and attach their files',
-      'Workspace: charts and analysis of your projects\' test results',
+      'Workspace: charts and analysis of your projects\' test results. A machine with several tests charts one test at a time (pick it next to the project filter); purple dashed lines are AASHTO specification limits where one applies',
       'Project Members: team up with others so you share project data',
     ],
   },
