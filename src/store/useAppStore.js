@@ -13,6 +13,13 @@ export const useAppStore = create((set, get) => ({
     // password). Clearing this on logout means the next sign-in re-evaluates
     // rather than inheriting the previous person's unlocked state.
     localStorage.removeItem('ilab_demo_public')
+    // Signed out, the address must not keep the last page (?screen=…): the
+    // next sign-in, or the browser suggesting this address, would reopen it.
+    try {
+      const u = new URL(window.location.href)
+      ;['screen', 'project', 'material', 'tab'].forEach(k => u.searchParams.delete(k))
+      window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash)
+    } catch { /* an address we cannot parse: leave it */ }
     set({ session: null, loginMode: null, sharedWorkspaces: [], viewingWorkspaceOwnerId: null, activeModules: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
   },
 

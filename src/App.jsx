@@ -394,6 +394,9 @@ export default function App() {
     if (soloUser) applyRestoredSoloSession(soloUser)
   }
 
+  // Set when init() restores a saved sign-in, read once by the session effect
+  const restoredOnLoad = useRef(false)
+
   useEffect(() => {
     async function init() {
       const [{ data: { session: authSession } }, { data: maintRow }] = await Promise.all([
@@ -402,6 +405,7 @@ export default function App() {
       ])
       if (maintRow?.value === 'true') setMaintenanceMode(true)
       if (authSession?.user) {
+        restoredOnLoad.current = true
         await restoreSessionFromAuth(authSession.user)
         // Clear demo-user localStorage flags on every page load so restrictions apply fresh
         if (authSession.user.email?.toLowerCase() === 'demo@labhive.app') {
@@ -432,8 +436,15 @@ export default function App() {
       refreshCache()
       // QR scan takes priority (equipment ?eq= or material/item ?item=)
       if (SCAN_EQ_ID || SCAN_ITEM_QR) { setScreen('equipmentscan'); return }
+      // Only a session restored on page load (a refresh, or an email link
+      // opened while already signed in) opens the page named in the address.
+      // A sign-in from the sign-in page always starts on the home page: the
+      // address — or the browser's suggestion of it — still holds the page
+      // used before signing out, and that page used to reopen.
+      const restored = restoredOnLoad.current
+      restoredOnLoad.current = false
       // Deep-link from email notification
-      if (DEEP_LINK_SCREEN) {
+      if (restored && DEEP_LINK_SCREEN) {
         if (DEEP_LINK_TAB === 'team') {
           const { setPendingProfileTab } = useAppStore.getState()
           setPendingProfileTab('team')
