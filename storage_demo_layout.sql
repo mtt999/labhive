@@ -41,6 +41,11 @@ BEGIN
     ]'::jsonb
   WHERE id = lay;
 
+  -- The setup file converted Demo Lab's old photo plan (clinical-lab zones)
+  -- into a map; the asphalt-lab map above replaces it, and every demo
+  -- material is re-filed onto it below.
+  DELETE FROM storage_layouts WHERE organization_id = org AND id <> lay;
+
   -- Every Demo Lab material: its project, depth below its parent folder, and
   -- the place it goes to
   CREATE TEMP TABLE demo_place ON COMMIT DROP AS

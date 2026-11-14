@@ -57,7 +57,8 @@ ALTER TABLE storage_locations ADD COLUMN IF NOT EXISTS occupied_by_id uuid;
 -- Existing photo floor plans become layouts: the photo stays as the map's
 -- background, each zone becomes a room with one floor spot of the same id,
 -- so materials already stored in a zone are still found. Only for
--- organizations that have no layout yet.
+-- organizations that still exist (floor_plans has no foreign key: plans of
+-- deleted organizations are left behind) and have no layout yet.
 INSERT INTO storage_layouts (organization_id, name, image_url, aspect, rooms, spots, sort_order)
 SELECT fp.organization_id, fp.name, fp.image_url, NULL,
   COALESCE((SELECT jsonb_agg(jsonb_build_object('id', 'room_' || (z->>'id'), 'name', z->>'label',
@@ -69,6 +70,7 @@ SELECT fp.organization_id, fp.name, fp.image_url, NULL,
   row_number() OVER (PARTITION BY fp.organization_id ORDER BY fp.created_at)
 FROM floor_plans fp
 WHERE fp.organization_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = fp.organization_id)
   AND NOT EXISTS (SELECT 1 FROM storage_layouts l WHERE l.organization_id = fp.organization_id);
 
 NOTIFY pgrst, 'reload schema';
