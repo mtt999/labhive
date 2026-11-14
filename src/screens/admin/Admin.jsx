@@ -7,7 +7,7 @@ import Modal from '../../components/Modal'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import { orgCapabilityPool } from '../../lib/modulePools'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
-import FloorPlanEditor from '../../components/FloorPlanEditor'
+import FloorPlanPicker from '../../components/FloorPlanPicker'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { applyDefaultIcons } from '../../lib/defaultIcons'
 import { generateTempPassword } from '../../lib/tempPassword'
@@ -1922,7 +1922,9 @@ export default function Admin() {
       {tab === 'images' && <ModuleImagesPanel orgId={myOrgId} />}
 
       {/* ── FLOOR PLAN (org admin only) ── */}
-      {!isSuperAdmin && tab === 'floorplan' && <FloorPlanEditor />}
+      {/* The storage map (Nov 2026): drawn rooms and spots, the ICT-Lab way —
+          it replaced the photo-and-zones FloorPlanEditor */}
+      {!isSuperAdmin && tab === 'floorplan' && <FloorPlanPicker allowLayoutEdit inline />}
 
       {/* ── ORG SETTINGS (org admin only) ── */}
       {!isSuperAdmin && tab === 'orgsettings' && <OrgSettingsPanel session={session} />}

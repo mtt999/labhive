@@ -41,6 +41,8 @@ const HELP_CONTENT = {
       'Material Reduction splits a material into new ones, such as fractions by sieve size. Each fraction gets its own label and is listed under its parent',
       'The small sign beside "Project Materials" opens that project\'s materials as folders, with reductions branching off their parent',
       'Every material has a printable 4×6 label with its own barcode and QR code',
+      'Storage: open the floor plan from a material, click a spot, then pick a shelf or place. One place holds many materials; the first person to store there owns it',
+      T('Edit layout on the floor plan draws rooms and storage spots (racks with shelves, pallets, floor). Set up shelves changes racks, shelves and places without losing what is stored. You can also move anyone\'s material', 'manager'),
       'Tested samples get their own label: use the Tested pill, or the Tested materials label tab on a material. Tested Materials (sidebar) lists them all',
       'Non-Project Material (on the Materials view) is for material that belongs to no project',
       T('You see the projects you are assigned to', 'labuser'),

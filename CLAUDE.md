@@ -2454,3 +2454,28 @@ belong to the MATERIAL, which still asks for them.
   certificates of ACTIVE users of the org only — uploads by deleted users
   (3 in each DB in Nov 2026) are shown nowhere and kept the dot on for good.
   Equipment = pending `retraining_requests`. Re-checked on every sub-tab switch.
+
+## Storage map — drawn rooms and spots, the ICT-Lab way (Nov 2026, LabHive only)
+
+`src/components/FloorPlanPicker.jsx` (`LayoutMap` + the picker). Replaced the
+photo-and-zones `FloorPlanEditor` (removed). SQL: `storage_layouts_setup.sql`,
+then `storage_demo_layout.sql` for Demo Lab. Mockup:
+https://claude.ai/artifact/JriVDb6Z2Bygx6ndwTw2KE
+- A floor plan = a `storage_layouts` row: `rooms` [{id,name,x,y,w,h}] and
+  `spots` [{id,room_id,name,x,y,type,rackNames,shelvesPerRack,placesPerShelf}],
+  coordinates in PERCENT of the map; `aspect` = width / height (NULL = take it
+  from the background photo, `image_url`, a JPEG data URL ≤ 2400px).
+- Place ids, ownership, Set up shelves (refuses to drop an occupied place,
+  re-files what moves), Move + `storage_moved` notification: the SAME rules
+  and code as ICT-Lab's FloorPlanPicker. One `storage_locations` row PER
+  MATERIAL (the old LabHive code kept one row per zone and overwrote it);
+  owner = first row's `occupied_by_id`.
+- Edit layout (admins, lab managers, solo owner): + New floor plan, + Add
+  room (drag a rectangle), + Place spot (click in a room), drag to move (a
+  room takes its spots), corner handle resizes, click to rename / remove.
+  Removing a spot or room that holds material is refused. Admin → Floor Plan
+  opens the same picker `allowLayoutEdit inline`.
+- RLS: members SELECT, `my_managed_org_ids()` write, solo owner both.
+- Old `floor_plans` rows were converted by the setup SQL: each zone a room
+  with one floor spot that keeps the zone id. The ICT / MPF hand-drawn maps
+  (ICT org only) are unchanged.
