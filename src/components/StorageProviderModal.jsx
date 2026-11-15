@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { sb } from '../lib/supabase'
 import { providers, getActiveProviderKey,
   ORG_MODE_KEY, ORG_COPY_KEY, TEAM_B_KEY,
@@ -415,7 +416,11 @@ export default function StorageProviderModal({ onClose, toast }) {
   const loginMode = session?.loginMode || localStorage.getItem('ilab_login_mode') || 'team'
   const isOrgAdmin = loginMode === 'team' && session?.role === 'admin' && session?.userId !== null
 
-  if (loginMode === 'solo') return <SoloStorageModal onClose={onClose} toast={toast} />
-  if (isOrgAdmin) return <OrgStorageModal onClose={onClose} toast={toast} />
-  return <TeamUserStorageModal onClose={onClose} toast={toast} />
+  const modal = loginMode === 'solo' ? <SoloStorageModal onClose={onClose} toast={toast} />
+    : isOrgAdmin ? <OrgStorageModal onClose={onClose} toast={toast} />
+    : <TeamUserStorageModal onClose={onClose} toast={toast} />
+  // Drawn on the page itself: inside the Profile card the full-screen
+  // overlay was clipped to the card (a parent's transform makes "fixed"
+  // relative to it), so the choices were cut off.
+  return createPortal(modal, document.body)
 }
