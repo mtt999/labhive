@@ -201,11 +201,14 @@ function SignUpForm({ onSuccess, onCancel }) {
 
 // ── Main Login ─────────────────────────────────────────────────────────────
 const QR_SCAN_EQ = new URLSearchParams(window.location.search).get('eq')
+// The landing page's "Create free Solo account" links here with ?signup=solo,
+// so a visitor lands on the sign-up form instead of hunting for it.
+const SOLO_SIGNUP = new URLSearchParams(window.location.search).get('signup') === 'solo'
 
 export default function Login({ linkError = null }) {
   const { setSession, setLoginMode, setSharedWorkspaces } = useAppStore()
   // When arriving from a QR code scan, default to Solo mode so visitors can sign up
-  const [mode, setMode]             = useState(QR_SCAN_EQ ? 'solo' : null)
+  const [mode, setMode]             = useState(QR_SCAN_EQ || SOLO_SIGNUP ? 'solo' : null)
   const [identifier, setIdentifier] = useState(() => localStorage.getItem('ilab_remembered_email') || '')
   // "Keep me signed in" — controls whether the Supabase auth session persists
   // across browser restarts (see the auth storage adapter in lib/supabase.js)
@@ -242,7 +245,15 @@ export default function Login({ linkError = null }) {
   const [error, setError]           = useState(linkError || '')
   const [loading, setLoading]       = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showSignUp, setShowSignUp] = useState(false)
+  const [showSignUp, setShowSignUp] = useState(SOLO_SIGNUP && !QR_SCAN_EQ)
+  useEffect(() => {
+    if (!SOLO_SIGNUP) return
+    setLoginMode('solo')
+    try {
+      const u = new URL(window.location.href); u.searchParams.delete('signup')
+      window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash)
+    } catch {}
+  }, [])
   const [signUpSuccess, setSignUpSuccess] = useState(false)
   const [showHelpLookup, setShowHelpLookup] = useState(false)
   const [helpEmail, setHelpEmail] = useState('')

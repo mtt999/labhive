@@ -395,6 +395,10 @@
     .price-cta.team:hover { background: var(--teal-dark); }
     .price-cta.solo { background: var(--blue); color: #fff; }
     .price-cta.solo:hover { background: #155a99; }
+    .price-cta.solo-outline { background: transparent; color: var(--blue); box-shadow: inset 0 0 0 1.5px var(--blue); }
+    .price-cta.solo-outline:hover { background: var(--blue-light); }
+    .price-card p.price-free { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+    .price-card p.price-free strong { color: var(--blue); }
 
     /* ── Request a demo (Pricing → Team Plan) ── */
     .price-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -627,8 +631,12 @@
         </div>
         <div class="price-card solo">
           <h4>Solo Plan</h4>
-          <p>For individual researchers managing their own projects and materials. Free to get started — contact us for information about paid Solo features and extended storage.</p>
-          <a href="/app?support=1" class="price-cta solo">Contact us →</a>
+          <p class="price-free"><strong>Free: create your own Solo account today.</strong> No cost, no card, no contract.</p>
+          <p>For individual researchers who manage their own projects, materials and test results. Sign up in a minute and start working right away. Need more storage or paid Solo features later? Contact us.</p>
+          <div class="price-ctas">
+            <a href="/app?signup=solo" class="price-cta solo">Create free Solo account →</a>
+            <a href="/app?support=1" class="price-cta solo-outline">Contact us →</a>
+          </div>
         </div>
       </div>
     </div>

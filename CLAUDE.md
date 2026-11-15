@@ -2520,3 +2520,13 @@ Agenda already clamped to the visible range.
   clusters, or one booking covering the whole day would merge every booking
   of that day into one block.
 
+
+## Landing page: Solo is free, said in bold (Nov 2026)
+
+The Solo Plan card on the landing page (`landing/index.html`) opens with a
+bold line, "Free: create your own Solo account today", and has a
+**Create free Solo account →** button beside Contact us. The button goes to
+`/app?signup=solo`, which Login.jsx reads (`SOLO_SIGNUP`) to open the Solo
+sign-up form directly, then strips the parameter from the address. Visitors
+could not tell from "Free to get started — contact us…" that they could sign
+up themselves.
