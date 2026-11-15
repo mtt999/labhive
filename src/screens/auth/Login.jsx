@@ -202,10 +202,14 @@ function SignUpForm({ onSuccess, onCancel }) {
 // ── Main Login ─────────────────────────────────────────────────────────────
 const QR_SCAN_EQ = new URLSearchParams(window.location.search).get('eq')
 // The landing page's "Create free Solo account" links here with ?signup=solo,
-// so a visitor lands on the sign-up form instead of hunting for it.
-const SOLO_SIGNUP = new URLSearchParams(window.location.search).get('signup') === 'solo'
+// so a visitor lands on the sign-up form instead of hunting for it. Read when
+// Login MOUNTS, not when the module loads: a module constant stays true for
+// the whole page, so signing out later reopened the sign-up form. The mount
+// effect strips the parameter, so the next mount (after sign-out) sees none.
+const wantsSoloSignup = () => new URLSearchParams(window.location.search).get('signup') === 'solo'
 
 export default function Login({ linkError = null }) {
+  const [SOLO_SIGNUP] = useState(wantsSoloSignup)
   const { setSession, setLoginMode, setSharedWorkspaces } = useAppStore()
   // When arriving from a QR code scan, default to Solo mode so visitors can sign up
   const [mode, setMode]             = useState(QR_SCAN_EQ || SOLO_SIGNUP ? 'solo' : null)
