@@ -2503,3 +2503,12 @@ https://claude.ai/artifact/JriVDb6Z2Bygx6ndwTw2KE
   (Hamburg, LA, Micro-Deval) are deliberately not drawn.
 - Demo Lab: 636 demo results (12 per test, 53 tests) recorded by
   "Demo Manager" so both demo roles see them.
+
+## Booking calendar loads bookings that OVERLAP the view (Nov 2026, both apps)
+
+`loadBookings` (BookingEquipment.jsx) asks for `start_time < end AND end_time >
+start` of the day / week / month on screen. It filtered on the start alone,
+so a multi-day booking vanished from every week after the one it began in
+(Mahala's Centrifuge booking, Nov 13 → 17). Month view now lists a booking on
+every day it covers ("cont." after its first day). Week band, Timeline and
+Agenda already clamped to the visible range.
