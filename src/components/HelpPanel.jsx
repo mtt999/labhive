@@ -64,7 +64,7 @@ const HELP_CONTENT = {
       'Lab User Documents: upload a certificate; a lab manager approves it',
       'Vehicle: vehicle training records',
       'Equipment: training per instrument. Equipment you have not used for 3 months needs retraining before you can book it',
-      T('Equipment: once a lab user passes the exam, run the training session, then press ✓ Confirm training done to open booking. Someone who could not pass (or did not take) the exam: Skip the exam → training session', 'manager'),
+      T('Equipment: once a lab user passes the exam, run the training session, then press ✓ Confirm training done to open booking. Someone who could not pass (or did not take) the exam: Skip the exam → training session. Wrong day or time? Change time on the session row — at any stage, even after the lab user accepted; they are notified and accept the new time', 'manager'),
       T('Equipment: after you pass an exam, your training session (day, time, lab manager) is shown. After the session your lab manager confirms it and you can book', 'labuser'),
       T('Equipment → + Add training: for someone trained before whose training was never recorded here, tick "Trained before. Give access without the exam". It works once; retraining still needs the exam', 'manager'),
       T('Lab User Locker: request a locker. A lab manager assigns one and you get a notification', 'labuser'),
